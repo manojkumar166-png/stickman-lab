@@ -1,0 +1,55 @@
+name: Daily Stickman Science Video
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:30 UTC = 10:00 India Standard Time. Scheduled runs may be delayed.
+    - cron: "30 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-stickman-video
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    # Public repositories can use standard hosted runners without Actions-minute charges;
+    # confirm GitHub's current terms and artifact limits for your account.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate daily video
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
+
+      - name: Upload video, script and narration
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stickman-science-video
+          path: |
+            output/stickman-science-*.mp4
+            output/story-*.json
+            output/narration-*.mp3
+          retention-days: 7
+          if-no-files-found: error
