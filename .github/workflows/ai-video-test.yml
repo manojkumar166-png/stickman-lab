@@ -1,12 +1,11 @@
 name: AI Video Experiment
 on:
-  workflow_dispatch: # Keeps the manual button
+  workflow_dispatch:
   schedule:
-    # Runs every day at 05:30 UTC (11:00 AM India Time)
-    - cron: "30 5 * * *"
+    - cron: "30 5 * * *" # 11:00 AM IST
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate-ai:
@@ -36,3 +35,11 @@ jobs:
             output/ai-experiment-*.mp4
             output/story-*.json
           retention-days: 7
+
+      - name: Commit topic history
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add topic_history.json
+          git commit -m "Update AI topic history [skip ci]" || exit 0
+          git push
