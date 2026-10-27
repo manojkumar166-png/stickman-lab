@@ -1,6 +1,6 @@
 name: AI Video Experiment
 on:
-  workflow_dispatch: # This means it ONLY runs when you click the button manually
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,10 +18,12 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt && pip install aiohttp
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python main_ai.py
       - name: Upload AI Video
         uses: actions/upload-artifact@v4

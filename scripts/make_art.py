@@ -1,5 +1,9 @@
-import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, time
+import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, requests
 from PIL import Image, ImageDraw, ImageFont
+
+STYLE = ("flat 2D vector illustration, educational explainer style, clean bold outlines, "
+         "solid flat colors, limited bright palette, simple geometric shapes, "
+         "plain light background, no gradients, no text, no photorealism")
 
 PALETTES = {
  "sky":("#A7D8FF","#F5FCFF"), "lab":("#D9F2F0","#F8FFFD"),
@@ -15,34 +19,71 @@ def font(size, bold=False):
     except: 
         return ImageFont.load_default()
 
-async def fetch_ai_image(session, prompt, seed):
-    url = f"https://image.pollinations.ai/prompt/{prompt}?width=1280&height=720&nologo=true&seed={seed}&model=flux"
-    async with session.get(url, timeout=120) as response:
-        response.raise_for_status()
-        return await response.read()
+def build_prompt(visual):
+    clean = " ".join(visual.split()).replace('"', "")[:250]
+    return f"{clean}, {STYLE}"
+
+# --- CLOUDFLARE PROVIDER ---
+CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")
+CF_API_TOKEN = os.getenv("CF_API_TOKEN")
+CF_URL = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+
+def cf_image(prompt):
+    if not CF_ACCOUNT_ID or not CF_API_TOKEN:
+        raise RuntimeError("CF credentials missing")
+    r = requests.post(CF_URL, headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
+                      json={"prompt": prompt, "steps": 4}, timeout=90)
+    r.raise_for_status()
+    return base64.b64decode(r.json()["result"]["image"])
+
+# --- GEMINI PROVIDER (FALLBACK) ---
+def gemini_image(prompt):
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Gemini key missing")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
+    r = requests.post(url, json={"contents":[{"parts":[{"text": prompt}]}]}, timeout=90)
+    r.raise_for_status()
+    data = r.json()
+    for part in data["candidates"][0]["content"]["parts"]:
+        if "inlineData" in part:
+            return base64.b64decode(part["inlineData"]["data"])
+    raise RuntimeError("No image in Gemini response")
+
+PROVIDERS = [("cloudflare", cf_image), ("gemini", gemini_image)]
+
+def generate_single(prompt, retries=2):
+    for name, fn in PROVIDERS:
+        for attempt in range(retries):
+            try:
+                return fn(prompt), name
+            except requests.HTTPError as e:
+                code = e.response.status_code
+                print(f"[{name}] HTTP {code}: {e.response.text[:200]}")
+                if code in (400, 401, 402, 403): 
+                    break
+                time.sleep(3 * (attempt + 1))
+            except Exception as e:
+                print(f"[{name}] {type(e).__name__}: {e}")
+                time.sleep(3 * (attempt + 1))
+    return None, "stickman"
 
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations (This will take ~12 minutes to avoid rate limits)...")
-    async with aiohttp.ClientSession() as session:
-        results = []
-        for i, scene in enumerate(scenes, 1):
-            visual = scene.get("visual", "science illustration")
-            # Force the 2D vector comic style
-            prompt = urllib.parse.quote(f"2D flat vector illustration, colorful, educational comic style, clean bold outlines, simple background, cute character, {visual}")
-            seed = int(hashlib.sha256((visual+str(i)).encode()).hexdigest()[:8],16)
-            try:
-                img_data = await fetch_ai_image(session, prompt, seed)
-                results.append((i, img_data))
-                print(f"  Downloaded scene {i}/{len(scenes)}...")
-            except Exception as e:
-                print(f"  Failed scene {i}: {e}")
-                results.append((i, None))
-            
-            # WAIT 15 SECONDS TO PREVENT RATE LIMITS
-            if i < len(scenes):
-                await asyncio.sleep(15)
-                
-        return results
+    print("Generating AI illustrations (Cloudflare -> Gemini -> Fallback)...")
+    results = []
+    for i, scene in enumerate(scenes, 1):
+        visual = scene.get("visual", "science illustration")
+        prompt = build_prompt(visual)
+        img_data, provider = generate_single(prompt)
+        if img_data:
+            results.append((i, img_data))
+            print(f"  Scene {i}/{len(scenes)}: {provider} ✓")
+        else:
+            results.append((i, None))
+            print(f"  Scene {i}/{len(scenes)}: FALLBACK (stickman)")
+        if i < len(scenes):
+            time.sleep(6)
+    return results
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
     if ai_image_data:
@@ -50,11 +91,10 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             im = Image.open(io.BytesIO(ai_image_data)).convert("RGB")
             im = im.resize((width, height), Image.Resampling.LANCZOS)
         except Exception as e:
-            print(f"Error processing AI image for scene {idx}: {e}")
+            print(f"Error processing image for scene {idx}: {e}")
             ai_image_data = None
 
     if not ai_image_data:
-        # Fallback to simple background if AI fails
         bg = scene.get("background","sky").lower()
         top,bottom = PALETTES.get(bg, PALETTES["sky"])
         im = Image.new("RGB",(width,height),top)
@@ -67,18 +107,12 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             d.line((0,y,width,y),fill=col)
 
     d = ImageDraw.Draw(im)
-    
-    # 1. Draw the Top Title Bar (Vibrant blue)
     title = (scene.get("title") or "Science Discovery")[:58]
     d.rounded_rectangle((30, 20, width - 30, 90), radius=15, fill="#2A5CAA")
     d.text((50, 40), title, font=font(28, True), fill="white")
-
-    # 2. Draw the Scene Counter in the top right
     d.text((width - 180, 42), f"Scene {idx}/{total}", font=font(20, True), fill="white")
 
-    # 3. Draw the Bottom Caption Bar
     narration = scene.get("narration", "")
-    # Wrap text
     words = narration.split()
     lines = []
     current_line = ""
@@ -90,15 +124,11 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             current_line = word + " "
     if current_line:
         lines.append(current_line.strip())
-    
-    lines = lines[:2] # Only show first 2 lines
+    lines = lines[:2]
     if len(lines) == 2 and len(narration) > 140:
          lines[1] += "..."
 
-    # Draw black box
     d.rectangle((0, height - 110, width, height), fill="black")
-    
-    # Draw text inside box
     y_offset = height - 90
     for line in lines:
         d.text((40, y_offset), line, font=font(24, False), fill="white")
