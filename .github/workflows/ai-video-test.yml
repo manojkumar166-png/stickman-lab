@@ -1,6 +1,9 @@
 name: AI Video Experiment
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Keeps the manual button
+  schedule:
+    # Runs every day at 05:30 UTC (11:00 AM India Time)
+    - cron: "30 5 * * *"
 
 permissions:
   contents: read
