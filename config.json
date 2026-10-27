@@ -5,7 +5,7 @@
   "height": 720,
   "fps": 24,
   "gemini_model": "gemini-3.5-flash-lite",
-  "voice": "en-US-AriaNeural",
+  "voice": "en-US-AndrewMultilingualNeural",
   "speech_rate": "+0%",
   "artifact_retention_days": 7,
   "topic_history_file": "topic_history.json",
