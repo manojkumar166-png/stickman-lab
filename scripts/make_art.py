@@ -36,21 +36,7 @@ def cf_image(prompt):
     r.raise_for_status()
     return base64.b64decode(r.json()["result"]["image"])
 
-# --- GEMINI PROVIDER (FALLBACK) ---
-def gemini_image(prompt):
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("Gemini key missing")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
-    r = requests.post(url, json={"contents":[{"parts":[{"text": prompt}]}]}, timeout=90)
-    r.raise_for_status()
-    data = r.json()
-    for part in data["candidates"][0]["content"]["parts"]:
-        if "inlineData" in part:
-            return base64.b64decode(part["inlineData"]["data"])
-    raise RuntimeError("No image in Gemini response")
-
-PROVIDERS = [("cloudflare", cf_image), ("gemini", gemini_image)]
+PROVIDERS = [("cloudflare", cf_image)]
 
 def generate_single(prompt, retries=2):
     for name, fn in PROVIDERS:
@@ -60,7 +46,7 @@ def generate_single(prompt, retries=2):
             except requests.HTTPError as e:
                 code = e.response.status_code
                 print(f"[{name}] HTTP {code}: {e.response.text[:200]}")
-                if code in (400, 401, 402, 403): 
+                if code in (400, 401, 402, 403, 404): 
                     break
                 time.sleep(3 * (attempt + 1))
             except Exception as e:
@@ -69,7 +55,7 @@ def generate_single(prompt, retries=2):
     return None, "stickman"
 
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations (Cloudflare -> Gemini -> Fallback)...")
+    print("Generating AI illustrations (Cloudflare)...")
     results = []
     for i, scene in enumerate(scenes, 1):
         visual = scene.get("visual", "science illustration")
@@ -82,7 +68,7 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
             results.append((i, None))
             print(f"  Scene {i}/{len(scenes)}: FALLBACK (stickman)")
         if i < len(scenes):
-            time.sleep(6)
+            time.sleep(6) 
     return results
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
@@ -107,11 +93,13 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             d.line((0,y,width,y),fill=col)
 
     d = ImageDraw.Draw(im)
+    
+    # Title bar (Scene counter removed)
     title = (scene.get("title") or "Science Discovery")[:58]
     d.rounded_rectangle((30, 20, width - 30, 90), radius=15, fill="#2A5CAA")
     d.text((50, 40), title, font=font(28, True), fill="white")
-    d.text((width - 180, 42), f"Scene {idx}/{total}", font=font(20, True), fill="white")
 
+    # Caption bar
     narration = scene.get("narration", "")
     words = narration.split()
     lines = []
