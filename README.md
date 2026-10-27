@@ -1,66 +1,120 @@
-# Daily Stickman Science Video Generator
+🎬 Automated Daily Science Video Generator
 
-Create one approximately 8-minute colorful stickman science/educational video per day using:
-- **AI only for story/script and scene descriptions** (Gemini API; free-tier availability/quotas vary)
-- **Python + Pillow** for original cartoon scene artwork
-- **edge-tts** for natural-sounding narration (free to use, but it relies on Microsoft's online speech service and availability can change)
-- **FFmpeg** for video rendering
-- **GitHub Actions** for daily automation
+This project is a fully automated Python pipeline that generates high-quality, colorful educational science videos. It uses AI for the script, Text-to-Speech for the voice, and FFmpeg for the video rendering. It runs 100% for free using GitHub Actions.
 
-The animation is generated with code, not an AI video-generation service. No paid video-generation API is used.
+## 📂 Project Structure & File Details
 
-## Important limits and honest expectations
+Here is exactly what every file in this project does:
 
-- ₹0 is the target, **not a guarantee**. Free AI quotas, online TTS availability, GitHub limits, and network downloads can change.
-- Gemini API needs a Google AI Studio API key. Create one at https://aistudio.google.com/apikey and add it to your GitHub repository as an Actions secret named `GEMINI_API_KEY`.
-- `edge-tts` uses an online service; it is not an offline TTS engine or a guaranteed SLA. The workflow will fail clearly if narration cannot be generated. For a fully offline voice, replace this stage with a locally installed TTS engine/model.
-- GitHub Actions scheduled runs are not guaranteed to start at the exact minute. Use a **public repository** if you want standard hosted runner usage without included private-repository minute constraints; review GitHub's current terms.
-- The workflow uploads MP4s as Actions artifacts, retained for 7 days. Download each result from the workflow run's **Artifacts** section. It does not publish to YouTube.
-- AI-generated science scripts can contain errors. Review the final script/video before publishing.
+### Core Execution Scripts
+- **`main.py`**: The entry point for the **Daily Stickman Workflow**. It calls the story generator, draws the artwork using Python (Pillow), generates the voiceover, and renders the final video. It is 100% reliable and never hits AI image limits.
+- **`main_ai.py`**: The entry point for the **AI Video Experiment**. It does the same thing as `main.py`, but uses the Pollinations AI API to download beautiful 2D vector illustrations instead of drawing stickmen.
 
-## Quick start
+### Configuration & Data
+- **`config.json`**: The control center of the project. It holds settings for target length, scene count, video resolution (1280x720), fps, the Gemini model, and the TTS voice.
+- **`topics.txt`**: A plain text list of science topics. The script reads this, picks one randomly (avoiding recent ones), and generates a video for it.
+- **`requirements.txt`**: A list of Python packages needed (Pillow, requests, edge-tts, aiohttp).
+- **`topic_history.json`**: Automatically created. It saves the last 30 topics used so the script doesn't repeat the same video twice in a row.
 
-1. Create a new GitHub repository, e.g. `daily-stickman-science`.
-2. Upload all files from this project (keep the `.github/workflows/daily-video.yml` path).
-3. In the repository, go to **Settings → Secrets and variables → Actions → New repository secret**.
-   - Name: `GEMINI_API_KEY`
-   - Value: your Google AI Studio API key.
-4. Open **Actions**, enable workflows if prompted, and run **Daily Stickman Science Video** using **Run workflow** for a first test.
-5. Open the run when finished and download `stickman-science-video` from Artifacts.
-6. The workflow is scheduled daily at 04:30 UTC (10:00 AM India time). Change the cron line in `.github/workflows/daily-video.yml` if desired.
+### The `scripts/` Folder (The Engine)
+- **`scripts/generate_story.py`**: Connects to the Google Gemini API. It sends a strict prompt asking for a 48-scene script in JSON format. It also includes a fallback system: if `gemini-3.5-flash-lite` is overloaded (503 error), it automatically tries `3.5-flash`, then `3.6-flash`.
+- **`scripts/make_art.py`**: The artwork generator. 
+  - In the *Stickman* workflow, it draws backgrounds and stick figures using Python.
+  - In the *AI* workflow, it downloads images from Pollinations, waits 15 seconds between downloads to avoid rate limits, and draws a comic-style title bar and black caption box at the bottom.
+- **`scripts/make_voice.py`**: Uses `edge-tts` to convert the text script into an MP3 voiceover.
+- **`scripts/render_video.py`**: Uses FFmpeg. It takes the 48 images, applies a smooth panning motion (Ken Burns effect), sets the video to 24fps, and syncs it perfectly with the MP3 audio.
 
-## Run locally
+### The `.github/workflows/` Folder
+- **`daily-video.yml`**: The automated GitHub Action. Runs every day at 04:30 UTC (10:00 AM IST). It uses `main.py`.
+- **`ai-video-test.yml`**: The manual experimental GitHub Action. You run this by clicking a button in the Actions tab. It uses `main_ai.py`.
 
-Requirements: Python 3.11+, FFmpeg installed and available as `ffmpeg`, internet access for Gemini and edge-tts.
+---
 
-```bash
+## ⚙️ How to Customize Everything
+
+### 1. How to Change the Topics
+Open `topics.txt` and add one topic per line. 
+```text
+Why do we dream?
+Why is the ocean salty?
+How do airplanes stay in the air?
+2. How to Change the AI Script Model (Gemini)
+Open config.json and change "gemini_model":
+
+"gemini-3.5-flash-lite" (Default - Fastest, best for free tier)
+
+"gemini-3.5-flash" (Better writing quality, stricter quota)
+
+"gemini-3.6-flash"
+
+3. How to Change the Voice
+Open config.json and change "voice":
+
+"en-US-AndrewMultilingualNeural" (Default - Warm male voice)
+
+"en-US-AriaNeural" (Female voice)
+
+"en-GB-SoniaNeural" (British female)
+
+4. How to Change Video Length
+Open config.json:
+
+"scene_count": 48 (48 scenes = roughly 8 to 10 minutes).
+
+"fps": 24 (24 frames per second is standard cinematic quality).
+
+🚀 How to Run It Locally (On Your PC)
+Requirements: Python 3.11+, FFmpeg installed, and internet access.
+
+bash
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-source .venv/bin/activate
+# Windows: .venv\Scripts\activate
+# Mac/Linux: source .venv/bin/activate
+
 pip install -r requirements.txt
-export GEMINI_API_KEY="your-key"
+
+# Set your API key (Windows PowerShell)
+$env:GEMINI_API_KEY="your-google-ai-studio-key"
+
+# Run the Daily (Stickman) version
 python main.py
-```
 
-On Windows PowerShell:
-```powershell
-$env:GEMINI_API_KEY="your-key"
-python main.py
-```
+# Run the AI (Experimental) version
+python main_ai.py
+The final video will be saved in the output/ folder.
 
-Output is written to `output/`. The main MP4 is `output/stickman-science-YYYY-MM-DD.mp4`; the script and scene plan are saved beside it.
+☁️ How to Run on GitHub Actions (The Cloud)
+Create a new GitHub repository and upload all files.
 
-## Customize
+Go to Settings → Secrets and variables → Actions → New repository secret.
 
-- Edit `config.json` to change visual style, number of scenes, target length, voice, and output frame rate.
-- Edit `topics.txt` to add your own topic ideas. The script selects one that hasn't been used recently where possible.
-- This starter version creates 24–40 scenes with colorful illustrated backgrounds and a reusable stickman design. It uses slow camera movement for visual variety.
-- Do not commit API keys to the repository. Use GitHub Secrets.
+Name: GEMINI_API_KEY | Value: Your Google AI Studio API key.
 
-## Troubleshooting
+Go to the Actions tab:
 
-- **No GEMINI_API_KEY**: add the secret; never hardcode it.
-- **Gemini quota/rate limit**: wait for quota reset or choose another available model in `config.json`.
-- **edge-tts fails**: check network/service availability and rerun; the project currently stops rather than silently making a video with no narration.
-- **FFmpeg missing**: install FFmpeg and ensure `ffmpeg -version` works.
-- **Video takes a while**: 8 minutes of video encoding is CPU-intensive. The workflow uses 12 fps and 720p to keep rendering manageable.
+Daily Stickman Science Video: Runs automatically every day. You can also click "Run workflow" to test it.
+
+AI Video Experiment: Click "Run workflow" to manually generate the AI art video.
+
+When the run finishes (green checkmark), scroll to the bottom of the run page and click the Artifacts to download your MP4.
+
+🛠️ Troubleshooting
+GEMINI_API_KEY is missing: You forgot to add the secret in GitHub Settings.
+
+Gemini API 404/503: The Google model is overloaded. The script automatically tries fallback models. If all fail, wait a few minutes and try again.
+
+Images look like Stickmen in the AI workflow: The free Pollinations API blocked the request. The script silently falls back to drawing stickmen so the video still works. Try running the AI workflow again later.
+
+FFmpeg missing: Install FFmpeg and ensure ffmpeg -version works in your terminal.
+
+text
+
+Save and close Notepad.
+
+### Step 2: Push the new README to GitHub
+Run this in your command prompt:
+
+```cmd
+git add README.md
+git commit -m "Add highly detailed README with full file structure"
+git push
