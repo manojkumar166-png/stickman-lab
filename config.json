@@ -3,7 +3,7 @@
   "scene_count": 48,
   "width": 1280,
   "height": 720,
-  "fps": 12,
+  "fps": 24,
   "gemini_model": "gemini-3.5-flash-lite",
   "voice": "en-US-AriaNeural",
   "speech_rate": "+0%",
