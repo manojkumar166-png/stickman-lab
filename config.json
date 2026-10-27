@@ -8,5 +8,6 @@
   "voice": "en-US-AriaNeural",
   "speech_rate": "+0%",
   "artifact_retention_days": 7,
-  "topic_history_file": "topic_history.json"
+  "topic_history_file": "topic_history.json",
+  "use_ai_art": true
 }
