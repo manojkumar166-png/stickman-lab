@@ -1,5 +1,6 @@
 import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, requests
 from PIL import Image, ImageDraw, ImageFont
+from scripts.make_art_python import make_scene_art as make_scene_art_python
 
 STYLE = ("flat 2D vector illustration, educational explainer style, clean bold outlines, "
          "solid flat colors, limited bright palette, simple geometric shapes, "
@@ -14,9 +15,9 @@ PALETTES = {
 }
 
 def font(size, bold=False):
-    try: 
+    try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
-    except: 
+    except:
         return ImageFont.load_default()
 
 def build_prompt(visual):
@@ -46,7 +47,7 @@ def generate_single(prompt, retries=2):
             except requests.HTTPError as e:
                 code = e.response.status_code
                 print(f"[{name}] HTTP {code}: {e.response.text[:200]}")
-                if code in (400, 401, 402, 403, 404): 
+                if code in (400, 401, 402, 403, 404):
                     break
                 time.sleep(3 * (attempt + 1))
             except Exception as e:
@@ -63,12 +64,12 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
         img_data, provider = generate_single(prompt)
         if img_data:
             results.append((i, img_data))
-            print(f"  Scene {i}/{len(scenes)}: {provider} ✓")
+            print(f"  Scene {i}/{len(scenes)}: {provider} OK")
         else:
             results.append((i, None))
             print(f"  Scene {i}/{len(scenes)}: FALLBACK (stickman)")
         if i < len(scenes):
-            time.sleep(6) 
+            time.sleep(6)
     return results
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
@@ -80,21 +81,13 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             print(f"Error processing image for scene {idx}: {e}")
             ai_image_data = None
 
+    # --- BACKUP TRIGGER ---
     if not ai_image_data:
-        bg = scene.get("background","sky").lower()
-        top,bottom = PALETTES.get(bg, PALETTES["sky"])
-        im = Image.new("RGB",(width,height),top)
-        d = ImageDraw.Draw(im)
-        for y in range(height):
-            t=y/height
-            import PIL.ImageColor as IC
-            a,b=IC.getrgb(top),IC.getrgb(bottom)
-            col=tuple(int(a[c]*(1-t)+b[c]*t) for c in range(3))
-            d.line((0,y,width,y),fill=col)
+        return make_scene_art_python(scene, idx, total, path, width, height)
 
     d = ImageDraw.Draw(im)
-    
-    # Title bar (Scene counter removed)
+
+    # Title bar
     title = (scene.get("title") or "Science Discovery")[:58]
     d.rounded_rectangle((30, 20, width - 30, 90), radius=15, fill="#2A5CAA")
     d.text((50, 40), title, font=font(28, True), fill="white")
