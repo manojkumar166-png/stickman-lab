@@ -49,10 +49,11 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             h_tree=random.randrange(100*scale,220*scale); d.rectangle((x,ground_y-h_tree//2,x+14*scale,ground_y),fill="#795438")
             d.ellipse((x-40*scale,ground_y-h_tree-45*scale,x+55*scale,ground_y-h_tree+45*scale),fill=random.choice(["#39895B","#4B9D61","#6AB76B"]))
 
-    # Stickman
+    # Stickman (Fixed sizing & positioning)
     cx=int(w*.38); cy=int(h*.65); head=48*scale
     skin=random.choice(["#FFD7B0","#F4C9A6","#E8B58F"])
     shirt=random.choice(["#F15B5B","#3979D8","#F2B544","#6C56B8","#24A08B"])
+    
     d.ellipse((cx-55*scale,ground_y-10*scale,cx+55*scale,ground_y+12*scale),fill="#66877A")
     d.line((cx,cy+70*scale,cx-30*scale,cy+130*scale),fill="#252A35",width=12*scale)
     d.line((cx,cy+70*scale,cx+32*scale,cy+130*scale),fill="#252A35",width=12*scale)
@@ -71,7 +72,7 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
     d.ellipse((cx+10*scale,cy-63*scale,cx+20*scale,cy-53*scale),fill="#20242B")
     d.arc((cx-18*scale,cy-50*scale,cx+18*scale,cy-25*scale),0,180,fill="#7A3D37",width=3*scale)
 
-    # UI Elements
+    # UI Elements (Title & Caption)
     title = (scene.get("title") or "Science Discovery")[:58]
     d.rounded_rectangle((30*scale, 20*scale, w - 30*scale, 90*scale), radius=15*scale, fill="#2A5CAA")
     d.text((50*scale, 40*scale), title, font=font(28*scale, True), fill="white")
