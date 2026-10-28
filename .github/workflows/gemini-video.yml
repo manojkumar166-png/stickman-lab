@@ -25,8 +25,6 @@ jobs:
       - name: Generate Gemini Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python main_gemini.py
 
       - name: Send Video to Telegram

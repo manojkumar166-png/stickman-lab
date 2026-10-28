@@ -20,56 +20,33 @@ def gemini_image(prompt):
             return base64.b64decode(part["inlineData"]["data"])
     raise RuntimeError("No image in Gemini response")
 
-# --- CLOUDFLARE PROVIDER ---
-CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")
-CF_API_TOKEN = os.getenv("CF_API_TOKEN")
-CF_URL = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell"
-
-def cf_image(prompt):
-    if not CF_ACCOUNT_ID or not CF_API_TOKEN:
-        raise RuntimeError("CF credentials missing")
-    r = requests.post(CF_URL, headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
-                      json={"prompt": prompt, "steps": 4}, timeout=90)
-    r.raise_for_status()
-    return base64.b64decode(r.json()["result"]["image"])
-
+# --- CLEAN PROVIDER STRATEGY (GEMINI ONLY) ---
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations (Gemini First, then Cloudflare)...")
-    
+    print("Attempting to generate all images with Gemini...")
     results = {}
-    provider_name = "Gemini"
-    provider_fn = gemini_image
+    gemini_failed = False
     
     for i, scene in enumerate(scenes, 1):
         visual = scene.get("visual", "science illustration")
         prompt = f"{visual}. {STYLE}"
-        
         try:
-            img_data = provider_fn(prompt)
+            img_data = gemini_image(prompt)
             results[i] = img_data
-            print(f"  Scene {i}/{len(scenes)}: {provider_name} OK")
+            print(f"  Scene {i}/{len(scenes)}: Gemini OK")
         except Exception as e:
-            print(f"  Scene {i} failed: {e}")
-            # If Gemini fails, switch to Cloudflare for the rest
-            if provider_name == "Gemini":
-                print("  Switching to Cloudflare for remaining scenes...")
-                provider_name = "Cloudflare"
-                provider_fn = cf_image
-                try:
-                    img_data = provider_fn(prompt)
-                    results[i] = img_data
-                    print(f"  Scene {i}/{len(scenes)}: {provider_name} OK")
-                except Exception as e2:
-                    print(f"  Cloudflare failed too. Falling back to stickman for scene {i}.")
-                    results[i] = None
-            else:
-                results[i] = None
-        
-        # Pacing: 7s for Gemini, 6s for Cloudflare
+            print(f"  Gemini failed at scene {i}: {e}")
+            gemini_failed = True
+            break # Stop trying Gemini, switch to Stickman
         if i < len(scenes):
-            time.sleep(7 if provider_name == "Gemini" else 6)
-            
-    return results
+            time.sleep(7) # Pace Gemini at 7 seconds
+
+    if not gemini_failed:
+        print("Successfully generated all images with Gemini!")
+        return results
+
+    # Fall back to pure Stickmen
+    print("Gemini failed. Falling back to pure Python Stickmen...")
+    return {i: None for i in range(1, len(scenes) + 1)}
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
     if ai_image_data:
@@ -116,5 +93,5 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             print(f"Error processing image {idx}: {e}")
             ai_image_data = None
 
-    # Fallback
+    # Fallback to Python Stickman
     return make_scene_art_python(scene, idx, total, path, width, height)
