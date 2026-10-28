@@ -6,14 +6,6 @@ STYLE = ("flat 2D vector illustration, educational explainer style, clean bold o
          "solid flat colors, limited bright palette, simple geometric shapes, "
          "plain light background, no gradients, no text, no photorealism")
 
-PALETTES = {
- "sky":("#A7D8FF","#F5FCFF"), "lab":("#D9F2F0","#F8FFFD"),
- "space":("#101B3B","#253D70"), "ocean":("#56C5E8","#DDF8FF"),
- "forest":("#9ED69A","#E8F5C8"), "city":("#F7C98B","#FFF1D5"),
- "home":("#F4D9B7","#FFF6E8"), "cave":("#8D8A9A","#D6D0D9"),
- "desert":("#F4C477","#FFE8B0"), "mountain":("#B8D8E8","#F4FBFF")
-}
-
 def font(size, bold=False):
     try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
@@ -24,21 +16,35 @@ def build_prompt(visual):
     clean = " ".join(visual.split()).replace('"', "")[:250]
     return f"{clean}, {STYLE}"
 
-# --- CLOUDFLARE PROVIDER ---
+# --- CLOUDFLARE CREDENTIALS ---
 CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")
 CF_API_TOKEN = os.getenv("CF_API_TOKEN")
-CF_URL = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell"
 
-def cf_image(prompt):
+# --- CHEAP MODEL ONLY: FLUX-2-KLEIN-4B ---
+CF_URL_CHEAP = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
+
+def cf_image_cheap(prompt):
     if not CF_ACCOUNT_ID or not CF_API_TOKEN:
         raise RuntimeError("CF credentials missing")
-    r = requests.post(CF_URL, headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
-                      json={"prompt": prompt, "steps": 4}, timeout=90)
+    
+    form_data = {
+        "prompt": (None, prompt),
+        "width": (None, "1024"),
+        "height": (None, "576")
+    }
+    
+    r = requests.post(CF_URL_CHEAP, headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
+                      files=form_data, timeout=120)
     r.raise_for_status()
-    return base64.b64decode(r.json()["result"]["image"])
+    
+    if r.headers.get("content-type", "").startswith("image/"):
+        return r.content
+        
+    j = r.json()
+    return base64.b64decode(j.get("result", j)["image"])
 
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations (Cloudflare)...")
+    print("Generating AI illustrations (Cheap Model ONLY)...")
     results = []
     
     for i, scene in enumerate(scenes, 1):
@@ -46,17 +52,17 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
         prompt = build_prompt(visual)
         
         try:
-            img_data = cf_image(prompt)
+            img_data = cf_image_cheap(prompt)
             results.append((i, img_data))
-            print(f"  Scene {i}/{len(scenes)}: Cloudflare OK")
+            print(f"  Scene {i}/{len(scenes)}: Klein OK")
         except Exception as e:
-            print(f"  Cloudflare failed at scene {i}: {e}")
+            print(f"  Klein failed at scene {i}: {e}")
             results.append((i, None))
             
         if i < len(scenes):
             time.sleep(6)
             
-    # --- THE MAGIC TRICK: Reuse successful images for missing ones ---
+    # If any failed, reuse a successful image to fill the gap
     successful_images = [img for idx, img in results if img is not None]
     
     if not successful_images:
@@ -68,7 +74,6 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
         if img_data is not None:
             final_results.append((i, img_data))
         else:
-            # Pick a random successful image to fill the gap
             random_img = random.choice(successful_images)
             final_results.append((i, random_img))
             print(f"  Scene {i}/{len(scenes)}: Filled with a random AI image")
