@@ -19,55 +19,62 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
     return [(i, None) for i in range(1, len(scenes) + 1)]
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
+    # --- 4X ANTI-ALIASING (DRAW AT 4K, THEN SCALE DOWN) ---
+    scale = 4
+    w, h = width * scale, height * scale
+    
     bg = scene.get("background","sky").lower()
     top,bottom = PALETTES.get(bg, PALETTES["sky"])
-    im = Image.new("RGB",(width,height),top)
+    im = Image.new("RGB",(w,h),top)
     d = ImageDraw.Draw(im)
-    for y in range(height):
-        t=y/height
+    
+    # Gradient Background
+    for y in range(h):
+        t=y/h
         import PIL.ImageColor as IC
         a,b=IC.getrgb(top),IC.getrgb(bottom)
         col=tuple(int(a[c]*(1-t)+b[c]*t) for c in range(3))
-        d.line((0,y,width,y),fill=col)
+        d.line((0,y,w,y),fill=col)
     
-    ground_y=int(height*.78)
+    ground_y=int(h*.78)
     if bg in ("sky","city","desert","mountain","forest","home","lab"):
-        d.rectangle((0,ground_y,width,height), fill={"sky":"#7CCB79","city":"#D6B17A","desert":"#E5B45E","mountain":"#B5D0A1","forest":"#5EAA68","home":"#D7B68F","lab":"#C5E2DF"}.get(bg,"#7CCB79"))
+        d.rectangle((0,ground_y,w,h), fill={"sky":"#7CCB79","city":"#D6B17A","desert":"#E5B45E","mountain":"#B5D0A1","forest":"#5EAA68","home":"#D7B68F","lab":"#C5E2DF"}.get(bg,"#7CCB79"))
     
     if bg=="space":
-        for _ in range(100):
-            x,y=random.randrange(width),random.randrange(int(height*.75))
-            rad=random.choice([1,2,3]); d.ellipse((x-rad,y-rad,x+rad,y+rad),fill="#FFFFFF")
+        for _ in range(300):
+            x,y=random.randrange(w),random.randrange(int(h*.75))
+            rad=random.choice([2,4,6]); d.ellipse((x-rad,y-rad,x+rad,y+rad),fill="#FFFFFF")
     elif bg=="forest":
-        for x in range(35,width,100):
-            h=random.randrange(100,220); d.rectangle((x,ground_y-h//2,x+14,ground_y),fill="#795438")
-            d.ellipse((x-40,ground_y-h-45,x+55,ground_y-h+45),fill=random.choice(["#39895B","#4B9D61","#6AB76B"]))
+        for x in range(35*scale,w,100*scale):
+            h_tree=random.randrange(100*scale,220*scale); d.rectangle((x,ground_y-h_tree//2,x+14*scale,ground_y),fill="#795438")
+            d.ellipse((x-40*scale,ground_y-h_tree-45*scale,x+55*scale,ground_y-h_tree+45*scale),fill=random.choice(["#39895B","#4B9D61","#6AB76B"]))
 
-    cx=int(width*.38); cy=int(height*.65); head=48
+    # Stickman
+    cx=int(w*.38); cy=int(h*.65); head=48*scale
     skin=random.choice(["#FFD7B0","#F4C9A6","#E8B58F"])
     shirt=random.choice(["#F15B5B","#3979D8","#F2B544","#6C56B8","#24A08B"])
-    d.ellipse((cx-55,ground_y-10,cx+55,ground_y+12),fill="#66877A")
-    d.line((cx,cy+70,cx-30,cy+130),fill="#252A35",width=12)
-    d.line((cx,cy+70,cx+32,cy+130),fill="#252A35",width=12)
-    d.line((cx,cy+10,cx,cy+75),fill=shirt,width=22)
+    d.ellipse((cx-55*scale,ground_y-10*scale,cx+55*scale,ground_y+12*scale),fill="#66877A")
+    d.line((cx,cy+70*scale,cx-30*scale,cy+130*scale),fill="#252A35",width=12*scale)
+    d.line((cx,cy+70*scale,cx+32*scale,cy+130*scale),fill="#252A35",width=12*scale)
+    d.line((cx,cy+10*scale,cx,cy+75*scale),fill=shirt,width=22*scale)
     
     action=scene.get("action","explain").lower()
     if action in ("point","explain","observe"):
-        d.line((cx,cy+25,cx+65,cy-5),fill="#252A35",width=10)
-        d.ellipse((cx+58,cy-14,cx+76,cy+4),fill=skin,outline="#252A35",width=2)
+        d.line((cx,cy+25*scale,cx+65*scale,cy-5*scale),fill="#252A35",width=10*scale)
+        d.ellipse((cx+58*scale,cy-14*scale,cx+76*scale,cy+4*scale),fill=skin,outline="#252A35",width=2*scale)
     else:
-        d.line((cx,cy+25,cx-45,cy-20),fill="#252A35",width=10)
-        d.line((cx,cy+25,cx+45,cy-20),fill="#252A35",width=10)
+        d.line((cx,cy+25*scale,cx-45*scale,cy-20*scale),fill="#252A35",width=10*scale)
+        d.line((cx,cy+25*scale,cx+45*scale,cy-20*scale),fill="#252A35",width=10*scale)
         
-    d.ellipse((cx-head,cy-head*2,cx+head,cy),fill=skin,outline="#252A35",width=5)
-    d.ellipse((cx-20,cy-63,cx-10,cy-53),fill="#20242B")
-    d.ellipse((cx+10,cy-63,cx+20,cy-53),fill="#20242B")
-    d.arc((cx-18,cy-50,cx+18,cy-25),0,180,fill="#7A3D37",width=3)
+    d.ellipse((cx-head,cy-head*2,cx+head,cy),fill=skin,outline="#252A35",width=5*scale)
+    d.ellipse((cx-20*scale,cy-63*scale,cx-10*scale,cy-53*scale),fill="#20242B")
+    d.ellipse((cx+10*scale,cy-63*scale,cx+20*scale,cy-53*scale),fill="#20242B")
+    d.arc((cx-18*scale,cy-50*scale,cx+18*scale,cy-25*scale),0,180,fill="#7A3D37",width=3*scale)
 
-    d = ImageDraw.Draw(im)
+    # UI Elements
     title = (scene.get("title") or "Science Discovery")[:58]
-    d.rounded_rectangle((30, 20, width - 30, 90), radius=15, fill="#2A5CAA")
-    d.text((50, 40), title, font=font(28, True), fill="white")
+    d.rounded_rectangle((30*scale, 20*scale, w - 30*scale, 90*scale), radius=15*scale, fill="#2A5CAA")
+    d.text((50*scale, 40*scale), title, font=font(28*scale, True), fill="white")
 
     narration = scene.get("narration", "")
     words = narration.split()
@@ -82,11 +89,13 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
     if current_line: lines.append(current_line.strip())
     lines = lines[:2]
     
-    d.rectangle((0, height - 110, width, height), fill="black")
-    y_offset = height - 90
+    d.rectangle((0, h - 110*scale, w, h), fill="black")
+    y_offset = h - 90*scale
     for line in lines:
-        d.text((40, y_offset), line, font=font(24, False), fill="white")
-        y_offset += 35
+        d.text((40*scale, y_offset), line, font=font(24*scale, False), fill="white")
+        y_offset += 35*scale
 
+    # Shrink back down to 720p for a beautifully smooth image
+    im = im.resize((width, height), Image.Resampling.LANCZOS)
     im.save(path, quality=95)
     return path
