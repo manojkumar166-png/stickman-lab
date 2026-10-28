@@ -19,7 +19,6 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
     return [(i, None) for i in range(1, len(scenes) + 1)]
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
-    # --- 4X ANTI-ALIASING (DRAW AT 4K, THEN SCALE DOWN) ---
     scale = 4
     w, h = width * scale, height * scale
     
@@ -28,7 +27,6 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
     im = Image.new("RGB",(w,h),top)
     d = ImageDraw.Draw(im)
     
-    # Gradient Background
     for y in range(h):
         t=y/h
         import PIL.ImageColor as IC
@@ -49,7 +47,6 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             h_tree=random.randrange(100*scale,220*scale); d.rectangle((x,ground_y-h_tree//2,x+14*scale,ground_y),fill="#795438")
             d.ellipse((x-40*scale,ground_y-h_tree-45*scale,x+55*scale,ground_y-h_tree+45*scale),fill=random.choice(["#39895B","#4B9D61","#6AB76B"]))
 
-    # Stickman (Fixed sizing & positioning)
     cx=int(w*.38); cy=int(h*.65); head=48*scale
     skin=random.choice(["#FFD7B0","#F4C9A6","#E8B58F"])
     shirt=random.choice(["#F15B5B","#3979D8","#F2B544","#6C56B8","#24A08B"])
@@ -72,7 +69,6 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
     d.ellipse((cx+10*scale,cy-63*scale,cx+20*scale,cy-53*scale),fill="#20242B")
     d.arc((cx-18*scale,cy-50*scale,cx+18*scale,cy-25*scale),0,180,fill="#7A3D37",width=3*scale)
 
-    # UI Elements (Title & Caption)
     title = (scene.get("title") or "Science Discovery")[:58]
     d.rounded_rectangle((30*scale, 20*scale, w - 30*scale, 90*scale), radius=15*scale, fill="#2A5CAA")
     d.text((50*scale, 40*scale), title, font=font(28*scale, True), fill="white")
@@ -96,7 +92,6 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
         d.text((40*scale, y_offset), line, font=font(24*scale, False), fill="white")
         y_offset += 35*scale
 
-    # Shrink back down to 720p for a beautifully smooth image
     im = im.resize((width, height), Image.Resampling.LANCZOS)
     im.save(path, quality=95)
     return path
