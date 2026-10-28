@@ -5,6 +5,7 @@ MODEL_FALLBACKS = [
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.6-flash",
+    "gemini-3.8-flash",
 ]
 
 def _call_gemini(api_key, model, prompt, attempts=3):
@@ -32,35 +33,22 @@ def _call_gemini(api_key, model, prompt, attempts=3):
         raise RuntimeError(f"Gemini API error {r.status_code} on {model}: {r.text[:1000]}")
     raise RuntimeError(f"Gemini API gave up on {model} after {attempts} tries: {last_err}")
 
+
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("Set GEMINI_API_KEY.")
 
-    topics_file = root / "topics.txt"
+    topics = [x.strip() for x in (root / "topics.txt").read_text(encoding="utf-8").splitlines() if x.strip()]
     history_path = root / config.get("topic_history_file", "topic_history.json")
-    
-    # Load topics and history
-    all_topics = [x.strip() for x in topics_file.read_text(encoding="utf-8").splitlines() if x.strip()]
     history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
-
-    # Find a topic from the file that hasn't been used yet
-    available = [t for t in all_topics if t not in history]
-    
-    if available:
-        topic = random.choice(available)
-        print(f"Selected topic from topics.txt: {topic}")
-    else:
-        topic = "A brand new science topic (read history and invent something new)"
-        print("topics.txt is empty or fully used. Asking Gemini to invent a completely new topic...")
+    available = [t for t in topics if t not in history[-30:]] or topics
+    topic = random.choice(available)
 
     prompt = f"""
 Create an original, factually careful educational science explainer for a colorful stickman cartoon video.
 Topic: {topic}
 Target narration duration: about {config.get('target_minutes', 8)} minutes, approximately 1200-1350 spoken words.
-
-IMPORTANT: If the topic is "A brand new science topic", invent a fascinating, specific science question that is NOT in this list of recent topics: {history[-50:]}. 
-
 Return ONLY valid JSON with this schema:
 {{
  "topic": "a concise title",
@@ -123,9 +111,6 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
                     "action": "point",
                 }[key]
 
-    # Save the actual generated topic (not the "brand new" placeholder) to history
-    final_topic = story.get("topic", topic)
-    history.append(final_topic)
+    history.append(topic)
     history_path.write_text(json.dumps(history[-100:], indent=2), encoding="utf-8")
-    
     return story

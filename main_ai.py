@@ -25,14 +25,17 @@ def main():
     story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Topic: {story['topic']}")
 
-    print("Generating scene artwork...")
+    print("Generating AI scene artwork...")
     scene_dir = OUT / f"scenes-{day}"
     if scene_dir.exists():
         shutil.rmtree(scene_dir)
     scene_dir.mkdir(parents=True)
 
-    # Generate images: Cloudflare primary, Python Stickman fallback
-    ai_images = asyncio.run(generate_all_ai_images(story["scenes"], scene_dir, config["width"], config["height"]))
+    # Force AI generation for this experiment
+    ai_images = {}
+    images_data = asyncio.run(generate_all_ai_images(story["scenes"], scene_dir, config["width"], config["height"]))
+    for i, img_data in images_data:
+        ai_images[i] = img_data
 
     for i, scene in enumerate(story["scenes"], 1):
         make_scene_art(scene, i, len(story["scenes"]), scene_dir / f"scene-{i:03d}.png",
