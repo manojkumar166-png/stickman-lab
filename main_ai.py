@@ -31,8 +31,7 @@ def main():
         shutil.rmtree(scene_dir)
     scene_dir.mkdir(parents=True)
 
-    # Generate all images (Clean Provider Strategy: Gemini -> Cloudflare -> Stickman)
-    # This returns a dictionary: {1: image_bytes, 2: image_bytes, ...}
+    # Generate images: Cloudflare primary, Python Stickman fallback
     ai_images = asyncio.run(generate_all_ai_images(story["scenes"], scene_dir, config["width"], config["height"]))
 
     for i, scene in enumerate(story["scenes"], 1):
