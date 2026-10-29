@@ -73,13 +73,13 @@ Return ONLY valid JSON with this schema:
    {{
     "title": "short scene heading",
     "narration": "natural voiceover, about 28-32 words",
-    "visual": "a concrete, drawable scene description, no written text in image",
+    "visual": "a detailed cinematic illustration brief: subject placement, foreground/midground/background, environment, lighting, color palette, focal point, scientific objects and their relationships; no written text in image",
     "background": "one of: sky, lab, space, ocean, forest, city, home, cave, desert, mountain",
     "action": "one of: explain, walk, point, run, think, surprised, celebrate, observe"
    }}
  ]
 }}
-Create exactly {config.get('scene_count', 48)} scenes. The total narration should be close to 8 minutes at 125-145 words per minute. Begin with a surprising hook, build curiosity, explain the science accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
+Create exactly {config.get('scene_count', 48)} scenes. The total narration should be close to 8 minutes at 125-145 words per minute. Begin with a surprising hook, build curiosity, explain the science accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Visual descriptions must be rich, specific, and suitable for original hand-painted 2D storybook illustrations, not simple icon scenes. Describe a distinct composition for every scene, including the setting, scale, foreground details, background depth, lighting, mood, and exact scientific subject/action. Avoid repeating the same composition. Keep scientific structures plausible and explainable. No 3D/CGI look. Do not put text or labels inside scene images. JSON only, no Markdown fences.
 """
 
     preferred = config.get("gemini_model", "").strip()
