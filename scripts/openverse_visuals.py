@@ -264,12 +264,16 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
     # Add style variants to the specific queries first, while preserving direct queries as fallbacks.
     styled = []
     for query in specific_queries[:5]:
-        styled.append("anime style " + query)
-        styled.append("ghibli style " + query)
+        if "anime" not in query:
+            styled.append("anime style " + query)
+        if "ghibli" not in query:
+            styled.append("ghibli style " + query)
     for query in candidates:
         if query not in specific_queries:
-            styled.append("anime style " + query)
-            styled.append("ghibli style " + query)
+            if "anime" not in query:
+                styled.append("anime style " + query)
+            if "ghibli" not in query:
+                styled.append("ghibli style " + query)
             if len(styled) >= 10:
                 break
     return list(dict.fromkeys(styled + candidates))[:16] or ["anime black hole illustration"]
