@@ -6,7 +6,8 @@ from pathlib import Path
 
 from scripts.generate_story import generate_story
 from scripts.make_voice import make_voice
-from scripts.free_visuals import choose_style, prepare_scene, render_motion_video
+from scripts.free_visuals import choose_style, prepare_scene
+from scripts.render_video import render_video
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "output"
@@ -61,8 +62,8 @@ def main():
     print(f"Narration ready: {narration_path}", flush=True)
 
     video_path = OUT / f"free-science-{day}.mp4"
-    print(f"Rendering {len(story['scenes'])} scenes into the final MP4...", flush=True)
-    render_motion_video(scene_dir, narration_path, video_path, config)
+    print(f"Rendering {len(story['scenes'])} scenes with the same FFmpeg renderer as the faster workflows...", flush=True)
+    render_video(scene_dir, narration_path, video_path, story, config)
     print(f"Finished video: {video_path}")
     print(f"Style: {style}")
     print(f"Image source/license report: {credits_path}")
