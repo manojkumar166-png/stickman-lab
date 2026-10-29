@@ -203,7 +203,7 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
         "every", "some", "many", "much", "more", "most", "often", "like",
         "scene", "introduction", "introduces", "shows", "show", "visual", "image",
         "vibrant", "cyan", "yellow", "stickman", "wearing", "foreground",
-        "background", "stands", "standing", "looking", "curiously",
+        "background", "stands", "standing", "looking", "curiously", "work", "works", "working", "function", "functions",
     }
     candidates = []
 
@@ -230,9 +230,13 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
             if len(candidates) >= 8:
                 break
 
-    # Small science-specific expansions; these are simple phrases, not character art direction.
+    # Put known subject phrases first so the search never becomes a leftover title fragment
+    # such as "black holes work". These are the actual objects/topics the scene is about.
     combined = " ".join(topic_words + title_words + narration_words)
     expansions = [
+        (r"\b(black hole|black holes|blackhole|blackholes|event horizon|accretion disk)\b",
+         ["black hole anime", "anime black hole illustration", "anime space black hole",
+          "black hole accretion disk", "ghibli style black hole"]),
         (r"\b(star|stars|twinkle|twinkling|starlight)\b", ["anime stars", "anime night sky stars", "anime twinkling stars"]),
         (r"\b(planet|planets|orbit|orbiting)\b", ["anime planets", "anime planets in space", "anime planet orbit"]),
         (r"\b(moon|lunar)\b", ["anime moon", "anime moon in night sky"]),
@@ -246,18 +250,29 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
         (r"\b(heart|heartbeat|blood)\b", ["human heart"]),
         (r"\b(plant|plants|photosynthesis|leaf|leaves)\b", ["green plant"]),
     ]
+    specific_queries = []
     for pattern, phrases in expansions:
         if re.search(pattern, combined):
             for phrase in phrases:
-                add(phrase)
+                if phrase not in specific_queries:
+                    specific_queries.append(phrase)
+
+    # Prioritize specific science objects over generic title/narration keywords.
+    candidates = specific_queries + candidates
 
     # Search for anime-style scenery and science objects, not people/characters.
+    # Add style variants to the specific queries first, while preserving direct queries as fallbacks.
     styled = []
-    for query in candidates[:6]:
+    for query in specific_queries[:5]:
         styled.append("anime style " + query)
         styled.append("ghibli style " + query)
-    candidates = styled + candidates
-    return candidates[:12] or ["anime style science illustration"]
+    for query in candidates:
+        if query not in specific_queries:
+            styled.append("anime style " + query)
+            styled.append("ghibli style " + query)
+            if len(styled) >= 10:
+                break
+    return list(dict.fromkeys(styled + candidates))[:16] or ["anime black hole illustration"]
 
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
