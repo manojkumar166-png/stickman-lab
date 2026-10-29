@@ -6,7 +6,7 @@ from pathlib import Path
 
 from scripts.generate_story import generate_story
 from scripts.make_voice import make_voice
-from scripts.storybook_2d import render_storybook_stills
+from scripts.storybook_composite import render_storybook_stills
 from scripts.render_video import render_video
 
 ROOT = Path(__file__).resolve().parent
@@ -27,9 +27,9 @@ def main():
         raise RuntimeError("Story generator returned no scenes.")
     day = date.today().isoformat()
     topic = str(story.get("topic", "Science discovery"))
-    story["visual_style"] = "original storybook-inspired 2D illustration"
+    story["visual_style"] = "original storybook landscapes + topic-aware scientific illustrations"
     print(f"Topic: {topic}", flush=True)
-    print("Visual style: original hand-painted-storybook-inspired 2D; no 3D renderer", flush=True)
+    print("Visual style: original layered 2D storybook landscapes + science drawings; no AI images or 3D", flush=True)
     story_path = OUT / f"storybook-science-story-{day}.json"
     story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
     scene_dir = OUT / f"storybook-science-scenes-{day}"
