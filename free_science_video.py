@@ -7,7 +7,6 @@ from pathlib import Path
 from scripts.generate_story import generate_story
 from scripts.make_voice import make_voice
 from scripts.free_visuals import choose_style, prepare_scene
-from scripts.free_ai_art import generate_ai_images, save_ai_image
 from scripts.render_video import render_video
 
 ROOT = Path(__file__).resolve().parent
