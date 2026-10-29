@@ -145,23 +145,21 @@ def _search_unsplash(query: str) -> list[dict]:
     return items
 
 def _image_signature(data: bytes) -> str | None:
-    if data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if data.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10))):
         return ".png"
-    if data.startswith(b"\\xff\\xd8\\xff"):
+    if data.startswith(bytes((255, 216, 255))):
         return ".jpg"
     if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
         return ".webp"
     if data.startswith((b"GIF87a", b"GIF89a")):
         return ".gif"
     return None
-
 def _scene_query(topic: str, scene: dict) -> str:
     visual = str(scene.get("visual_description") or scene.get("visual") or "")
     if not visual:
         visual = str(scene.get("title") or scene.get("narration") or "")
-    cleaned = re.sub(r"[^\\w\\s,-]", " ", " ".join(visual.split()))
+    cleaned = re.sub(r"[^\w\s,-]", " ", " ".join(visual.split()))
     return " ".join(cleaned.split()[:12])[:120] or topic[:120]
-
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
