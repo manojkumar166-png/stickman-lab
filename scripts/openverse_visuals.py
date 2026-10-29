@@ -17,8 +17,8 @@ from pathlib import Path
 
 API = "https://api.openverse.org/v1/images/"
 ALLOWED_LICENSES = {"cc0", "pdm"}
-MAX_WORKERS = 3
-TIMEOUT = 20
+MAX_WORKERS = 2
+TIMEOUT = 45
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 USER_AGENT = "stickman-lab-public-domain-illustrations/1.0"
 
@@ -36,7 +36,7 @@ def _search(query: str) -> list[dict]:
         "filter_dead": "true",
     })
     last_error = None
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             payload = json.loads(_request(API + "?" + params).decode("utf-8"))
             return [
@@ -47,7 +47,7 @@ def _search(query: str) -> list[dict]:
             ]
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             last_error = exc
-            time.sleep(2 ** attempt)
+            time.sleep(min(2 ** attempt, 20))
     raise RuntimeError(f"Openverse search failed for {query!r}: {last_error}")
 
 def _safe_name(value: str) -> str:
@@ -66,15 +66,16 @@ def _image_signature(data: bytes) -> str | None:
     return None
 
 def _scene_query(topic: str, scene: dict) -> str:
-    parts = [str(scene.get(k) or "") for k in ("title", "visual", "visual_description")]
-    # Narration can be long/noisy; use it only when visual metadata is missing.
-    if not any(parts):
-        parts.append(str(scene.get("narration") or "")[:100])
-    cleaned = " ".join(" ".join(parts).split())
-    cleaned = re.sub(r"[^\w\s,-]", " ", cleaned)
+    # Prefer the concrete visual description, not poetic titles or multiple
+    # long fields concatenated together (which produce poor search queries).
+    visual = str(scene.get("visual_description") or scene.get("visual") or "")
+    if not visual:
+        visual = str(scene.get("title") or scene.get("narration") or "")
+    cleaned = " ".join(visual.split())
+    cleaned = re.sub(r"[^\\w\\s,-]", " ", cleaned)
     cleaned = " ".join(cleaned.split())
-    # Prefer the scene subject, with topic as context rather than the whole narration.
-    return (cleaned or topic)[:180]
+    # Short queries are more reliable and less likely to time out.
+    return " ".join(cleaned.split()[:12])[:120] or topic[:120]
 
 def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     scenes = story.get("scenes") or []
