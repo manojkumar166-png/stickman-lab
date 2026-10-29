@@ -199,8 +199,10 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
     """
     from PIL import ImageChops, ImageEnhance
     W, H = int(width), int(height)
-    key = (topic + " " + scene_title + " " + narration[:450]).lower()
-    scene_key = (scene_title + " " + narration[:300]).lower()
+    # Classify from this scene's own title and narration first. Putting the episode
+    # topic first caused broad words such as "space" to override the actual scene.
+    scene_key = (scene_title + " " + narration[:700]).lower()
+    key = scene_key if len(scene_key.split()) >= 3 else (scene_key + " " + topic.lower())
     # Deep, colorful background gradient.
     tops = [(9, 17, 43), (12, 29, 54), (20, 19, 54), (7, 34, 52)]
     bottoms = [(28, 53, 85), (29, 38, 83), (49, 28, 76), (10, 61, 72)]
@@ -415,7 +417,9 @@ def render_motion_video(scene_dir, audio_path, output_path, config):
             clip = tmp / f"clip-{i:03d}.mp4"
             frames = max(2, round(per_scene * fps))
             # Gentle Ken Burns zoom; reset for every image so style remains stable.
-            zoompan = f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z='min(zoom+0.00035,1.08)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={fps},format=yuv420p"
+            # Only overscale by the maximum zoom amount. The old 2x source scale
+            # processed four times as many pixels as needed for every scene.
+            zoompan = f"scale={int(width*1.12)}:{int(height*1.12)}:force_original_aspect_ratio=increase,crop={int(width*1.12)}:{int(height*1.12)},zoompan=z='min(zoom+0.00035,1.08)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={fps},format=yuv420p"
             subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(image), "-vf", zoompan,
                  "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", str(clip)],
@@ -427,10 +431,12 @@ def render_motion_video(scene_dir, audio_path, output_path, config):
         silent = tmp / "silent.mp4"
         print("Combining scene clips...", flush=True)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(silent)], check=True)
-        print("Adding narration and finalizing MP4...", flush=True)
+        print("Adding narration without re-encoding the video...", flush=True)
+        # Every scene clip already has the final H.264 settings. Copying that
+        # stream avoids an expensive second full encode of the entire video.
         subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent), "-i", str(audio_path),
-             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
              "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(output_path)],
             check=True
         )
