@@ -112,18 +112,28 @@ def _search_public_page(browser, provider: str, url: str, query: str) -> list[di
     print(f"{provider}: public page yielded {len(items)} linked image candidates for {query!r}", flush=True)
     return items
 
+BLOCKED_PUBLIC_PROVIDERS: set[str] = set()
+
+
 def _search_all(query: str) -> list[dict]:
-    """Search public website pages in a browser; never call provider APIs."""
+    """Search available public website pages, skipping providers blocked earlier in this run."""
     all_results = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             for provider, template in PUBLIC_SEARCHES:
+                if provider in BLOCKED_PUBLIC_PROVIDERS:
+                    continue
                 url = _public_page_url(template, query)
                 try:
                     all_results.extend(_search_public_page(browser, provider, url, query))
                 except Exception as exc:
-                    print(f"{provider}: public search page unavailable ({exc}); continuing", flush=True)
+                    message = str(exc)
+                    if "HTTP 401" in message or "HTTP 403" in message:
+                        BLOCKED_PUBLIC_PROVIDERS.add(provider)
+                        print(f"{provider}: blocked for this run ({message}); skipping it on later searches", flush=True)
+                    else:
+                        print(f"{provider}: public search page unavailable ({message}); continuing", flush=True)
         finally:
             browser.close()
     return all_results
@@ -313,7 +323,9 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
         base_query = queries[0]
         chosen = None
         errors = []
-        for query in queries:
+        # Avoid multiplying slow public-page searches across every scene.
+        # Gemini provides several candidates; one fallback is enough for a first pass.
+        for query in queries[:2]:
             candidates = _search_all(query)
             rng.shuffle(candidates)
             for item in candidates:
