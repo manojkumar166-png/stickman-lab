@@ -233,12 +233,12 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
     # Small science-specific expansions; these are simple phrases, not character art direction.
     combined = " ".join(topic_words + title_words + narration_words)
     expansions = [
-        (r"\b(star|stars|twinkle|twinkling|starlight)\b", ["stars", "night sky stars", "stars twinkling"]),
-        (r"\b(planet|planets|orbit|orbiting)\b", ["planet", "planet orbit"]),
-        (r"\b(moon|lunar)\b", ["moon in night sky"]),
-        (r"\b(sun|solar|sunlight)\b", ["sun", "sunlight"]),
-        (r"\b(cloud|clouds|cloudy)\b", ["clouds in sky"]),
-        (r"\b(rain|rainfall|raindrop|raindrops)\b", ["rain falling"]),
+        (r"\b(star|stars|twinkle|twinkling|starlight)\b", ["anime stars", "anime night sky stars", "anime twinkling stars"]),
+        (r"\b(planet|planets|orbit|orbiting)\b", ["anime planets", "anime planets in space", "anime planet orbit"]),
+        (r"\b(moon|lunar)\b", ["anime moon", "anime moon in night sky"]),
+        (r"\b(sun|solar|sunlight)\b", ["anime sun", "anime sunlight"]),
+        (r"\b(cloud|clouds|cloudy)\b", ["anime clouds", "anime sky with clouds"]),
+        (r"\b(rain|rainfall|raindrop|raindrops)\b", ["anime rain", "anime rainy sky"]),
         (r"\b(light|lightwave|refraction|atmosphere)\b", ["light through atmosphere"]),
         (r"\b(ice|freezing|frozen)\b", ["ice"]),
         (r"\b(electricity|electric|current|circuit)\b", ["electric circuit"]),
@@ -251,14 +251,14 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
             for phrase in phrases:
                 add(phrase)
 
-    # Anime characters/illustrations only: never add sky/background-only style queries.
-    # Keep the actual script subject and action in every query.
+    # Search for anime-style scenery and science objects, not people/characters.
     styled = []
     for query in candidates[:6]:
-        styled.append("anime character illustration " + query)
-        styled.append("ghibli style anime character " + query)
+        styled.append("anime style " + query)
+        styled.append("ghibli style " + query)
     candidates = styled + candidates
-    return candidates[:12] or ["anime character science illustration"]
+    return candidates[:12] or ["anime style science illustration"]
+
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
