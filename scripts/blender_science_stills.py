@@ -38,7 +38,7 @@ def setup(width,height):
         bpy.ops.object.light_add(type="AREA",location=loc); l=bpy.context.object
         l.data.energy=energy; l.data.shape="DISK"; l.data.size=size
     sc=bpy.context.scene; sc.render.engine="BLENDER_EEVEE_NEXT"
-    sc.render.resolution_x=width; sc.render.resolution_y=height; sc.render.resolution_percentage=70
+    sc.render.resolution_x=width; sc.render.resolution_y=height; sc.render.resolution_percentage=100
     sc.render.image_settings.file_format="PNG"; sc.view_settings.view_transform="AgX"
     sc.world.color=(.012,.02,.06)
     floor=material("Midnight stage",(.012,.025,.07),.6)
