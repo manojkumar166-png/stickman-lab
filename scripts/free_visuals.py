@@ -142,7 +142,62 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
         draw.ellipse((x-r, y-r, x+r, y+r), fill="#304263")
     cx, cy = width // 2, height // 2 - 15
     key = (topic + " " + scene_title + " " + narration).lower()
-    if any(x in key for x in ("space", "planet", "sun", "moon", "star", "galaxy", "black hole")):
+    scene_key = (scene_title + " " + narration).lower()
+    # Topic-specific fallback art for sleep, dreams, and neuroscience. Draw a
+    # different visual cue for each scene instead of reusing generic node diagrams.
+    if any(x in key for x in ("dream", "sleep", "rem", "nightmare", "brain", "neural", "lucid")):
+        draw.ellipse((cx-260, cy-170, cx+260, cy+170), fill="#182b50", outline="#6cb6ff", width=5)
+        if any(x in scene_key for x in ("rem", "paralyzed", "muscle")):
+            # Eyes and REM movement lines.
+            draw.ellipse((cx-125, cy-50, cx-25, cy+10), outline="#ffffff", width=8)
+            draw.ellipse((cx+25, cy-50, cx+125, cy+10), outline="#ffffff", width=8)
+            draw.arc((cx-110, cy-45, cx-35, cy+5), 190, 345, fill="#ff7b9c", width=7)
+            draw.arc((cx+35, cy-45, cx+110, cy+5), 190, 345, fill="#ff7b9c", width=7)
+            for j in range(3):
+                draw.line((cx-210+j*18, cy-115, cx-175+j*18, cy-135), fill="#55d6be", width=5)
+                draw.line((cx+175+j*18, cy+105, cx+210+j*18, cy+85), fill="#55d6be", width=5)
+        elif any(x in scene_key for x in ("memory", "forget", "consolidation", "neural", "highways", "problem solving")):
+            # Brain-like lobes with linked memory nodes.
+            for x, y, r in ((cx-85,cy-30,65),(cx-25,cy-75,58),(cx+40,cy-60,62),(cx+90,cy-5,55),(cx+20,cy+45,58),(cx-55,cy+40,55)):
+                draw.ellipse((x-r,y-r,x+r,y+r), fill="#ff7b9c", outline="#ffd6e0", width=3)
+            nodes = [(cx-120,cy-30),(cx-25,cy-85),(cx+70,cy-45),(cx+110,cy+25),(cx,cy+60)]
+            for j in range(len(nodes)-1):
+                draw.line((*nodes[j], *nodes[j+1]), fill="#ffd166", width=7)
+        elif any(x in scene_key for x in ("nightmare", "fear", "threat", "falling", "paradox", "stress")):
+            # A dream cloud with a bold lightning / fear symbol.
+            draw.ellipse((cx-150,cy-65,cx-35,cy+40), fill="#b8a1ff")
+            draw.ellipse((cx-75,cy-110,cx+60,cy+40), fill="#b8a1ff")
+            draw.ellipse((cx+15,cy-60,cx+145,cy+45), fill="#b8a1ff")
+            draw.polygon([(cx+15,cy-70),(cx-25,cy+5),(cx+15,cy+5),(cx-5,cy+75),(cx+65,cy-15),(cx+25,cy-15)], fill="#ffd166")
+        elif any(x in scene_key for x in ("animal", "animals", "baby", "babies")):
+            # Small sleeping animal/baby silhouette and dream stars.
+            draw.ellipse((cx-100,cy-75,cx+95,cy+80), fill="#ffd166", outline="#fff0bf", width=4)
+            draw.ellipse((cx-70,cy-110,cx-20,cy-60), fill="#ffd166")
+            draw.ellipse((cx+25,cy-110,cx+75,cy-60), fill="#ffd166")
+            draw.arc((cx-35,cy-5,cx+10,cy+30), 10, 170, fill="#101b35", width=5)
+            draw.arc((cx+30,cy-5,cx+75,cy+30), 10, 170, fill="#101b35", width=5)
+            for sx,sy in ((cx+175,cy-120),(cx+220,cy-45),(cx-190,cy+90)):
+                draw.polygon([(sx,sy-18),(sx+6,sy-5),(sx+20,sy),(sx+6,sy+6),(sx,sy+20),(sx-6,sy+6),(sx-20,sy),(sx-6,sy-5)], fill="#55d6be")
+        elif any(x in scene_key for x in ("lucid", "controlling", "personal cinema", "movie", "flying")):
+            # Thought bubble with a miniature dream landscape.
+            for bx,by,br in ((cx-140,cy-90,48),(cx-70,cy-125,60),(cx+10,cy-120,58),(cx+100,cy-80,50)):
+                draw.ellipse((bx-br,by-br,bx+br,by+br), fill="#263f6b", outline="#6cb6ff", width=4)
+            draw.ellipse((cx-12,cy-25,cx+12,cy-1), fill="#ffffff")
+            draw.ellipse((cx+25,cy+8,cx+42,cy+25), fill="#ffffff")
+            draw.ellipse((cx+45,cy+30,cx+57,cy+42), fill="#ffffff")
+            draw.arc((cx-160,cy-30,cx+160,cy+150), 185, 350, fill="#55d6be", width=8)
+            draw.ellipse((cx+80,cy+15,cx+125,cy+60), fill="#ffd166")
+        else:
+            # Default sleep scene: pillow, sleeper, crescent moon and stars.
+            draw.rounded_rectangle((cx-210,cy+35,cx+210,cy+125), radius=28, fill="#6cb6ff", outline="#b8dcff", width=4)
+            draw.ellipse((cx-135,cy-85,cx+25,cy+75), fill="#ffd6b0", outline="#fff0df", width=4)
+            draw.arc((cx-95,cy-20,cx-35,cy+20), 10, 170, fill="#101b35", width=6)
+            draw.arc((cx-20,cy-20,cx+40,cy+20), 10, 170, fill="#101b35", width=6)
+            draw.ellipse((cx+90,cy-145,cx+190,cy-45), fill="#ffd166")
+            draw.ellipse((cx+120,cy-165,cx+210,cy-65), fill="#182b50")
+            for sx,sy in ((cx-210,cy-120),(cx+30,cy-155),(cx+220,cy+5)):
+                draw.polygon([(sx,sy-16),(sx+5,sy-5),(sx+16,sy),(sx+5,sy+5),(sx,sy+16),(sx-5,sy+5),(sx-16,sy),(sx-5,sy-5)], fill="#55d6be")
+    elif any(x in key for x in ("space", "planet", "sun", "moon", "star", "galaxy", "black hole")):
         for r, color in ((190, "#263f6b"), (130, "#345f8b"), (70, "#4b8bb5")):
             draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=color, outline="#9bd8ff", width=3)
         draw.ellipse((cx-43, cy-43, cx+43, cy+43), fill="#ffd166")
