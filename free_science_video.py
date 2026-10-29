@@ -56,9 +56,12 @@ def main():
     if not narration:
         raise RuntimeError("The story contains no narration.")
     narration_path = OUT / f"free-science-narration-{day}.mp3"
+    print("Generating narration audio...", flush=True)
     make_voice(narration, narration_path, config)
+    print(f"Narration ready: {narration_path}", flush=True)
 
     video_path = OUT / f"free-science-{day}.mp4"
+    print(f"Rendering {len(story['scenes'])} scenes into the final MP4...", flush=True)
     render_motion_video(scene_dir, narration_path, video_path, config)
     print(f"Finished video: {video_path}")
     print(f"Style: {style}")
