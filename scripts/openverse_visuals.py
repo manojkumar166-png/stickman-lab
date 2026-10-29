@@ -1,30 +1,26 @@
-"""Find reusable science illustrations through multiple providers.
-
-Provider order: Openverse CC0/Public Domain, Wikimedia Commons public domain/CC0,
-then optional Pixabay, Unsplash, and Pexels APIs when their keys are configured. The
-manifest preserves provider, source, and license metadata; metadata is not a
-legal guarantee, so review the manifest before publishing.
-"""
+"""Find reusable science illustrations by searching public website pages (no provider APIs)."""
 from __future__ import annotations
 
 import json
-import os
 import random
 import re
-import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-OPENVERSE_API = "https://api.openverse.org/v1/images/"
-WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
-PIXABAY_API = "https://pixabay.com/api/"
-UNSPLASH_API = "https://api.unsplash.com/search/photos"
-TIMEOUT = 30
+TIMEOUT = 25
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
-USER_AGENT = "stickman-lab-science-visuals/1.1 (educational video pipeline)"
-ALLOWED_LICENSES = {"cc0", "pdm", "public domain", "public-domain", "cc-zero"}
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
+
+# Public search pages only. These are normal browser URLs, not provider API endpoints.
+PUBLIC_SEARCHES = [
+    ("Openverse", "https://openverse.org/search/image?q={query}&license=cc0,pdm"),
+    ("Wikimedia Commons", "https://commons.wikimedia.org/w/index.php?search={query}&title=Special:MediaSearch&type=image"),
+    ("Pixabay", "https://pixabay.com/images/search/{path_query}/"),
+    ("Unsplash", "https://unsplash.com/s/photos/{path_query}"),
+    ("Pexels", "https://www.pexels.com/search/{path_query}/"),
+]
 
 def _request(url: str, timeout: int = TIMEOUT, headers: dict | None = None) -> bytes:
     request_headers = {"User-Agent": USER_AGENT}
@@ -37,137 +33,99 @@ def _request(url: str, timeout: int = TIMEOUT, headers: dict | None = None) -> b
         raise ValueError("response exceeds 12 MiB limit")
     return data
 
-def _json(url: str, headers: dict | None = None) -> dict:
-    return json.loads(_request(url, headers=headers).decode("utf-8"))
+def _public_page_url(template: str, query: str) -> str:
+    return template.format(
+        query=urllib.parse.quote_plus(query),
+        path_query=urllib.parse.quote(query.lower()),
+    )
 
-def _with_retry(url: str, headers: dict | None = None) -> dict:
-    last_error = None
-    for attempt in range(4):
+def _search_public_page(browser, provider: str, url: str, query: str) -> list[dict]:
+    """Open a provider's human-facing search page and collect linked image results."""
+    page = browser.new_page(user_agent=USER_AGENT, viewport={"width": 1365, "height": 900})
+    items = []
+    try:
+        response = page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT * 1000)
+        if response is None or response.status >= 400:
+            raise RuntimeError(f"public search page returned HTTP {response.status if response else 'no response'}")
         try:
-            return _json(url, headers=headers)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-            last_error = exc
-            if attempt < 3:
-                time.sleep(2 ** attempt)
-    raise RuntimeError(f"provider request failed: {last_error}")
-
-def _search_openverse(query: str) -> list[dict]:
-    params = urllib.parse.urlencode({
-        "q": query[:160], "license": "cc0,pdm", "page_size": 10,
-        "mature": "false", "filter_dead": "true",
-    })
-    payload = _with_retry(OPENVERSE_API + "?" + params)
-    items = []
-    for item in payload.get("results", []):
-        license_name = str(item.get("license", "")).lower()
-        if license_name in ALLOWED_LICENSES and item.get("url") and item.get("foreign_landing_url"):
+            page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+        page.wait_for_timeout(1200)
+        # Public search pages differ; use linked image cards rather than API payloads.
+        cards = page.locator("a").evaluate_all("""anchors => anchors.map(a => {
+          const imgs = Array.from(a.querySelectorAll('img'));
+          if (!imgs.length) return null;
+          const img = imgs.find(i => (i.currentSrc || i.src || i.getAttribute('data-src') || '').startsWith('http')) || imgs[0];
+          const image = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+          const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset') || '';
+          const candidate = srcset.split(',').map(s => s.trim().split(/\\s+/)[0]).filter(Boolean).pop();
+          return {href: a.href || '', image: image || candidate || '', alt: img.alt || '', title: a.getAttribute('aria-label') || a.title || ''};
+        }).filter(x => x && x.href && x.image && /^https?:/.test(x.image))""")
+        seen = set()
+        for card in cards:
+            source_page, image_url = card["href"], card["image"]
+            if source_page in seen or image_url.startswith("data:"):
+                continue
+            seen.add(source_page)
+            lower_page = source_page.lower()
+            # Only retain links that appear to be actual image/detail results from the provider.
+            if provider == "Wikimedia Commons" and "commons.wikimedia.org" not in lower_page:
+                continue
+            if provider == "Openverse" and "openverse.org" not in lower_page:
+                continue
+            if provider == "Pixabay" and "pixabay.com" not in lower_page:
+                continue
+            if provider == "Unsplash" and "unsplash.com" not in lower_page:
+                continue
+            if provider == "Pexels" and "pexels.com" not in lower_page:
+                continue
+            # Skip logos, avatars, and tiny UI assets; downloads are validated again later.
+            if any(term in image_url.lower() for term in ("logo", "avatar", "icon", "profile")):
+                continue
+            license_name = {
+                "Openverse": "CC0/Public Domain search filter (verify source page)",
+                "Wikimedia Commons": "License must be verified on file page",
+                "Pixabay": "Pixabay Content License",
+                "Unsplash": "Unsplash License",
+                "Pexels": "Pexels License",
+            }[provider]
             items.append({
-                "id": "openverse:" + str(item.get("id") or item["url"]),
-                "url": item["url"], "source_page": item["foreign_landing_url"],
-                "title": item.get("title"), "creator": item.get("creator"),
-                "license": item.get("license"), "license_url": item.get("license_url"),
-                "provider": "Openverse", "attribution": item.get("attribution"),
+                "id": provider.lower().replace(" ", "-") + ":" + source_page,
+                "url": image_url, "source_page": source_page,
+                "title": card.get("alt") or card.get("title") or query,
+                "creator": None, "license": license_name,
+                "license_url": {
+                    "Openverse": "https://openverse.org/",
+                    "Wikimedia Commons": "https://commons.wikimedia.org/wiki/Commons:Licensing",
+                    "Pixabay": "https://pixabay.com/service/license-summary/",
+                    "Unsplash": "https://unsplash.com/license",
+                    "Pexels": "https://www.pexels.com/license/",
+                }[provider],
+                "provider": provider, "attribution": None,
             })
+            if len(items) >= 12:
+                break
+    finally:
+        page.close()
+    print(f"{provider}: public page yielded {len(items)} linked image candidates for {query!r}", flush=True)
     return items
 
-def _search_wikimedia(query: str) -> list[dict]:
-    params = urllib.parse.urlencode({
-        "action": "query", "generator": "search",
-        "gsrsearch": f'filetype:bitmap "{query}" (CC0 OR "public domain")',
-        "gsrnamespace": 6, "gsrlimit": 10, "prop": "imageinfo",
-        "iiprop": "url|extmetadata", "iiurlwidth": 1400, "format": "json",
-    })
-    payload = _with_retry(WIKIMEDIA_API + "?" + params)
-    items = []
-    for page in payload.get("query", {}).get("pages", {}).values():
-        info_list = page.get("imageinfo") or []
-        if not info_list:
-            continue
-        info = info_list[0]
-        meta = info.get("extmetadata") or {}
-        license_name = str((meta.get("LicenseShortName") or {}).get("value", "")).strip()
-        license_url = str((meta.get("LicenseUrl") or {}).get("value", "")).strip()
-        normalized = license_name.lower()
-        if normalized not in ALLOWED_LICENSES and not ("public domain" in normalized or "cc0" in normalized):
-            continue
-        image_url = info.get("thumburl") or info.get("url")
-        if not image_url:
-            continue
-        items.append({
-            "id": "wikimedia:" + str(page.get("pageid")),
-            "url": image_url, "source_page": page.get("canonicalurl") or info.get("descriptionurl"),
-            "title": page.get("title"), "creator": (meta.get("Artist") or {}).get("value"),
-            "license": license_name, "license_url": license_url,
-            "provider": "Wikimedia Commons",
-            "attribution": (meta.get("Credit") or {}).get("value"),
-        })
-    return items
-
-def _search_pixabay(query: str) -> list[dict]:
-    key = os.environ.get("PIXABAY_API_KEY")
-    if not key:
-        return []
-    params = urllib.parse.urlencode({
-        "key": key, "q": query[:100], "image_type": "illustration",
-        "safesearch": "true", "per_page": 10,
-    })
-    payload = _with_retry(PIXABAY_API + "?" + params)
-    return [{
-        "id": "pixabay:" + str(item.get("id")), "url": item.get("largeImageURL") or item.get("webformatURL"),
-        "source_page": item.get("pageURL"), "title": query,
-        "creator": item.get("user"), "license": "Pixabay Content License",
-        "license_url": "https://pixabay.com/service/license-summary/",
-        "provider": "Pixabay", "attribution": item.get("user"),
-    } for item in payload.get("hits", []) if item.get("largeImageURL") or item.get("webformatURL")]
-
-def _search_unsplash(query: str) -> list[dict]:
-    key = os.environ.get("UNSPLASH_ACCESS_KEY")
-    if not key:
-        return []
-    params = urllib.parse.urlencode({"query": query[:100], "per_page": 10, "content_filter": "high"})
-    payload = _with_retry(UNSPLASH_API + "?" + params, {"Authorization": f"Client-ID {key}"})
-    items = []
-    for item in payload.get("results", []):
-        urls = item.get("urls") or {}
-        image_url = urls.get("regular") or urls.get("small")
-        if not image_url:
-            continue
-        items.append({
-            "id": "unsplash:" + str(item.get("id")), "url": image_url,
-            "source_page": (item.get("links") or {}).get("html"),
-            "title": (item.get("alt_description") or query),
-            "creator": ((item.get("user") or {}).get("name")),
-            "license": "Unsplash License",
-            "license_url": "https://unsplash.com/license",
-            "provider": "Unsplash",
-            "attribution": ((item.get("user") or {}).get("name")),
-        })
-    return items
-
-def _search_pexels(query: str) -> list[dict]:
-    key = os.environ.get("PEXELS_API_KEY")
-    if not key:
-        return []
-    params = urllib.parse.urlencode({"query": query[:100], "per_page": 10, "orientation": "landscape"})
-    payload = _with_retry("https://api.pexels.com/v1/search?" + params, {"Authorization": key})
-    items = []
-    for photo in payload.get("photos", []):
-        src = photo.get("src") or {}
-        image_url = src.get("large") or src.get("original")
-        if not image_url:
-            continue
-        items.append({
-            "id": "pexels:" + str(photo.get("id")),
-            "url": image_url,
-            "source_page": photo.get("url"),
-            "title": photo.get("alt") or query,
-            "creator": photo.get("photographer"),
-            "license": "Pexels License",
-            "license_url": "https://www.pexels.com/license/",
-            "provider": "Pexels",
-            "attribution": photo.get("photographer"),
-        })
-    return items
+def _search_all(query: str) -> list[dict]:
+    """Search public website pages in a browser; never call provider APIs."""
+    all_results = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            for provider, template in PUBLIC_SEARCHES:
+                url = _public_page_url(template, query)
+                try:
+                    all_results.extend(_search_public_page(browser, provider, url, query))
+                except Exception as exc:
+                    print(f"{provider}: public search page unavailable ({exc}); continuing", flush=True)
+        finally:
+            browser.close()
+    return all_results
 
 def _image_signature(data: bytes) -> str | None:
     if data.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10))):
@@ -180,7 +138,7 @@ def _image_signature(data: bytes) -> str | None:
         return ".gif"
     return None
 def _scene_queries(topic: str, scene: dict) -> list[str]:
-    """Build short, literal image searches from the topic and narration, not art-direction prose."""
+    """Build short, literal searches from the topic and narration, not art-direction prose."""
     def words(value: object) -> list[str]:
         value = re.sub(r"[^A-Za-z0-9\s'-]", " ", str(value or "")).lower()
         return [w for w in value.split() if w]
