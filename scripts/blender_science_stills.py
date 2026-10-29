@@ -49,7 +49,8 @@ def setup(width,height):
     return sc
 
 def create_subject(scene):
-    words=(str(scene.get("title",""))+" "+str(scene.get("narration",""))[:500]).lower()
+    # Use the generated visual brief as well as narration to choose a relevant model.
+    words=(" ".join(str(scene.get(k,"")) for k in ("title","visual","narration","background"))).lower()
     blue=material("Sapphire",(.025,.22,.78),.22,.12)
     cyan=material("Energy cyan",(.02,.65,1),.2,.1,1.4)
     gold=material("Amber", (1,.43,.045),.24,.18)
@@ -58,9 +59,59 @@ def create_subject(scene):
     pearl=material("Pearl",(.82,.91,1),.2)
     purple=material("Violet",(.32,.07,.68),.25)
     dark=material("Deep slate",(.035,.06,.13),.4,.1)
-    if any(k in words for k in ("brain","neuron","memory","dream","sleep","nerve")):
+    if any(k in words for k in ("heart","heartbeat","blood vessel","circulation","artery","vein")):
+        # Heart chambers, vessels and circulating blood cells.
+        sphere("Heart main chamber",(-.1,0,.15),(.72,.42,.85),pink)
+        sphere("Heart left chamber",(-.52,-.02,.55),(.43,.4,.48),pink)
+        sphere("Heart right chamber",(.42,-.02,.52),(.4,.4,.45),pink)
+        for x,z,ang,mat in [(-.35,1.05,-18,blue),(.1,1.18,10,pink),(.52,.93,24,blue),(-.55,-.45,-25,pink),(.4,-.48,20,blue)]:
+            bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=.13,depth=.9,location=(x,-.02,z),rotation=(0,math.radians(ang),0))
+            bpy.context.object.data.materials.append(mat)
+        for i in range(18):
+            a=i*2.399
+            sphere("Blood cell",(.15+math.cos(a)*(.55+(i%3)*.12),-.5,.12+math.sin(a)*(.62+(i%4)*.08)),(.075,.035,.05),gold)
+    elif any(k in words for k in ("lung","lungs","breathing","respiration","oxygen","alveol")):
+        # Lungs with branching airways and alveoli.
+        bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=.13,depth=1.0,location=(0,0,.78))
+        bpy.context.object.data.materials.append(gold)
+        for x in (-.48,.48):
+            sphere("Lung",(x,0,.05),(.52,.3,.82),pink)
+            for j in range(3):
+                start=Vector((0,-.05,.55-j*.13)); end=Vector((x*.72,-.08,.38-j*.2)); d=end-start
+                bpy.ops.mesh.primitive_cylinder_add(vertices=12,radius=.035,depth=d.length,location=(start+end)/2)
+                o=bpy.context.object; o.rotation_euler=d.to_track_quat("Z","Y").to_euler(); o.data.materials.append(gold)
+            for j in range(7):
+                sphere("Alveoli",(x+random.uniform(-.3,.3),-.28,random.uniform(-.45,.42)),(.09,.07,.09),cyan)
+    elif any(k in words for k in ("eye","eyes","vision","retina","pupil")):
+        sphere("Eyeball",(0,0,.2),(1.0,.42,.7),pearl)
+        sphere("Iris",(0,-.39,.2),(.37,.09,.38),blue)
+        sphere("Pupil",(0,-.47,.2),(.17,.045,.2),dark)
+        sphere("Eye highlight",(-.09,-.515,.32),(.07,.025,.07),pearl)
+        for i in range(7):
+            x=-1.6+i*.17
+            bpy.ops.mesh.primitive_cylinder_add(vertices=8,radius=.018,depth=.6,location=(x,-.05,.2),rotation=(0,math.radians(-20),0))
+            bpy.context.object.data.materials.append(gold)
+    elif any(k in words for k in ("brain","neuron","memory","dream","sleep","nerve")):
         for x,z,r,m in [(-.8,.2,.52,pink),(-.4,.6,.58,pearl),(.2,.65,.62,pink),(.72,.35,.52,pink),(-.5,-.3,.48,purple),(.2,-.25,.56,pink),(.7,-.15,.4,pink)]:
             sphere("Brain lobe",(x,0,z),(r,.42,r*.8),m)
+        # Neural nodes and fine branches add depth to the brain model.
+        random.seed(24)
+        for i in range(24):
+            x=random.uniform(-1.15,1.1); z=random.uniform(-.45,1.05)
+            sphere("Neural node",(x,-.43,z),(.035,.025,.035),gold if i%3==0 else cyan)
+        for i in range(10):
+            x=-1.1+i*.23
+            bpy.ops.mesh.primitive_cylinder_add(vertices=8,radius=.012,depth=random.uniform(.25,.65),location=(x,-.4,random.uniform(-.2,.65)),rotation=(0,random.uniform(-.8,.8),0))
+            bpy.context.object.data.materials.append(cyan)
+    elif any(k in words for k in ("solar system","planet orbit","planets","saturn","jupiter","mars","earth","moon","galaxy","universe","black hole","space")):
+        sunmat=material("Solar gold",(1,.55,.04),.22,.05,1.2)
+        sphere("Sun",(-2.15,.15,.25),(.48,.42,.48),sunmat)
+        for i,(x,z,r,col) in enumerate([(-1.05,.45,.16,blue),(-.55,-.15,.23,gold),(.25,.45,.29,green),(1.05,-.1,.2,pink),(2.0,.5,.42,purple)]):
+            sphere("Planet",(x,.05,z),(r,r*.8,r),col)
+            if i==4: ring("Planet rings",(x,.05,z),r*1.45,pearl,(math.radians(68),0,.2))
+        random.seed(18)
+        for i in range(85):
+            sphere("Star",(random.uniform(-3.8,3.8),1.2,random.uniform(-.7,2.8)),(.012,)*3,pearl)
     elif any(k in words for k in ("sound","noise","hearing","ear","vibration","frequency","echo","music","pitch")):
         sphere("Sound source",(-1.3,0,.15),(.38,.35,.38),gold)
         for r in (.6,.95,1.35,1.8,2.25): ring("Sound wave",(-.7,0,.15),r,cyan)
@@ -79,6 +130,10 @@ def create_subject(scene):
         bpy.context.object.data.materials.append(green)
         for x,z,a in [(-.4,.5,-25),(.4,.2,25),(-.4,-.1,20),(.4,.75,-25),(0,1,0)]:
             o=sphere("Leaf",(x,0,z),(.48,.12,.18),green); o.rotation_euler[1]=math.radians(a)
+            bpy.ops.mesh.primitive_cylinder_add(vertices=10,radius=.012,depth=.7,location=(x,-.13,z),rotation=(0,math.radians(a),0))
+            bpy.context.object.data.materials.append(pearl)
+        for i in range(8):
+            sphere("Photosynthesis particle",(-.9+i*.25,-.25,1.25+(i%2)*.15),(.035,)*3,gold if i%2 else cyan)
         sphere("Sun",(1.7,.2,1.2),(.42,.3,.42),gold)
     elif any(k in words for k in ("cell","bacteria","virus","microscope","organelle")):
         sphere("Cell membrane",(0,0,.1),(1.45,.55,1.05),cyan)
@@ -86,6 +141,11 @@ def create_subject(scene):
         sphere("Nucleus",(-.2,-.5,.2),(.45,.2,.42),pink)
         for p in [(.6,-.5,.45),(.65,-.45,-.25),(-.8,-.4,.25)]:
             sphere("Organelle",p,(.2,.12,.13),gold)
+        for i in range(24):
+            a=i*2*math.pi/24
+            sphere("Membrane pore",(1.43*math.cos(a),-.12,.1+.99*math.sin(a)),(.035,.035,.035),pearl)
+        for p in [(-.65,-.48,-.35),(.35,-.48,.65),(-.75,-.48,.05),(.8,-.4,.05)]:
+            sphere("Mitochondrion",p,(.16,.08,.09),gold)
     elif any(k in words for k in ("volcano","eruption","lava","magma","fire","heat","lightning","storm")):
         bpy.ops.mesh.primitive_cone_add(vertices=48,radius1=1.45,radius2=.15,depth=2.3,location=(0,0,-.05))
         bpy.context.object.data.materials.append(dark)
@@ -108,6 +168,8 @@ def create_subject(scene):
         sphere("Moon",(1.65,.1,.9),(.3,)*3,pearl)
         random.seed(10)
         for i in range(45): sphere("Star",(random.uniform(-3.8,3.8),1.3,random.uniform(-.1,3)),(.018,)*3,pearl)
+    # Log the concrete visual brief to make topic mismatches easier to diagnose.
+    print("Scene visual brief:", str(scene.get("visual",""))[:180], flush=True)
     # Clean 3D typography is part of the rendered still, not a moving overlay.
     title=str(scene.get("title","SCIENCE")).upper()[:44]
     cu=bpy.data.curves.new("Scene title","FONT"); cu.body=title; cu.size=.19; cu.extrude=.002
