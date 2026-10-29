@@ -1,5 +1,4 @@
-name: Free Science Visuals — Storybook 2D
-
+name: Free Science Visuals — Public Domain Storybook
 on:
   workflow_dispatch:
   schedule:
@@ -26,11 +25,6 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Set up Node.js for browser rendering
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Install FFmpeg
         run: |
           sudo apt-get update
@@ -45,79 +39,45 @@ jobs:
           pip install playwright
           python -m playwright install --with-deps chromium
 
-      # Fail early if the workflow checkout is missing the intended 2D renderer
-      # or if the active video assembly code has regressed to a Blender call.
-      - name: Verify 2D rendering pipeline (no Blender)
+      - name: Verify public-domain image pipeline and static video assembly
         shell: bash
         run: |
           set -euo pipefail
-          test -f storybook_science_video.py
-          test -f scripts/storybook_scene_renderer.py
+          test -f scripts/openverse_visuals.py
+          test -f scripts/external_image_scene_renderer.py
           test -f scripts/render_video.py
           python - <<'PY'
           from pathlib import Path
-          import re
-
           entry = Path("storybook_science_video.py").read_text(encoding="utf-8")
-          renderer = Path("scripts/storybook_scene_renderer.py").read_text(encoding="utf-8")
+          images = Path("scripts/openverse_visuals.py").read_text(encoding="utf-8")
+          renderer = Path("scripts/external_image_scene_renderer.py").read_text(encoding="utf-8")
           assembler = Path("scripts/render_video.py").read_text(encoding="utf-8")
-
-          assert "storybook_scene_renderer" in entry and "render_scenes" in entry, (
-              "Video entry point is not wired to the HTML/CSS/JavaScript scene renderer."
-          )
-          assert "playwright" in renderer.lower() or "chromium" in renderer.lower(), (
-              "Scene renderer does not appear to use browser-based 2D rendering."
-          )
-          assert "ffmpeg" in assembler.lower(), (
-              "Video assembler must use FFmpeg."
-          )
-          assert "zoompan" not in assembler.lower(), (
-              "Still-image mode must not apply zoom or pan animation."
-          )
-          assert 'font:900 27px' in renderer and 'SCIENCE SHORT' in renderer, (
-              "TikTok-style bold narration subtitles/title styling is missing."
-          )
-          assert '.replace("TITLE",_safe(story.get("topic") or title))' in renderer, (
-              "The on-image title must come from the script topic, not a fixed label."
-          )
-          assert '.replace("CAPTION",caption[:150])' in renderer, (
-              "Scene subtitles must use the scene narration."
-          )
-
-          blender_patterns = [
-              r"import\s+bpy\b",
-              r"from\s+bpy\b",
-              r"blender\s+[-]",
-              r"subprocess\.(?:run|Popen|call)\([^\n]*blender",
-          ]
-          for filename, source in [
-              ("storybook_science_video.py", entry),
-              ("scripts/storybook_scene_renderer.py", renderer),
-              ("scripts/render_video.py", assembler),
-          ]:
-              for pattern in blender_patterns:
-                  if re.search(pattern, source, flags=re.IGNORECASE):
-                      raise SystemExit(
-                          f"Blender reference detected in active 2D pipeline: {filename} ({pattern})"
-                      )
-          print("Verified: HTML/CSS/JavaScript scenes + FFmpeg assembly; no Blender call detected.")
+          assert "download_scene_illustrations" in entry and "render_external_scenes" in entry
+          assert '"cc0", "pdm"' in images
+          assert "image-attribution-manifest.json" in images
+          assert "page.screenshot" in renderer and "object-fit:contain" in renderer
+          assert "ffmpeg" in assembler.lower()
+          assert "zoompan" not in assembler.lower()
+          print("Verified: CC0/Public Domain source filter, per-scene download, static illustrations, FFmpeg.")
           PY
 
-      - name: Generate storybook science video (no AI image generation)
+      - name: Generate science video (no AI image generation)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
 
-      - name: Upload video and story artifacts
+      - name: Upload video, story, source images, and attribution manifest
         uses: actions/upload-artifact@v4
         with:
-          name: free-science-storybook-2d
+          name: free-science-public-domain-storybook
           path: |
             output/storybook-science-*.mp4
             output/storybook-science-story-*.json
             output/storybook-science-narration-*.mp3
+            output/storybook-science-source-images-*
+            output/storybook-science-scenes-*
           retention-days: 7
           if-no-files-found: error
 
