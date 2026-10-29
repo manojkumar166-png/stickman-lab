@@ -180,38 +180,50 @@ def _image_signature(data: bytes) -> str | None:
         return ".gif"
     return None
 def _scene_queries(topic: str, scene: dict) -> list[str]:
-    """Build short search phrases from scene meaning, not Gemini's poetic art direction."""
-    text = " ".join(str(scene.get(key) or "") for key in ("title", "narration", "visual_description", "visual"))
-    text = re.sub(r"[^A-Za-z0-9\s'-]", " ", text).lower()
-    text = " ".join(text.split())
-    topic_clean = re.sub(r"[^A-Za-z0-9\s'-]", " ", topic).lower()
-    topic_clean = " ".join(topic_clean.split())
+    """Make image queries from what the scene actually says or shows."""
+    def clean(value: object) -> str:
+        value = re.sub(r"[^A-Za-z0-9\s'-]", " ", str(value or "")).lower()
+        return " ".join(value.split())
 
-    actions = [
-        (r"\b(dream|dreaming|dreams)\b", "anime man dreaming"),
-        (r"\b(wake|wakes|waking|awake|awakes|awaken)\b", "anime man waking up"),
-        (r"\b(sleep|sleeps|sleeping|asleep)\b", "anime man sleeping"),
-        (r"\b(think|thinks|thinking|thought|wonder|wonders|wondering)\b", "anime man thinking"),
-        (r"\b(walk|walks|walking|stroll|strolling)\b", "anime man walking"),
-        (r"\b(run|runs|running|jog|jogging)\b", "anime man running"),
-        (r"\b(cold|chill|chilly|shiver|shivers|shivering|goosebumps|gooseflesh)\b", "anime person feeling cold shivering"),
-        (r"\b(scared|fear|afraid|fright|frightened|terrified)\b", "anime person scared"),
-        (r"\b(remember|memory|memories|recall|recalling)\b", "anime person remembering thinking"),
+    # Narration/title describe the script beat; use visual text only as a secondary clue.
+    script_text = clean(" ".join(str(scene.get(k) or "") for k in ("title", "narration")))
+    visual_text = clean(" ".join(str(scene.get(k) or "") for k in ("visual_description", "visual")))
+    topic_clean = clean(topic)
+    action_rules = [
+        (r"\b(dream|dreaming|dreams)\b", "anime person dreaming"),
+        (r"\b(wake|wakes|waking|awake|awaken)\b", "anime person waking up"),
+        (r"\b(sleep|sleeps|sleeping|asleep)\b", "anime person sleeping"),
+        (r"\b(think|thinks|thinking|thought|wonder|wonders|wondering)\b", "anime person thinking"),
+        (r"\b(walk|walks|walking|stroll|strolling)\b", "anime person walking"),
+        (r"\b(run|runs|running|jog|jogging)\b", "anime person running"),
+        (r"\b(cold|chill|chilly|shiver|shivers|shivering|goosebumps|gooseflesh)\b", "anime person cold shivering"),
+        (r"\b(scared|fear|afraid|fright|frightened|terrified|horror|creepy)\b", "anime person scared"),
+        (r"\b(remember|memory|memories|recall|recalling)\b", "anime person remembering"),
         (r"\b(study|studies|studying|learn|learning|read|reading)\b", "anime person studying"),
         (r"\b(eat|eats|eating|food|hungry)\b", "anime person eating"),
         (r"\b(talk|talks|talking|speak|speaks|speaking|conversation)\b", "anime people talking"),
         (r"\b(look|looks|looking|see|sees|seeing|watch|watching)\b", "anime person looking"),
+        (r"\b(heart|heartbeat|pulse|racing heart)\b", "anime person holding chest heartbeat"),
+        (r"\b(skin|hair|body|arm|arms|hair standing)\b", "anime close up skin arm hair"),
     ]
     candidates = []
-    for pattern, phrase in actions:
-        if re.search(pattern, text):
-            candidates.append(phrase)
-    # Short topical phrases help find subject-specific images after the generic action search.
-    if topic_clean:
-        candidates.extend([f"anime {topic_clean[:55]}", topic_clean[:70]])
-    # Keep short, plain searches and try each only once.
-    return list(dict.fromkeys(q.strip() for q in candidates if q.strip())) or ["anime man thinking", "anime person", topic_clean[:70] or "science illustration"]
+    for source in (script_text, visual_text):
+        for pattern, phrase in action_rules:
+            if re.search(pattern, source) and phrase not in candidates:
+                candidates.append(phrase)
+        # Keep a short phrase from actual script wording as a search candidate too.
+        if source:
+            candidates.append("anime " + " ".join(source.split()[:5]))
 
+    if topic_clean:
+        candidates.append("anime " + " ".join(topic_clean.split()[:6]))
+    # Remove duplicates and overly long queries; preserve script-derived order.
+    result = []
+    for query in candidates:
+        query = " ".join(query.split())[:90].strip()
+        if query and query not in result:
+            result.append(query)
+    return result or ["anime person", topic_clean[:70] or "science illustration"]
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
