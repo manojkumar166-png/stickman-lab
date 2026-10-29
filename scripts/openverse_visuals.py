@@ -1,12 +1,14 @@
-"""Find and download public-domain/CC0 illustrations for every story scene.
+"""Find reusable science illustrations through multiple providers.
 
-Only CC0 and Public Domain Mark results are accepted. Openverse metadata is not
-a legal guarantee; source/creator/license URLs are preserved in the manifest.
+Provider order: Openverse CC0/Public Domain, Wikimedia Commons public domain/CC0,
+then optional Pixabay and Unsplash APIs when their keys are configured. The
+manifest preserves provider, source, and license metadata; metadata is not a
+legal guarantee, so review the manifest before publishing.
 """
 from __future__ import annotations
 
-import concurrent.futures
 import json
+import os
 import random
 import re
 import time
@@ -15,67 +17,168 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-API = "https://api.openverse.org/v1/images/"
-ALLOWED_LICENSES = {"cc0", "pdm"}
-MAX_WORKERS = 2
-TIMEOUT = 45
+OPENVERSE_API = "https://api.openverse.org/v1/images/"
+WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
+PIXABAY_API = "https://pixabay.com/api/"
+UNSPLASH_API = "https://api.unsplash.com/search/photos"
+TIMEOUT = 30
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
-USER_AGENT = "stickman-lab-public-domain-illustrations/1.0"
+USER_AGENT = "stickman-lab-science-visuals/1.1 (educational video pipeline)"
+ALLOWED_LICENSES = {"cc0", "pdm", "public domain", "public-domain", "cc-zero"}
 
-def _request(url: str, timeout: int = TIMEOUT) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def _request(url: str, timeout: int = TIMEOUT, headers: dict | None = None) -> bytes:
+    request_headers = {"User-Agent": USER_AGENT}
+    if headers:
+        request_headers.update(headers)
+    req = urllib.request.Request(url, headers=request_headers)
     with urllib.request.urlopen(req, timeout=timeout) as response:
-        return response.read(MAX_IMAGE_BYTES + 1)
+        data = response.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ValueError("response exceeds 12 MiB limit")
+    return data
 
-def _search(query: str) -> list[dict]:
-    params = urllib.parse.urlencode({
-        "q": query[:200],
-        "license": "cc0,pdm",
-        "page_size": 10,
-        "mature": "false",
-        "filter_dead": "true",
-    })
+def _json(url: str, headers: dict | None = None) -> dict:
+    return json.loads(_request(url, headers=headers).decode("utf-8"))
+
+def _with_retry(url: str, headers: dict | None = None) -> dict:
     last_error = None
-    for attempt in range(5):
+    for attempt in range(4):
         try:
-            payload = json.loads(_request(API + "?" + params).decode("utf-8"))
-            return [
-                item for item in payload.get("results", [])
-                if str(item.get("license", "")).lower() in ALLOWED_LICENSES
-                and item.get("url")
-                and item.get("foreign_landing_url")
-            ]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            return _json(url, headers=headers)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
             last_error = exc
-            time.sleep(min(2 ** attempt, 20))
-    raise RuntimeError(f"Openverse search failed for {query!r}: {last_error}")
+            if attempt < 3:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"provider request failed: {last_error}")
 
-def _safe_name(value: str) -> str:
-    value = re.sub(r"[^a-zA-Z0-9_-]+", "-", value).strip("-").lower()
-    return value[:60] or "scene"
+def _search_openverse(query: str) -> list[dict]:
+    params = urllib.parse.urlencode({
+        "q": query[:160], "license": "cc0,pdm", "page_size": 10,
+        "mature": "false", "filter_dead": "true",
+    })
+    payload = _with_retry(OPENVERSE_API + "?" + params)
+    items = []
+    for item in payload.get("results", []):
+        license_name = str(item.get("license", "")).lower()
+        if license_name in ALLOWED_LICENSES and item.get("url") and item.get("foreign_landing_url"):
+            items.append({
+                "id": "openverse:" + str(item.get("id") or item["url"]),
+                "url": item["url"], "source_page": item["foreign_landing_url"],
+                "title": item.get("title"), "creator": item.get("creator"),
+                "license": item.get("license"), "license_url": item.get("license_url"),
+                "provider": "Openverse", "attribution": item.get("attribution"),
+            })
+    return items
+
+def _search_wikimedia(query: str) -> list[dict]:
+    params = urllib.parse.urlencode({
+        "action": "query", "generator": "search",
+        "gsrsearch": f'filetype:bitmap "{query}" (CC0 OR "public domain")',
+        "gsrnamespace": 6, "gsrlimit": 10, "prop": "imageinfo",
+        "iiprop": "url|extmetadata", "iiurlwidth": 1400, "format": "json",
+    })
+    payload = _with_retry(WIKIMEDIA_API + "?" + params)
+    items = []
+    for page in payload.get("query", {}).get("pages", {}).values():
+        info_list = page.get("imageinfo") or []
+        if not info_list:
+            continue
+        info = info_list[0]
+        meta = info.get("extmetadata") or {}
+        license_name = str((meta.get("LicenseShortName") or {}).get("value", "")).strip()
+        license_url = str((meta.get("LicenseUrl") or {}).get("value", "")).strip()
+        normalized = license_name.lower()
+        if normalized not in ALLOWED_LICENSES and not ("public domain" in normalized or "cc0" in normalized):
+            continue
+        image_url = info.get("thumburl") or info.get("url")
+        if not image_url:
+            continue
+        items.append({
+            "id": "wikimedia:" + str(page.get("pageid")),
+            "url": image_url, "source_page": page.get("canonicalurl") or info.get("descriptionurl"),
+            "title": page.get("title"), "creator": (meta.get("Artist") or {}).get("value"),
+            "license": license_name, "license_url": license_url,
+            "provider": "Wikimedia Commons",
+            "attribution": (meta.get("Credit") or {}).get("value"),
+        })
+    return items
+
+def _search_pixabay(query: str) -> list[dict]:
+    key = os.environ.get("PIXABAY_API_KEY")
+    if not key:
+        return []
+    params = urllib.parse.urlencode({
+        "key": key, "q": query[:100], "image_type": "illustration",
+        "safesearch": "true", "per_page": 10,
+    })
+    payload = _with_retry(PIXABAY_API + "?" + params)
+    return [{
+        "id": "pixabay:" + str(item.get("id")), "url": item.get("largeImageURL") or item.get("webformatURL"),
+        "source_page": item.get("pageURL"), "title": query,
+        "creator": item.get("user"), "license": "Pixabay Content License",
+        "license_url": "https://pixabay.com/service/license-summary/",
+        "provider": "Pixabay", "attribution": item.get("user"),
+    } for item in payload.get("hits", []) if item.get("largeImageURL") or item.get("webformatURL")]
+
+def _search_unsplash(query: str) -> list[dict]:
+    key = os.environ.get("UNSPLASH_ACCESS_KEY")
+    if not key:
+        return []
+    params = urllib.parse.urlencode({"query": query[:100], "per_page": 10, "content_filter": "high"})
+    payload = _with_retry(UNSPLASH_API + "?" + params, {"Authorization": f"Client-ID {key}"})
+    items = []
+    for item in payload.get("results", []):
+        urls = item.get("urls") or {}
+        image_url = urls.get("regular") or urls.get("small")
+        if not image_url:
+            continue
+        items.append({
+            "id": "unsplash:" + str(item.get("id")), "url": image_url,
+            "source_page": (item.get("links") or {}).get("html"),
+            "title": (item.get("alt_description") or query),
+            "creator": ((item.get("user") or {}).get("name")),
+            "license": "Unsplash License",
+            "license_url": "https://unsplash.com/license",
+            "provider": "Unsplash",
+            "attribution": ((item.get("user") or {}).get("name")),
+        })
+    return items
 
 def _image_signature(data: bytes) -> str | None:
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+    if data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
         return ".png"
-    if data.startswith(b"\xff\xd8\xff"):
+    if data.startswith(b"\\xff\\xd8\\xff"):
         return ".jpg"
-    if data.startswith((b"RIFF",)) and data[8:12] == b"WEBP":
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
         return ".webp"
     if data.startswith((b"GIF87a", b"GIF89a")):
         return ".gif"
     return None
 
 def _scene_query(topic: str, scene: dict) -> str:
-    # Prefer the concrete visual description, not poetic titles or multiple
-    # long fields concatenated together (which produce poor search queries).
     visual = str(scene.get("visual_description") or scene.get("visual") or "")
     if not visual:
         visual = str(scene.get("title") or scene.get("narration") or "")
-    cleaned = " ".join(visual.split())
-    cleaned = re.sub(r"[^\\w\\s,-]", " ", cleaned)
-    cleaned = " ".join(cleaned.split())
-    # Short queries are more reliable and less likely to time out.
+    cleaned = re.sub(r"[^\\w\\s,-]", " ", " ".join(visual.split()))
     return " ".join(cleaned.split()[:12])[:120] or topic[:120]
+
+def _search_all(query: str) -> list[dict]:
+    providers = [
+        ("Openverse CC0/Public Domain", _search_openverse),
+        ("Wikimedia Commons Public Domain/CC0", _search_wikimedia),
+        ("Pixabay", _search_pixabay),
+        ("Unsplash", _search_unsplash),
+    ]
+    for provider_name, search_fn in providers:
+        try:
+            results = search_fn(query)
+            if results:
+                print(f"{provider_name}: found {len(results)} candidates for {query!r}", flush=True)
+                return results
+            print(f"{provider_name}: no eligible results for {query!r}; trying next provider", flush=True)
+        except Exception as exc:
+            print(f"{provider_name}: search unavailable ({exc}); trying next provider", flush=True)
+    return []
 
 def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     scenes = story.get("scenes") or []
@@ -83,32 +186,20 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
         raise RuntimeError("Story has no scenes; cannot search for illustrations.")
     output_dir.mkdir(parents=True, exist_ok=True)
     topic = str(story.get("topic") or "science")
-    queries = [_scene_query(topic, scene) for scene in scenes]
-    unique_queries = list(dict.fromkeys(q.casefold() for q in queries))
-    original_by_normalized = {q.casefold(): q for q in queries}
-
-    # Bounded concurrency; no search-engine scraping and no image-generation API.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        search_results = list(pool.map(_search, [original_by_normalized[q] for q in unique_queries]))
-    results_by_query = dict(zip(unique_queries, search_results))
-
+    manifest, paths, used_ids = [], [], set()
     rng = random.SystemRandom()
-    manifest = []
-    paths = []
-    used_ids = set()
-    for index, (scene, query) in enumerate(zip(scenes, queries), start=1):
-        candidates = list(results_by_query[query.casefold()])
-        # Randomize only among public-domain/CC0 candidates returned for this scene.
+
+    for index, scene in enumerate(scenes, start=1):
+        query = _scene_query(topic, scene)
+        candidates = _search_all(query)
         rng.shuffle(candidates)
         chosen = None
-        last_error = None
+        errors = []
         for item in candidates:
-            if item.get("id") in used_ids:
+            if not item.get("url") or item.get("id") in used_ids:
                 continue
             try:
                 data = _request(str(item["url"]))
-                if len(data) > MAX_IMAGE_BYTES:
-                    raise ValueError("image exceeds 12 MiB limit")
                 suffix = _image_signature(data)
                 if not suffix:
                     raise ValueError("download is not a recognized image format")
@@ -116,14 +207,15 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
                     raise ValueError("image is suspiciously small")
                 chosen = (item, data, suffix)
                 break
-            except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-                last_error = str(exc)
+            except Exception as exc:
+                errors.append(f"{item.get('provider')}: {exc}")
         if not chosen:
-            reason = f"; last download error: {last_error}" if last_error else ""
+            detail = "; ".join(errors[-3:]) or "no eligible search results"
             raise RuntimeError(
-                f"No downloadable CC0/Public Domain illustration for scene {index} "
-                f"({scene.get('title')!r}), query={query!r}; found {len(candidates)} "
-                f"eligible candidates{reason}. Stopping before narration/video rendering."
+                f"No reusable illustration found for scene {index} "
+                f"({scene.get('title')!r}), query={query!r}. Tried Openverse, "
+                f"Wikimedia Commons, Pixabay and Unsplash. {detail}. "
+                "Configure PIXABAY_API_KEY and/or UNSPLASH_ACCESS_KEY for those optional providers."
             )
         item, data, suffix = chosen
         used_ids.add(item.get("id"))
@@ -132,24 +224,14 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
         scene["_external_image_path"] = str(path.resolve())
         paths.append(path)
         manifest.append({
-            "scene_index": index,
-            "scene_title": str(scene.get("title") or ""),
-            "search_query": query,
-            "file": path.name,
-            "title": item.get("title"),
-            "creator": item.get("creator"),
-            "license": item.get("license"),
-            "license_version": item.get("license_version"),
-            "license_url": item.get("license_url"),
-            "source_page": item.get("foreign_landing_url"),
-            "image_url": item.get("url"),
-            "provider": item.get("provider"),
-            "source": item.get("source"),
-            "width": item.get("width"),
-            "height": item.get("height"),
+            "scene_index": index, "scene_title": str(scene.get("title") or ""),
+            "search_query": query, "file": path.name, "title": item.get("title"),
+            "creator": item.get("creator"), "license": item.get("license"),
+            "license_url": item.get("license_url"), "source_page": item.get("source_page"),
+            "image_url": item.get("url"), "provider": item.get("provider"),
             "attribution": item.get("attribution"),
         })
-        print(f"Public-domain visual {index}/{len(scenes)}: {query} -> {path.name}", flush=True)
+        print(f"Illustration {index}/{len(scenes)} via {item.get('provider')}: {query} -> {path.name}", flush=True)
 
     (output_dir / "image-attribution-manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
