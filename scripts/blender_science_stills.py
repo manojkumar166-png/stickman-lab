@@ -146,6 +146,65 @@ def create_subject(scene):
             sphere("Membrane pore",(1.43*math.cos(a),-.12,.1+.99*math.sin(a)),(.035,.035,.035),pearl)
         for p in [(-.65,-.48,-.35),(.35,-.48,.65),(-.75,-.48,.05),(.8,-.4,.05)]:
             sphere("Mitochondrion",p,(.16,.08,.09),gold)
+    elif any(k in words for k in ("ancient rome","roman empire","roman forum","colosseum","roman","ancient egypt","egyptian","pharaoh","pyramid","hieroglyph","ancient civilization","archaeology","archaeological","ancient greece","greek temple","mesopotamia","indus valley","maya civilization","aztec","medieval castle","medieval village","historical architecture","ancient history")):
+        # Adaptive historical reconstruction: choose architecture from the scene's
+        # own description rather than defaulting unfamiliar history to a planet.
+        stone=material("Weathered limestone",(.63,.49,.31),.82)
+        pale=material("Sunlit sandstone",(.88,.70,.43),.76)
+        shadow=material("Carved stone",(.27,.22,.17),.9)
+        accent=material("Ancient pigment",(.12,.34,.49),.48)
+        sand=material("Desert ground",(.43,.28,.14),.95)
+        bpy.ops.mesh.primitive_plane_add(size=200,location=(0,0,-1.18))
+        bpy.context.object.data.materials.append(sand)
+        if any(k in words for k in ("egypt","pharaoh","pyramid","hieroglyph")):
+            # Pyramids, temple pylons, obelisks and a stylized sphinx silhouette.
+            for x,z,s in [(-1.45,-.12,1.55),(.65,-.25,1.15)]:
+                bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=s, radius2=0, depth=s*1.65, location=(x,.15,z), rotation=(0,0,math.radians(45)))
+                obj=bpy.context.object; obj.name="Ancient Egyptian pyramid"; obj.data.materials.append(pale)
+                obj.rotation_euler[0]=math.radians(90)
+            # Temple pylons and a colonnaded entrance add scale and context.
+            for x in (1.75,2.35):
+                bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.05,-.05))
+                obj=bpy.context.object; obj.name="Egyptian temple pylon"; obj.scale=(.42,.48,1.0); obj.data.materials.append(stone)
+            for x in (-.2,.2,.6,1.0):
+                bpy.ops.mesh.primitive_cylinder_add(vertices=32,radius=.075,depth=.9,location=(x,-.28,-.25))
+                obj=bpy.context.object; obj.name="Temple column"; obj.data.materials.append(pale)
+                for z in (.17,-.66):
+                    sphere("Carved column capital",(x,-.28,z),(.12,.12,.08),accent)
+            # An obelisk and engraved-looking horizontal bands.
+            bpy.ops.mesh.primitive_cube_add(size=1,location=(2.8,-.1,.0))
+            obj=bpy.context.object; obj.name="Obelisk"; obj.scale=(.12,.13,.92); obj.data.materials.append(pale)
+            bpy.ops.mesh.primitive_cone_add(vertices=4,radius1=.12,radius2=0,depth=.22,location=(2.8,-.1,.57))
+            bpy.context.object.data.materials.append(accent)
+        elif any(k in words for k in ("rome","roman","colosseum","forum")):
+            # Roman amphitheatre facade, repeated arches, columns and tiled forum.
+            bpy.ops.mesh.primitive_cube_add(size=1,location=(0,.15,-.08))
+            obj=bpy.context.object; obj.name="Roman amphitheatre core"; obj.scale=(3.6,.62,1.55); obj.data.materials.append(stone)
+            for row,z in enumerate((-.38,.12,.62)):
+                for i in range(9):
+                    x=-1.55+i*.39
+                    bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.22,z))
+                    obj=bpy.context.object; obj.name="Roman arch opening"; obj.scale=(.25,.08,.30); obj.data.materials.append(shadow)
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=.045,depth=.42,location=(x-.18,-.28,z),rotation=(math.pi/2,0,0))
+                    bpy.context.object.data.materials.append(pale)
+            # Forum columns and pediment evoke a temple without requiring external assets.
+            for x in (-2.35,-1.9,1.9,2.35):
+                bpy.ops.mesh.primitive_cylinder_add(vertices=32,radius=.09,depth=.95,location=(x,-.48,-.22))
+                obj=bpy.context.object; obj.name="Roman forum column"; obj.data.materials.append(pale)
+            bpy.ops.mesh.primitive_cube_add(size=1,location=(0,-.48,.28))
+            obj=bpy.context.object; obj.name="Roman temple entablature"; obj.scale=(1.25,.16,.14); obj.data.materials.append(pale)
+        else:
+            # Fallback for other historical settings: layered settlement, walls,
+            # towers, a central public building and repeated architectural detail.
+            for i,(x,h,w) in enumerate([(-2.1,.8,.65),(-1.15,1.25,.8),(0,1.65,1.0),(1.2,1.0,.72),(2.15,.72,.55)]):
+                bpy.ops.mesh.primitive_cube_add(size=1,location=(x,.1,-.55+h/2))
+                obj=bpy.context.object; obj.name="Historic settlement building"; obj.scale=(w,.5,h); obj.data.materials.append(pale if i%2==0 else stone)
+                for j in range(max(1,int(h*3))):
+                    bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.17,-.4+j*.28))
+                    obj=bpy.context.object; obj.name="Building inset"; obj.scale=(.11,.04,.15); obj.data.materials.append(shadow)
+            for x in (-2.7,2.7):
+                bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=.12,depth=1.5,location=(x,.15,-.35))
+                bpy.context.object.data.materials.append(stone)
     elif any(k in words for k in ("ocean","sea floor","underwater","coral reef","deep sea","marine","tide","ocean current","sea life","whale","shark","dolphin")):
         # Layered ocean diorama: deep water, textured waves, coral, fish, bubbles and seabed.
         deep=material("Ocean depth",(.008,.075,.24),.24,.1)
