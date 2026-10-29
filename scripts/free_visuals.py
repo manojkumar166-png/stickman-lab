@@ -166,29 +166,24 @@ SPACE_TERMS = ("space", "astronaut", "planet", "jupiter", "mars", "sun", "solar"
 
 
 def _radial_sphere(size, base, highlight=(255, 255, 255), light=(-0.38, -0.48), strength=0.72):
-    """Render a softly shaded, glossy 3D-looking sphere using only Pillow."""
-    from PIL import ImageChops
+    """Fast Pillow-only faux-3D sphere built from shaded layers and a soft specular highlight."""
     w, h = size
     base_rgb = tuple(int(base[i:i+2], 16) for i in (1, 3, 5)) if isinstance(base, str) else base
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    px = img.load()
-    lx, ly = light
-    for y in range(h):
-        ny = (2 * y / max(1, h - 1)) - 1
-        for x in range(w):
-            nx = (2 * x / max(1, w - 1)) - 1
-            rr = nx * nx + ny * ny
-            if rr > 1:
-                continue
-            nz = math.sqrt(max(0.0, 1.0 - rr))
-            diffuse = max(0.0, nx * lx + ny * ly + nz * 0.82)
-            shade = 0.28 + 0.72 * diffuse
-            spec = max(0.0, 1.0 - ((nx + 0.34) ** 2 + (ny + 0.42) ** 2) / 0.12) ** 5
-            vals = tuple(max(0, min(255, int(base_rgb[i] * shade * (1 - 0.22 * rr) + highlight[i] * spec * strength))) for i in range(3))
-            alpha = 255
-            px[x, y] = (*vals, alpha)
+    d = ImageDraw.Draw(img, "RGBA")
+    # Dark edge / body, then offset lit layers create volume without expensive pixel loops.
+    d.ellipse((1, 1, w-2, h-2), fill=(*tuple(int(v*.48) for v in base_rgb), 255))
+    d.ellipse((w*.06, h*.045, w*.92, h*.91), fill=(*tuple(int(v*.72) for v in base_rgb), 255))
+    d.ellipse((w*.10, h*.08, w*.84, h*.82), fill=(*base_rgb, 255))
+    lit = tuple(min(255, int(base_rgb[i]*.55 + highlight[i]*.45)) for i in range(3))
+    d.ellipse((w*.14, h*.10, w*.67, h*.62), fill=(*lit, 210))
+    # Small blurred highlight gives a glossy, animated-feature lighting cue.
+    hi = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hi)
+    hd.ellipse((w*.18, h*.13, w*.47, h*.35), fill=(*highlight, int(150*strength)))
+    hi = hi.filter(ImageFilter.GaussianBlur(max(2, int(min(w, h)*.035))))
+    img = Image.alpha_composite(img, hi)
     return img
-
 
 def fallback_illustration(topic, scene_title, narration, width, height, index):
     """Create polished, animated-feature-inspired 3D-looking science art with Pillow.
@@ -421,7 +416,7 @@ def render_motion_video(scene_dir, audio_path, output_path, config):
             # processed four times as many pixels as needed for every scene.
             zoompan = f"scale={int(width*1.12)}:{int(height*1.12)}:force_original_aspect_ratio=increase,crop={int(width*1.12)}:{int(height*1.12)},zoompan=z='min(zoom+0.00035,1.08)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={fps},format=yuv420p"
             subprocess.run(
-                ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(image), "-vf", zoompan,
+                ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "1", "-i", str(image), "-vf", zoompan,
                  "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", str(clip)],
                 check=True
             )
