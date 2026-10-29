@@ -165,137 +165,162 @@ SPACE_TERMS = ("space", "astronaut", "planet", "jupiter", "mars", "sun", "solar"
                "satellite", "spacecraft", "vacuum", "plasma", "nebula", "galaxy", "moon")
 
 
+def _radial_sphere(size, base, highlight=(255, 255, 255), light=(-0.38, -0.48), strength=0.72):
+    """Render a softly shaded, glossy 3D-looking sphere using only Pillow."""
+    from PIL import ImageChops
+    w, h = size
+    base_rgb = tuple(int(base[i:i+2], 16) for i in (1, 3, 5)) if isinstance(base, str) else base
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = img.load()
+    lx, ly = light
+    for y in range(h):
+        ny = (2 * y / max(1, h - 1)) - 1
+        for x in range(w):
+            nx = (2 * x / max(1, w - 1)) - 1
+            rr = nx * nx + ny * ny
+            if rr > 1:
+                continue
+            nz = math.sqrt(max(0.0, 1.0 - rr))
+            diffuse = max(0.0, nx * lx + ny * ly + nz * 0.82)
+            shade = 0.28 + 0.72 * diffuse
+            spec = max(0.0, 1.0 - ((nx + 0.34) ** 2 + (ny + 0.42) ** 2) / 0.12) ** 5
+            vals = tuple(max(0, min(255, int(base_rgb[i] * shade * (1 - 0.22 * rr) + highlight[i] * spec * strength))) for i in range(3))
+            alpha = 255
+            px[x, y] = (*vals, alpha)
+    return img
+
+
 def fallback_illustration(topic, scene_title, narration, width, height, index):
-    """Create a clean, original diagram-like illustration when no good free file is found."""
-    image = Image.new("RGB", (width, height), "#101b35")
-    draw = ImageDraw.Draw(image)
-    title = scene_title or topic
-    # Friendly color palette; shapes are explanatory rather than character drawings.
-    palette = ["#55d6be", "#ffd166", "#6cb6ff", "#ff7b9c", "#b8a1ff"]
-    for i in range(70):
-        x = (i * 137 + index * 41) % width
-        y = (i * 83 + index * 29) % height
+    """Create polished, animated-feature-inspired 3D-looking science art with Pillow.
+
+    This is procedural rendering, not a diffusion model: use gradients, depth,
+    glossy shaded objects, atmospheric light, soft shadows, and cinematic framing
+    instead of flat diagram icons.
+    """
+    from PIL import ImageChops, ImageEnhance
+    W, H = int(width), int(height)
+    key = (topic + " " + scene_title + " " + narration[:450]).lower()
+    scene_key = (scene_title + " " + narration[:300]).lower()
+    # Deep, colorful background gradient.
+    tops = [(9, 17, 43), (12, 29, 54), (20, 19, 54), (7, 34, 52)]
+    bottoms = [(28, 53, 85), (29, 38, 83), (49, 28, 76), (10, 61, 72)]
+    palette_idx = index % len(tops)
+    image = Image.new("RGB", (W, H))
+    pix = image.load()
+    top, bottom = tops[palette_idx], bottoms[palette_idx]
+    for y in range(H):
+        t = y / max(1, H - 1)
+        row = tuple(int(top[c] * (1-t) + bottom[c] * t) for c in range(3))
+        for x in range(W):
+            pix[x, y] = row
+    # Atmospheric glow and soft, out-of-focus background lights.
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse((W*.19, H*.04, W*.77, H*.88), fill=(54, 123, 220, 46))
+    gd.ellipse((W*.48, H*.12, W*.91, H*.77), fill=(176, 75, 202, 30))
+    glow = glow.filter(ImageFilter.GaussianBlur(max(18, int(W*.045))))
+    image = Image.alpha_composite(image.convert("RGBA"), glow)
+    draw = ImageDraw.Draw(image, "RGBA")
+    # Tiny depth-of-field particles; restrained rather than diagram decoration.
+    for i in range(54):
+        x = (i * 197 + index * 83) % W
+        y = (i * 113 + index * 47) % int(H * .78)
         r = 1 + (i % 3)
-        draw.ellipse((x-r, y-r, x+r, y+r), fill="#304263")
-    cx, cy = width // 2, height // 2 - 15
-    key = (topic + " " + scene_title + " " + narration).lower()
-    scene_key = (scene_title + " " + narration).lower()
-    # Topic-specific fallback art for sleep, dreams, and neuroscience. Draw a
-    # different visual cue for each scene instead of reusing generic node diagrams.
-    if any(x in scene_key for x in ("dream", "sleep", "rem", "nightmare", "brain", "neural", "lucid", "memory", "forget", "animal", "baby", "fear", "threat", "falling", "flying", "paralyzed", "muscle", "movie", "cinema")):
-        draw.ellipse((cx-260, cy-170, cx+260, cy+170), fill="#182b50", outline="#6cb6ff", width=5)
-        if any(x in scene_key for x in ("rem", "paralyzed", "muscle")):
-            # Eyes and REM movement lines.
-            draw.ellipse((cx-125, cy-50, cx-25, cy+10), outline="#ffffff", width=8)
-            draw.ellipse((cx+25, cy-50, cx+125, cy+10), outline="#ffffff", width=8)
-            draw.arc((cx-110, cy-45, cx-35, cy+5), 190, 345, fill="#ff7b9c", width=7)
-            draw.arc((cx+35, cy-45, cx+110, cy+5), 190, 345, fill="#ff7b9c", width=7)
-            for j in range(3):
-                draw.line((cx-210+j*18, cy-115, cx-175+j*18, cy-135), fill="#55d6be", width=5)
-                draw.line((cx+175+j*18, cy+105, cx+210+j*18, cy+85), fill="#55d6be", width=5)
-        elif any(x in scene_key for x in ("memory", "forget", "consolidation", "neural", "highways", "problem solving")):
-            # Brain-like lobes with linked memory nodes.
-            for x, y, r in ((cx-85,cy-30,65),(cx-25,cy-75,58),(cx+40,cy-60,62),(cx+90,cy-5,55),(cx+20,cy+45,58),(cx-55,cy+40,55)):
-                draw.ellipse((x-r,y-r,x+r,y+r), fill="#ff7b9c", outline="#ffd6e0", width=3)
-            nodes = [(cx-120,cy-30),(cx-25,cy-85),(cx+70,cy-45),(cx+110,cy+25),(cx,cy+60)]
-            for j in range(len(nodes)-1):
-                draw.line((*nodes[j], *nodes[j+1]), fill="#ffd166", width=7)
-        elif any(x in scene_key for x in ("nightmare", "fear", "threat", "falling", "paradox", "stress")):
-            # A dream cloud with a bold lightning / fear symbol.
-            draw.ellipse((cx-150,cy-65,cx-35,cy+40), fill="#b8a1ff")
-            draw.ellipse((cx-75,cy-110,cx+60,cy+40), fill="#b8a1ff")
-            draw.ellipse((cx+15,cy-60,cx+145,cy+45), fill="#b8a1ff")
-            draw.polygon([(cx+15,cy-70),(cx-25,cy+5),(cx+15,cy+5),(cx-5,cy+75),(cx+65,cy-15),(cx+25,cy-15)], fill="#ffd166")
-        elif any(x in scene_key for x in ("animal", "animals", "baby", "babies")):
-            # Small sleeping animal/baby silhouette and dream stars.
-            draw.ellipse((cx-100,cy-75,cx+95,cy+80), fill="#ffd166", outline="#fff0bf", width=4)
-            draw.ellipse((cx-70,cy-110,cx-20,cy-60), fill="#ffd166")
-            draw.ellipse((cx+25,cy-110,cx+75,cy-60), fill="#ffd166")
-            draw.arc((cx-35,cy-5,cx+10,cy+30), 10, 170, fill="#101b35", width=5)
-            draw.arc((cx+30,cy-5,cx+75,cy+30), 10, 170, fill="#101b35", width=5)
-            for sx,sy in ((cx+175,cy-120),(cx+220,cy-45),(cx-190,cy+90)):
-                draw.polygon([(sx,sy-18),(sx+6,sy-5),(sx+20,sy),(sx+6,sy+6),(sx,sy+20),(sx-6,sy+6),(sx-20,sy),(sx-6,sy-5)], fill="#55d6be")
-        elif any(x in scene_key for x in ("lucid", "controlling", "personal cinema", "movie", "flying")):
-            # Thought bubble with a miniature dream landscape.
-            for bx,by,br in ((cx-140,cy-90,48),(cx-70,cy-125,60),(cx+10,cy-120,58),(cx+100,cy-80,50)):
-                draw.ellipse((bx-br,by-br,bx+br,by+br), fill="#263f6b", outline="#6cb6ff", width=4)
-            draw.ellipse((cx-12,cy-25,cx+12,cy-1), fill="#ffffff")
-            draw.ellipse((cx+25,cy+8,cx+42,cy+25), fill="#ffffff")
-            draw.ellipse((cx+45,cy+30,cx+57,cy+42), fill="#ffffff")
-            draw.arc((cx-160,cy-30,cx+160,cy+150), 185, 350, fill="#55d6be", width=8)
-            draw.ellipse((cx+80,cy+15,cx+125,cy+60), fill="#ffd166")
-        else:
-            # Default sleep scene: pillow, sleeper, crescent moon and stars.
-            draw.rounded_rectangle((cx-210,cy+35,cx+210,cy+125), radius=28, fill="#6cb6ff", outline="#b8dcff", width=4)
-            draw.ellipse((cx-135,cy-85,cx+25,cy+75), fill="#ffd6b0", outline="#fff0df", width=4)
-            draw.arc((cx-95,cy-20,cx-35,cy+20), 10, 170, fill="#101b35", width=6)
-            draw.arc((cx-20,cy-20,cx+40,cy+20), 10, 170, fill="#101b35", width=6)
-            draw.ellipse((cx+90,cy-145,cx+190,cy-45), fill="#ffd166")
-            draw.ellipse((cx+120,cy-165,cx+210,cy-65), fill="#182b50")
-            for sx,sy in ((cx-210,cy-120),(cx+30,cy-155),(cx+220,cy+5)):
-                draw.polygon([(sx,sy-16),(sx+5,sy-5),(sx+16,sy),(sx+5,sy+5),(sx,sy+16),(sx-5,sy+5),(sx-16,sy),(sx-5,sy-5)], fill="#55d6be")
-    elif any(x in key for x in ("space", "planet", "sun", "moon", "star", "galaxy", "black hole")):
-        for r, color in ((190, "#263f6b"), (130, "#345f8b"), (70, "#4b8bb5")):
-            draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=color, outline="#9bd8ff", width=3)
-        draw.ellipse((cx-43, cy-43, cx+43, cy+43), fill="#ffd166")
-        draw.ellipse((cx-250, cy-110, cx-225, cy-85), fill="#ffffff")
-        draw.ellipse((cx+215, cy+105, cx+238, cy+128), fill="#ffffff")
-    elif any(x in key for x in ("atom", "molecule", "cell", "dna", "chemical")):
-        for j, (dx, dy) in enumerate(((-120, -40), (0, 0), (120, -40), (-65, 100), (75, 100))):
-            x, y = cx + dx, cy + dy
-            if j:
-                draw.line((cx, cy, x, y), fill="#8fb9d9", width=8)
-            r = 35 if j == 0 else 26
-            draw.ellipse((x-r, y-r, x+r, y+r), fill=palette[j], outline="#ffffff", width=3)
-    elif any(x in key for x in ("sound", "noise", "explosion", "boom", "bell", "wave", "vibration", "ear", "eardrum", "music", "roar", "whisper", "silence", "train", "radio")):
-        # Sound-wave scene: wavefronts and a source object, not the generic node map.
-        for radius, color in ((90, "#ffd166"), (155, "#55d6be"), (225, "#6cb6ff")):
-            draw.arc((cx-radius, cy-radius, cx+radius, cy+radius), 235, 125, fill=color, width=9)
-        if any(x in key for x in ("explosion", "boom", "loud")):
-            draw.polygon([(cx,cy-125),(cx+35,cy-40),(cx+110,cy-75),(cx+65,cy+5),(cx+130,cy+55),(cx+40,cy+60),(cx+15,cy+145),(cx-25,cy+65),(cx-105,cy+90),(cx-60,cy+15),(cx-120,cy-35),(cx-35,cy-45)], fill="#ff7b4a", outline="#ffd166")
-        elif any(x in key for x in ("ear", "eardrum", "internal", "body")):
-            draw.ellipse((cx-65,cy-100,cx+65,cy+100), fill="#ffb5a7", outline="#ffe1da", width=6)
-            draw.arc((cx-35,cy-65,cx+40,cy+65), 250, 110, fill="#9b4357", width=8)
-            draw.line((cx+10,cy-35,cx+70,cy-10,cx+10,cy+25), fill="#9b4357", width=7)
-        elif any(x in key for x in ("radio", "astronaut", "space", "star wars", "vacuum", "planet", "mars", "jupiter", "sun")):
-            draw.ellipse((cx-90,cy-90,cx+90,cy+90), fill="#c65d4d", outline="#ffb28a", width=5)
-            draw.arc((cx-185,cy-135,cx+185,cy+135), 190, 350, fill="#6cb6ff", width=7)
-            draw.arc((cx-235,cy-175,cx+235,cy+175), 10, 170, fill="#55d6be", width=6)
-            draw.ellipse((cx+150,cy-95,cx+177,cy-68), fill="#ffffff")
-        else:
-            # Repeating pressure wave through air or another material.
-            pts = [(x, cy + int(90 * math.sin((x-cx)/38))) for x in range(50, width-50, 5)]
-            draw.line(pts, fill="#55d6be", width=9)
-            draw.line((50, cy+150, width-50, cy+150), fill="#6cb6ff", width=5)
-            for x in range(100, width-80, 110):
-                draw.ellipse((x-9,cy+135,x+9,cy+165), fill="#ffd166")
-    elif any(x in key for x in ("ocean", "water", "rain", "cloud", "ice")):
-        for j in range(5):
-            y = cy - 100 + j * 48
-            pts = [(x, y + int(12 * math.sin(x / 45 + j))) for x in range(60, width-50, 12)]
-            draw.line(pts, fill=palette[j % len(palette)], width=7)
-        draw.ellipse((cx-55, cy-190, cx+55, cy-80), fill="#78c9ff")
-    elif any(x in key for x in ("plant", "bee", "flower", "photosynthesis", "tree")):
-        draw.line((cx, cy+140, cx, cy-70), fill="#69bd75", width=18)
-        draw.ellipse((cx-140, cy-90, cx-5, cy-20), fill="#69bd75")
-        draw.ellipse((cx+5, cy-150, cx+140, cy-75), fill="#8bd17f")
-        draw.ellipse((cx-40, cy-220, cx+40, cy-140), fill="#ffd166")
+        draw.ellipse((x-r, y-r, x+r, y+r), fill=(177, 215, 255, 45 + (i % 4) * 12))
+
+    def sphere(cx, cy, radius, color, highlight=(255,255,255), outline=None):
+        # Blurred contact shadow gives the object a sense of weight.
+        shadow = Image.new("RGBA", (W, H), (0,0,0,0))
+        sd = ImageDraw.Draw(shadow)
+        sd.ellipse((cx-radius*.8, cy+radius*.62, cx+radius*.9, cy+radius*1.05), fill=(0,0,0,120))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(max(5, int(radius*.16))))
+        image.alpha_composite(shadow)
+        obj = _radial_sphere((int(radius*2), int(radius*2)), color, highlight)
+        image.alpha_composite(obj, (int(cx-radius), int(cy-radius)))
+        if outline:
+            ImageDraw.Draw(image, "RGBA").ellipse((cx-radius, cy-radius, cx+radius, cy+radius), outline=outline, width=max(2,int(radius*.025)))
+
+    cx, cy = int(W*.52), int(H*.40)
+    # Pick one dominant, rounded 3D subject based on scene meaning.
+    if any(w in scene_key for w in ("brain", "neuron", "memory", "dream", "sleep", "thought", "nerve")):
+        # Overlapping shaded lobes read as a soft sculpted brain, not a flat icon.
+        for dx, dy, r, col in [(-.12,-.02,.17,"#f06f91"),(-.02,-.13,.17,"#ff91a8"),(.10,-.09,.17,"#e85d88"),(.16,.04,.14,"#ff9caf"),(.05,.11,.16,"#f27b9c"),(-.09,.10,.14,"#d94f7b")]:
+            sphere(int(W*(.51+dx)), int(H*(.38+dy)), int(min(W,H)*r), col, (255,218,225))
+        d = ImageDraw.Draw(image, "RGBA")
+        d.arc((W*.40,H*.24,W*.54,H*.46), 230, 75, fill=(255,222,230,210), width=5)
+        d.arc((W*.51,H*.19,W*.66,H*.44), 100, 280, fill=(255,222,230,190), width=5)
+    elif any(w in scene_key for w in ("plant", "tree", "photosynthesis", "flower", "forest", "leaf")):
+        d = ImageDraw.Draw(image, "RGBA")
+        d.rounded_rectangle((W*.49,H*.37,W*.535,H*.70), radius=18, fill=(91,112,73,255))
+        sphere(int(W*.45),int(H*.36),int(min(W,H)*.12),"#54bd7b",(223,255,202))
+        sphere(int(W*.56),int(H*.31),int(min(W,H)*.14),"#72d88b",(231,255,200))
+        sphere(int(W*.51),int(H*.23),int(min(W,H)*.13),"#8de59b",(245,255,214))
+        sphere(int(W*.40),int(H*.48),int(min(W,H)*.075),"#39a967",(205,255,210))
+        sphere(int(W*.60),int(H*.46),int(min(W,H)*.08),"#42b971",(205,255,210))
+        sphere(int(W*.72),int(H*.20),int(min(W,H)*.065),"#ffd56a",(255,250,210))
+    elif any(w in scene_key for w in ("ocean", "water", "rain", "ice", "wave", "sea", "sound", "vibration", "frequency", "echo", "ear", "eardrum")):
+        # Large luminous glassy orb plus layered atmospheric wave ribbons.
+        sphere(cx, int(H*.38), int(min(W,H)*.19), "#1f8fc2", (210,247,255), (145,225,255,120))
+        d = ImageDraw.Draw(image, "RGBA")
+        for j, alpha in enumerate((170,130,95,70)):
+            box = (W*(.23-j*.035), H*(.18-j*.025), W*(.79+j*.035), H*(.62+j*.025))
+            d.arc(box, 200, 340, fill=(107,226,255,alpha), width=max(3, int(W*.005)))
+        # Bright highlight streak creates a glass / studio-lit finish.
+        d.arc((W*.39,H*.22,W*.55,H*.49), 205, 290, fill=(245,255,255,210), width=max(3,int(W*.006)))
+    elif any(w in scene_key for w in ("atom", "molecule", "electron", "chemical", "dna", "cell", "protein")):
+        sphere(cx, cy, int(min(W,H)*.105), "#ffbd59", (255,250,205))
+        d = ImageDraw.Draw(image, "RGBA")
+        for box, angle in [((W*.34,H*.18,W*.70,H*.62),25),((W*.34,H*.18,W*.70,H*.62),145),((W*.28,H*.23,W*.76,H*.57),80)]:
+            d.ellipse(box, outline=(120,220,255,205), width=max(3,int(W*.004)))
+        for px, py, col in [(W*.35,H*.34,"#53c7ff"),(W*.64,H*.31,"#ff6f91"),(W*.57,H*.58,"#65e5bc")]:
+            sphere(int(px),int(py),int(min(W,H)*.055),col,(255,255,255))
+    elif any(w in scene_key for w in ("planet", "space", "galaxy", "star", "moon", "mars", "jupiter", "universe", "black hole", "solar")):
+        sphere(cx, int(H*.39), int(min(W,H)*.23), "#b66b55", (255,215,177))
+        d = ImageDraw.Draw(image, "RGBA")
+        d.arc((W*.20,H*.20,W*.82,H*.59), 190, 345, fill=(132,215,255,210), width=max(5,int(W*.008)))
+        d.arc((W*.18,H*.24,W*.84,H*.65), 12, 166, fill=(255,194,126,170), width=max(3,int(W*.004)))
+        sphere(int(W*.72),int(H*.23),int(min(W,H)*.045),"#ffe8a0",(255,255,255))
+    elif any(w in scene_key for w in ("volcano", "eruption", "lava", "fire", "heat", "sun", "lightning", "storm")):
+        d = ImageDraw.Draw(image, "RGBA")
+        d.polygon([(W*.25,H*.67),(W*.43,H*.34),(W*.51,H*.46),(W*.61,H*.31),(W*.79,H*.67)], fill=(69,70,94,255))
+        d.polygon([(W*.43,H*.34),(W*.51,H*.46),(W*.61,H*.31),(W*.57,H*.48),(W*.47,H*.48)], fill=(255,132,68,255))
+        sphere(int(W*.52),int(H*.29),int(min(W,H)*.065),"#ffb347",(255,246,195))
+        for j in range(12):
+            x = int(W*(.42+(j*37%18)/100))
+            y = int(H*(.22+(j*29%25)/100))
+            sphere(x,y,max(5,int(min(W,H)*.012)),"#ff784b",(255,224,157))
     else:
-        # Abstract concept map with connected nodes.
-        points = [(cx, cy-105), (cx-145, cy+15), (cx+145, cy+15), (cx-80, cy+130), (cx+80, cy+130)]
-        for j in range(1, len(points)):
-            draw.line((*points[0], *points[j]), fill="#607ca8", width=8)
-        for j, (x, y) in enumerate(points):
-            r = 45 if j == 0 else 34
-            draw.ellipse((x-r, y-r, x+r, y+r), fill=palette[j], outline="#ffffff", width=4)
-    # Readable title panel.
-    panel_h = 132
-    draw.rectangle((0, height-panel_h, width, height), fill="#081225")
-    draw.text((48, height-panel_h+20), "SCIENCE EXPLAINED", font=font(22, True), fill="#55d6be")
-    lines = textwrap.wrap(title, width=55)[:2]
-    for j, line in enumerate(lines):
-        draw.text((48, height-panel_h+53+j*34), line, font=font(29, True), fill="#ffffff")
-    return image
+        # A glossy, sculptural science object; still shaded and cinematic.
+        sphere(cx, cy, int(min(W,H)*.18), "#4a9bd8", (226,247,255))
+        sphere(int(W*.61), int(H*.33), int(min(W,H)*.075), "#ffbd59", (255,249,207))
+        sphere(int(W*.43), int(H*.49), int(min(W,H)*.055), "#62d7bd", (236,255,246))
+        d = ImageDraw.Draw(image, "RGBA")
+        d.arc((W*.28,H*.18,W*.74,H*.66), 200, 340, fill=(192,230,255,190), width=max(4,int(W*.005)))
+
+    # Cinematic depth vignette and soft light bloom.
+    image = image.convert("RGB")
+    image = ImageEnhance.Contrast(image).enhance(1.06)
+    vignette = Image.new("L", (W,H), 0)
+    vp = vignette.load()
+    for y in range(H):
+        for x in range(W):
+            nx = (x-W/2)/(W/2)
+            ny = (y-H/2)/(H/2)
+            vp[x,y] = max(0, min(255, int(255 * max(0.58, 1 - 0.23*(nx*nx+ny*ny)))))
+    dark = Image.new("RGB", (W,H), (0,0,0))
+    image = Image.composite(image, dark, vignette)
+    # Subtle bottom title panel with a clean movie-poster treatment.
+    panel_h = int(H*.18)
+    overlay = Image.new("RGBA", (W,H), (0,0,0,0))
+    od = ImageDraw.Draw(overlay)
+    od.rectangle((0,H-panel_h,W,H), fill=(4,9,24,205))
+    image = Image.alpha_composite(image.convert("RGBA"), overlay)
+    d = ImageDraw.Draw(image, "RGBA")
+    d.text((int(W*.045), H-panel_h+int(H*.022)), "SCIENCE • ANIMATED VISUAL", font=font(max(18,int(H*.027)), True), fill=(116,226,255,255))
+    lines = textwrap.wrap(scene_title or topic, width=max(28,int(W/22)))[:2]
+    for j,line in enumerate(lines):
+        d.text((int(W*.045),H-panel_h+int(H*.06)+j*int(H*.045)),line,font=font(max(25,int(H*.039)),True),fill=(255,255,255,255))
+    return image.convert("RGB")
 
 def prepare_scene(scene, topic, style, out_path, width, height, index):
     title = str(scene.get("title") or topic).strip()
