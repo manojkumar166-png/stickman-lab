@@ -19,31 +19,85 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+
       - name: Set up Node.js for browser rendering
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+
       - name: Install Python dependencies and Chromium
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install playwright
           python -m playwright install --with-deps chromium
+
+      # Fail early if the workflow checkout is missing the intended 2D renderer
+      # or if the active video assembly code has regressed to a Blender call.
+      - name: Verify 2D rendering pipeline (no Blender)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f storybook_science_video.py
+          test -f scripts/storybook_scene_renderer.py
+          test -f scripts/render_video.py
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          entry = Path("storybook_science_video.py").read_text(encoding="utf-8")
+          renderer = Path("scripts/storybook_scene_renderer.py").read_text(encoding="utf-8")
+          assembler = Path("scripts/render_video.py").read_text(encoding="utf-8")
+
+          assert "storybook_scene_renderer" in entry and "render_scenes" in entry, (
+              "Video entry point is not wired to the HTML/CSS/JavaScript scene renderer."
+          )
+          assert "playwright" in renderer.lower() or "chromium" in renderer.lower(), (
+              "Scene renderer does not appear to use browser-based 2D rendering."
+          )
+          assert "ffmpeg" in assembler.lower(), (
+              "Video assembler must use FFmpeg."
+          )
+
+          blender_patterns = [
+              r"import\s+bpy\b",
+              r"from\s+bpy\b",
+              r"blender\s+[-]",
+              r"subprocess\.(?:run|Popen|call)\([^\n]*blender",
+          ]
+          for filename, source in [
+              ("storybook_science_video.py", entry),
+              ("scripts/storybook_scene_renderer.py", renderer),
+              ("scripts/render_video.py", assembler),
+          ]:
+              for pattern in blender_patterns:
+                  if re.search(pattern, source, flags=re.IGNORECASE):
+                      raise SystemExit(
+                          f"Blender reference detected in active 2D pipeline: {filename} ({pattern})"
+                      )
+          print("Verified: HTML/CSS/JavaScript scenes + FFmpeg assembly; no Blender call detected.")
+          PY
+
       - name: Generate storybook science video (no AI image generation)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
+
       - name: Upload video and story artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -54,6 +108,7 @@ jobs:
             output/storybook-science-narration-*.mp3
           retention-days: 7
           if-no-files-found: error
+
       - name: Commit this workflow's topic history only
         run: |
           git config user.name 'github-actions[bot]'
