@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 
 PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}html,body{margin:0;width:WIDTHpx;height:HEIGHTpx;overflow:hidden}
-.scene{position:relative;width:WIDTHpx;height:HEIGHTpx;overflow:hidden;background:linear-gradient(180deg,#7eb8d1 0%,#c6d9c6 48%,#f2c98e 100%);font-family:Georgia,serif;color:#fff7d9}
+.scene{position:relative;width:WIDTHpx;height:HEIGHTpx;overflow:hidden;background:linear-gradient(180deg,#7eb8d1 0%,#c6d9c6 48%,#f2c98e 100%);font-family:Georgia,serif;color:#fff7d9}.scene.winter{background:linear-gradient(180deg,#344d70 0%,#a7c7d5 55%,#e6edf0 100%)}.winter .sun{background:radial-gradient(circle at 35% 32%,#fff,#dcebf0 70%,#b5d2df);box-shadow:0 0 65px #e5f6ff88}.winter .mountain{background:#c2d5df}.winter .hill.back{background:linear-gradient(150deg,#e4edf0,#b7d0db)}.winter .hill{background:linear-gradient(160deg,#e9f0f2,#b7cbd5 80%)}.winter .field{background:linear-gradient(180deg,#f5f7f6,#d5e2e8)}.winter .tree:before{background:radial-gradient(circle at 36% 30%,#d9e8e7,#65828a 72%);box-shadow:35px 20px 0 -15px #78959d,-25px 30px 0 -20px #9bb8c0}.winter .tree:after{background:#c9dfe3}
 .skyglow{position:absolute;inset:0;background:radial-gradient(ellipse at 72% 24%,#fff4c8aa 0,transparent 26%),linear-gradient(180deg,#a8d0dc33,transparent 60%)}
 .sun{position:absolute;width:110px;height:110px;border-radius:50%;left:72%;top:13%;background:radial-gradient(circle at 35% 32%,#fff5cc,#f6d18b 65%,#e9a875);box-shadow:0 0 70px #fff0bd88}
 .cloud{position:absolute;width:240px;height:40px;border-radius:50%;background:#fff4dcbb;filter:blur(1px);top:20%;left:12%;box-shadow:36px -14px 0 3px #fff4dcbb,75px 2px 0 -4px #fff4dcbb}
@@ -26,7 +26,7 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><style>
 .narration{position:absolute;left:54px;bottom:35px;width:72%;font:16px/1.35 system-ui,sans-serif;color:#fff7e6;text-shadow:0 2px 8px #203b36}
 .index{position:absolute;right:48px;bottom:38px;font:13px system-ui,sans-serif;letter-spacing:2px}
 #science{position:absolute;inset:0;width:100%;height:100%}
-</style></head><body><main class="scene"><div class="skyglow"></div><div class="sun"></div><div class="cloud"></div><div class="cloud c2"></div><div class="mountain"></div><div class="hill back"></div><div class="hill"></div><div class="field"></div><div class="tree t1"></div><div class="tree t2"></div><div class="tree t3"></div><canvas id="science"></canvas><div class="vignette"></div><div class="paper"></div><div class="kicker">A little science story</div><div class="title">TITLE</div><div class="narration">CAPTION</div><div class="index">INDEX</div></main><script>
+</style></head><body><main class="scene SCENECLASS"><div class="skyglow"></div><div class="sun"></div><div class="cloud"></div><div class="cloud c2"></div><div class="mountain"></div><div class="hill back"></div><div class="hill"></div><div class="field"></div><div class="tree t1"></div><div class="tree t2"></div><div class="tree t3"></div><canvas id="science"></canvas><div class="vignette"></div><div class="paper"></div><div class="kicker">A little science story</div><div class="title">TITLE</div><div class="narration">CAPTION</div><div class="index">INDEX</div></main><script>
 const c=document.getElementById('science'),ctx=c.getContext('2d');c.width=WIDTH;c.height=HEIGHT;
 const topic=TOPIC.toLowerCase(); const sceneText=SCENETEXT.toLowerCase(); const cx=c.width*.69, cy=c.height*.48;
 function line(x1,y1,x2,y2,color='#fff1bd',w=3){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
@@ -61,9 +61,11 @@ async def render_scenes(story: dict, output_dir: Path, width: int, height: int) 
             caption=_safe(scene.get("visual_description") or scene.get("narration") or "")
             topic=_safe(story.get("topic") or title)
             sceneText=_safe(title+" "+str(scene.get("visual_description") or "")+" "+str(scene.get("narration") or ""))
+            sceneClass="winter" if any(k in (topic+" "+sceneText).lower() for k in ("winter","snow","hibernate","migration","migrate","cold","frost","squirrel","bear","fox","bird")) else ""
             html_doc=(PAGE.replace("WIDTH",str(width)).replace("HEIGHT",str(height))
                       .replace("TITLE",title).replace("CAPTION",caption[:210])
                       .replace("INDEX",f"{i+1:02d} / {len(scenes):02d}")
+                      .replace("SCENECLASS",sceneClass)
                       .replace("TOPIC",json.dumps(topic))
                       .replace("SCENETEXT",json.dumps(sceneText)))
             await page.set_content(html_doc,wait_until="load")
