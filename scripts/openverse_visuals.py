@@ -1,7 +1,7 @@
 """Find reusable science illustrations through multiple providers.
 
 Provider order: Openverse CC0/Public Domain, Wikimedia Commons public domain/CC0,
-then optional Pixabay and Unsplash APIs when their keys are configured. The
+then optional Pixabay, Unsplash, and Pexels APIs when their keys are configured. The
 manifest preserves provider, source, and license metadata; metadata is not a
 legal guarantee, so review the manifest before publishing.
 """
@@ -144,6 +144,31 @@ def _search_unsplash(query: str) -> list[dict]:
         })
     return items
 
+def _search_pexels(query: str) -> list[dict]:
+    key = os.environ.get("PEXELS_API_KEY")
+    if not key:
+        return []
+    params = urllib.parse.urlencode({"query": query[:100], "per_page": 10, "orientation": "landscape"})
+    payload = _with_retry("https://api.pexels.com/v1/search?" + params, {"Authorization": key})
+    items = []
+    for photo in payload.get("photos", []):
+        src = photo.get("src") or {}
+        image_url = src.get("large") or src.get("original")
+        if not image_url:
+            continue
+        items.append({
+            "id": "pexels:" + str(photo.get("id")),
+            "url": image_url,
+            "source_page": photo.get("url"),
+            "title": photo.get("alt") or query,
+            "creator": photo.get("photographer"),
+            "license": "Pexels License",
+            "license_url": "https://www.pexels.com/license/",
+            "provider": "Pexels",
+            "attribution": photo.get("photographer"),
+        })
+    return items
+
 def _image_signature(data: bytes) -> str | None:
     if data.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10))):
         return ".png"
@@ -169,6 +194,7 @@ def _search_all(query: str) -> list[dict]:
         ("Wikimedia Commons Public Domain/CC0", _search_wikimedia),
         ("Pixabay", _search_pixabay),
         ("Unsplash", _search_unsplash),
+        ("Pexels", _search_pexels),
     ]
     all_results = []
     for provider_name, search_fn in providers:
@@ -214,8 +240,8 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
             raise RuntimeError(
                 f"No reusable illustration found for scene {index} "
                 f"({scene.get('title')!r}), query={query!r}. Tried Openverse, "
-                f"Wikimedia Commons, Pixabay and Unsplash. {detail}. "
-                "Configure PIXABAY_API_KEY and/or UNSPLASH_ACCESS_KEY for those optional providers."
+                f"Wikimedia Commons, Pixabay, Unsplash and Pexels. {detail}. "
+                "Configure PIXABAY_API_KEY, UNSPLASH_ACCESS_KEY and/or PEXELS_API_KEY for optional providers."
             )
         item, data, suffix = chosen
         used_ids.add(item.get("id"))
