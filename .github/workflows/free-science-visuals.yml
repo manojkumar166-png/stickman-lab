@@ -64,6 +64,8 @@ jobs:
       - name: Generate science video (no AI image generation)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
