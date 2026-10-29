@@ -21,12 +21,12 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><style>
 .t1{left:7%;transform:scale(1.05)}.t2{right:8%;transform:scale(1.3)}.t3{left:20%;transform:scale(.6);opacity:.7}
 .vignette{position:absolute;inset:0;background:linear-gradient(90deg,#1a2a2b44,transparent 50%,#1a2a2b22),linear-gradient(0deg,#142b26aa,transparent 50%);pointer-events:none}
 .paper{position:absolute;inset:0;opacity:.13;pointer-events:none;background-image:radial-gradient(#fff 0.55px,transparent .8px);background-size:5px 5px;mix-blend-mode:soft-light}
-.kicker{position:absolute;top:38px;left:52px;font:600 14px/1.2 system-ui,sans-serif;letter-spacing:3px;text-transform:uppercase;color:#fff4d2;text-shadow:0 2px 8px #263e38}
-.title{position:absolute;left:52px;bottom:76px;width:75%;font-size:42px;line-height:1.08;font-weight:600;text-shadow:0 3px 14px #203b36}
-.narration{position:absolute;left:54px;bottom:35px;width:72%;font:16px/1.35 system-ui,sans-serif;color:#fff7e6;text-shadow:0 2px 8px #203b36}
-.index{position:absolute;right:48px;bottom:38px;font:13px system-ui,sans-serif;letter-spacing:2px}
+.kicker{position:absolute;top:34px;left:5%;max-width:90%;font:800 17px/1.2 system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#fff;text-shadow:0 3px 5px #000,0 0 12px #000}
+.title{position:absolute;left:5%;top:68px;width:90%;font:900 36px/1.08 system-ui,sans-serif;color:#ffe94d;text-transform:uppercase;text-shadow:2px 2px 0 #111,-2px -2px 0 #111,2px -2px 0 #111,-2px 2px 0 #111,0 5px 12px #000}
+.narration{position:absolute;left:5%;bottom:7%;width:90%;font:900 27px/1.18 system-ui,sans-serif;text-align:center;color:#fff;text-shadow:2px 2px 0 #111,-2px -2px 0 #111,2px -2px 0 #111,-2px 2px 0 #111,0 4px 9px #000;letter-spacing:.2px}
+.index{position:absolute;right:5%;top:36px;font:800 13px system-ui,sans-serif;letter-spacing:2px;color:#fff;text-shadow:0 2px 5px #000}
 #science{position:absolute;inset:0;width:100%;height:100%}
-</style></head><body><main class="scene SCENECLASS"><div class="skyglow"></div><div class="sun"></div><div class="cloud"></div><div class="cloud c2"></div><div class="mountain"></div><div class="hill back"></div><div class="hill"></div><div class="field"></div><div class="tree t1"></div><div class="tree t2"></div><div class="tree t3"></div><canvas id="science"></canvas><div class="vignette"></div><div class="paper"></div><div class="kicker">A little science story</div><div class="title">TITLE</div><div class="narration">CAPTION</div><div class="index">INDEX</div></main><script>
+</style></head><body><main class="scene SCENECLASS"><div class="skyglow"></div><div class="sun"></div><div class="cloud"></div><div class="cloud c2"></div><div class="mountain"></div><div class="hill back"></div><div class="hill"></div><div class="field"></div><div class="tree t1"></div><div class="tree t2"></div><div class="tree t3"></div><canvas id="science"></canvas><div class="vignette"></div><div class="paper"></div><div class="kicker">SCIENCE SHORT</div><div class="title">TITLE</div><div class="narration">CAPTION</div><div class="index">INDEX</div></main><script>
 const c=document.getElementById('science'),ctx=c.getContext('2d');c.width=WIDTH;c.height=HEIGHT;
 const topic=TOPIC.toLowerCase(); const sceneText=SCENETEXT.toLowerCase(); const sceneNo=SCENENO; const cx=c.width*(.52+((sceneNo%4)*.055)), cy=c.height*(.39+((sceneNo%3)*.055));
 function line(x1,y1,x2,y2,color='#fff1bd',w=3){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
@@ -88,7 +88,7 @@ async def render_scenes(story: dict, output_dir: Path, width: int, height: int) 
                 }.items() if env_hint==name or any(word in searchable for word in words)), "")
                 sceneClass=env
             html_doc=(PAGE.replace("WIDTH",str(width)).replace("HEIGHT",str(height))
-                      .replace("TITLE",title).replace("CAPTION",caption[:210])
+                      .replace("TITLE",_safe(story.get("topic") or title)).replace("CAPTION",caption[:150])
                       .replace("INDEX",f"{i+1:02d} / {len(scenes):02d}")
                       .replace("SCENECLASS",sceneClass)
                       .replace("SCENENO",str(i+1))
