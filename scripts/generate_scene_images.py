@@ -65,7 +65,7 @@ def generate_scene_images(story: dict, output_dir: Path, width: int, height: int
             credits.append({"file": path.name, "source": "Cloudflare Workers AI", "model": MODEL})
             continue
         prompt = make_prompt(scene, str(story.get("topic", "Science")), index)
-        payload = {"prompt": prompt, "width": 1024, "height": 576, "num_steps": 4}
+        payload = {"prompt": prompt, "steps": 4}
         last_error = None
         for attempt in range(3):
             try:
