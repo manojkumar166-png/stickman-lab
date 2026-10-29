@@ -30,14 +30,10 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
             clip=td/f"clip-{i:03d}.mp4"
             frames=max(2,math.ceil(per_scene*fps))
             
-            # Add gentle Ken Burns motion to every scene so the video never feels like a
-            # slideshow of frozen images. Alternate slow zoom-in and zoom-out framing.
-            zoom_expr = "min(zoom+0.0007,1.08)" if i % 2 == 0 else "if(lte(zoom,1.0),1.08,max(1.0,zoom-0.0007))"
-            x_expr = "iw/2-(iw/zoom/2)" if i % 2 == 0 else "(iw-iw/zoom)*(on/%d)" % max(frames-1,1)
-            y_expr = "ih/2-(ih/zoom/2)"
-            vf = f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d=1:s={width}x{height}:fps={fps},format=yuv420p"
+            # Keep each illustration completely still for its scene duration.
+            vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p"
             run(["ffmpeg","-y","-loglevel","error","-loop","1","-i",str(img),"-vf",vf,
-                 "-frames:v",str(frames),"-an","-c:v","libx264","-preset","veryfast","-crf","19",str(clip)])
+                 "-t",str(per_scene),"-r",str(fps),"-an","-c:v","libx264","-preset","veryfast","-crf","19",str(clip)])
             clips.append(clip)
             
         concat=td/"concat.txt"
