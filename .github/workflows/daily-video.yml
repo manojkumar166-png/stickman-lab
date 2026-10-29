@@ -50,11 +50,14 @@ jobs:
           echo "topic_name=$TOPIC" >> $GITHUB_OUTPUT
 
       - name: Send Video to Telegram
-        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' }}
         uses: PonomarevDA/telegram-upload@v1
         with:
-          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          bot_token: ${{ env.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ env.TELEGRAM_CHAT_ID }}
           files: output/storybook-science-*.mp4
           message: "🌿 New Storybook Science Video: ${{ steps.get_topic.outputs.topic_name }}"
 
