@@ -207,6 +207,7 @@ def _search_all(query: str) -> list[dict]:
     return all_results
 
 def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
+    """Try free, no-key sources first; missing images become text-only scenes."""
     scenes = story.get("scenes") or []
     if not scenes:
         raise RuntimeError("Story has no scenes; cannot search for illustrations.")
@@ -216,34 +217,54 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     rng = random.SystemRandom()
 
     for index, scene in enumerate(scenes, start=1):
-        query = _scene_query(topic, scene)
-        candidates = _search_all(query)
-        rng.shuffle(candidates)
+        base_query = _scene_query(topic, scene)
+        words = base_query.split()
+        queries = list(dict.fromkeys([
+            base_query,
+            " ".join(words[:6]),
+            " ".join(words[:3]),
+            str(scene.get("title") or topic)[:80],
+            topic[:80],
+        ]))
         chosen = None
         errors = []
-        for item in candidates:
-            if not item.get("url") or item.get("id") in used_ids:
-                continue
-            try:
-                data = _request(str(item["url"]))
-                suffix = _image_signature(data)
-                if not suffix:
-                    raise ValueError("download is not a recognized image format")
-                if len(data) < 8_000:
-                    raise ValueError("image is suspiciously small")
-                chosen = (item, data, suffix)
+        for query in queries:
+            candidates = _search_all(query)
+            rng.shuffle(candidates)
+            for item in candidates:
+                if not item.get("url") or item.get("id") in used_ids:
+                    continue
+                try:
+                    data = _request(str(item["url"]))
+                    suffix = _image_signature(data)
+                    if not suffix:
+                        raise ValueError("download is not a recognized image format")
+                    if len(data) < 8_000:
+                        raise ValueError("image is suspiciously small")
+                    chosen = (item, data, suffix, query)
+                    break
+                except Exception as exc:
+                    errors.append(f"{item.get('provider')}: {exc}")
+            if chosen:
                 break
-            except Exception as exc:
-                errors.append(f"{item.get('provider')}: {exc}")
+
         if not chosen:
-            detail = "; ".join(errors[-3:]) or "no eligible search results"
-            raise RuntimeError(
-                f"No reusable illustration found for scene {index} "
-                f"({scene.get('title')!r}), query={query!r}. Tried Openverse, "
-                f"Wikimedia Commons, Pixabay, Unsplash and Pexels. {detail}. "
-                "Configure PIXABAY_API_KEY, UNSPLASH_ACCESS_KEY and/or PEXELS_API_KEY for optional providers."
-            )
-        item, data, suffix = chosen
+            # Do not abort the whole video because one scene has no reusable image.
+            scene.pop("_external_image_path", None)
+            manifest.append({
+                "scene_index": index,
+                "scene_title": str(scene.get("title") or ""),
+                "search_query": base_query,
+                "file": None,
+                "provider": None,
+                "license": None,
+                "status": "text-only fallback",
+                "error": "; ".join(errors[-3:]) or "No eligible image found after query retries",
+            })
+            print(f"Scene {index}/{len(scenes)}: no eligible image found; using text-only background.", flush=True)
+            continue
+
+        item, data, suffix, successful_query = chosen
         used_ids.add(item.get("id"))
         path = output_dir / f"scene-{index:03d}{suffix}"
         path.write_bytes(data)
@@ -251,13 +272,13 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
         paths.append(path)
         manifest.append({
             "scene_index": index, "scene_title": str(scene.get("title") or ""),
-            "search_query": query, "file": path.name, "title": item.get("title"),
+            "search_query": successful_query, "file": path.name, "title": item.get("title"),
             "creator": item.get("creator"), "license": item.get("license"),
             "license_url": item.get("license_url"), "source_page": item.get("source_page"),
             "image_url": item.get("url"), "provider": item.get("provider"),
-            "attribution": item.get("attribution"),
+            "attribution": item.get("attribution"), "status": "downloaded",
         })
-        print(f"Illustration {index}/{len(scenes)} via {item.get('provider')}: {query} -> {path.name}", flush=True)
+        print(f"Illustration {index}/{len(scenes)} via {item.get('provider')}: {successful_query} -> {path.name}", flush=True)
 
     (output_dir / "image-attribution-manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
