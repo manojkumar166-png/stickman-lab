@@ -20,10 +20,11 @@ async def render_external_scenes(story: dict, scene_dir: Path, width: int, heigh
         page = await browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
         for i, scene in enumerate(scenes, start=1):
             source = Path(str(scene.get("_external_image_path") or ""))
-            if not source.is_file():
-                raise RuntimeError(f"Scene {i} has no downloaded illustration: {source}")
-            mime = mimetypes.guess_type(source.name)[0] or "image/jpeg"
-            data_uri = "data:" + mime + ";base64," + base64.b64encode(source.read_bytes()).decode("ascii")
+            data_uri = ""
+            if source.is_file():
+                mime = mimetypes.guess_type(source.name)[0] or "image/jpeg"
+                data_uri = "data:" + mime + ";base64," + base64.b64encode(source.read_bytes()).decode("ascii")
+            image_html = f'<img src="{data_uri}">' if data_uri else ""
             title = _escape(story.get("topic") or scene.get("title") or "Science")
             caption = _escape(scene.get("narration") or scene.get("visual_description") or "")
             doc = f"""<!doctype html><html><head><meta charset="utf-8"><style>
@@ -35,7 +36,7 @@ img{{position:absolute;inset:7% 5% 18%;width:90%;height:75%;object-fit:contain;f
 .title{{position:absolute;left:4%;top:7%;width:92%;font-size:32px;line-height:1.08;font-weight:950;color:#ffe94d;text-transform:uppercase;text-shadow:2px 2px #111,-2px -2px #111,2px -2px #111,-2px 2px #111,0 5px 12px #000}}
 .caption{{position:absolute;left:5%;bottom:6%;width:90%;font-size:27px;line-height:1.18;font-weight:900;text-align:center;color:white;text-shadow:2px 2px #111,-2px -2px #111,2px -2px #111,-2px 2px #111,0 4px 9px #000}}
 .index{{position:absolute;right:4%;top:3%;font-size:13px;font-weight:800;color:white;text-shadow:0 2px 5px #000}}
-</style></head><body><main><img src="{data_uri}"><div class="shade"></div><div class="kicker">SCIENCE SHORT</div><div class="title">{title}</div><div class="caption">{caption[:170]}</div><div class="index">{i:02d} / {len(scenes):02d}</div></main></body></html>"""
+</style></head><body><main>{image_html}<div class="shade"></div><div class="kicker">SCIENCE SHORT</div><div class="title">{title}</div><div class="caption">{caption[:170]}</div><div class="index">{i:02d} / {len(scenes):02d}</div></main></body></html>"""
             await page.set_content(doc, wait_until="load")
             path = scene_dir / f"scene-{i:03d}.png"
             await page.screenshot(path=str(path), type="png")
