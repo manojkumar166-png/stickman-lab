@@ -311,16 +311,78 @@ def create_subject(scene):
             ob=bpy.data.objects.new("Water wave",cu); bpy.context.collection.objects.link(ob); cu.materials.append(cyan if i%2 else blue)
         for i in range(16):
             sphere("Water particle",(random.uniform(-3,3),-.3,random.uniform(-.5,.8)),(.025,)*3,pearl)
+    elif any(k in words for k in ("robot","robotics","artificial intelligence","machine learning","computer","computing","processor","microchip","server","algorithm","automation","engineering","engine","vehicle","rocket","satellite","battery","solar panel","wind turbine","factory","industrial","technology","technology")):
+        # Modular engineering/technology scene: chassis, components, connectors and indicator lights.
+        metal=material("Brushed titanium",(.24,.31,.4),.26,.78)
+        casing=material("Enamel casing",(.055,.16,.29),.28,.42)
+        board=material("Circuit substrate",(.025,.23,.17),.35,.25)
+        bpy.ops.mesh.primitive_cube_add(size=1,location=(0,.05,.0))
+        chassis=bpy.context.object; chassis.name="Technology chassis"; chassis.scale=(2.05,.55,1.05); chassis.data.materials.append(casing)
+        bpy.ops.mesh.primitive_cube_add(size=1,location=(0,-.27,.02))
+        core=bpy.context.object; core.name="Central processor"; core.scale=(.75,.12,.55); core.data.materials.append(metal)
+        for x in (-.55,-.35,-.15,.05,.25,.45):
+            for z in (-.22,.26):
+                sphere("Processor contact",(x,-.36,z),(.035,.025,.035),gold)
+        # Connected modules make this a system rather than an isolated generic sphere.
+        for x,z in [(-1.25,.3),(-1.22,-.32),(1.2,.3),(1.22,-.3)]:
+            bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.05,z))
+            obj=bpy.context.object; obj.name="System module"; obj.scale=(.36,.35,.25); obj.data.materials.append(board)
+            start=Vector((x*.7,-.28,z*.7)); end=Vector((0,-.3,0)); delta=end-start
+            bpy.ops.mesh.primitive_cylinder_add(vertices=12,radius=.025,depth=delta.length,location=(start+end)/2)
+            obj=bpy.context.object; obj.name="Module connector"; obj.rotation_euler=delta.to_track_quat("Z","Y").to_euler(); obj.data.materials.append(cyan)
+        for i in range(14):
+            sphere("Status indicator",(-.8+i*.12,-.38,.43),(.025,.02,.025),green if i%3 else gold)
+        if any(k in words for k in ("robot","robotics","robot arm","automation")):
+            # A simple articulated arm adds an immediately recognizable robotic silhouette.
+            for loc,scale in [((-.8,-.45,.7),(.22,.18,.22)),((-.45,-.45,1.0),(.48,.13,.13)),((-.1,-.45,1.2),(.18,.15,.18)),((.25,-.45,1.0),(.42,.12,.12))]:
+                sphere("Robot joint or link",loc,scale,metal)
+            for x in (-.55,.0,.42):
+                sphere("Robot joint",(x,-.48,1.0 if x!=-0.0 else 1.2),(.11,.1,.11),gold)
     else:
-        # Space / general science gets a detailed planet with an atmosphere and moon.
-        sphere("Hero planet",(-.2,0,.25),(1.25,1,1.25),blue)
-        sphere("Continental feature",(-.7,-.85,.5),(.38,.06,.22),green)
-        sphere("Continental feature",(.35,-.8,-.1),(.48,.06,.25),green)
-        ring("Atmospheric rim",(-.2,0,.25),1.38,cyan,(math.radians(70),0,-.2))
-        ring("Orbital path",(-.2,0,.25),1.9,gold,(math.radians(68),0,.3))
-        sphere("Moon",(1.65,.1,.9),(.3,)*3,pearl)
-        random.seed(10)
-        for i in range(45): sphere("Star",(random.uniform(-3.8,3.8),1.3,random.uniform(-.1,3)),(.018,)*3,pearl)
+        # General-purpose conceptual composition for topics without a specialist builder.
+        # Prefer objects named by the brief's strongest concrete nouns over a misleading planet.
+        visual_text=str(scene.get("visual","")).strip()
+        title_text=str(scene.get("title","")).strip()
+        description=(visual_text+" "+title_text).lower()
+        print("Using general-purpose concept builder for:", title_text, flush=True)
+        hero_mat=material("Concept hero",(.08,.32,.58),.25,.22)
+        accent_mat=material("Concept accent",(.98,.43,.09),.24,.12,0.25)
+        pale_mat=material("Concept highlight",(.65,.85,.96),.25,.05)
+        # Compose a layered, dimensional exhibit: central subject, supporting forms,
+        # a grounded platform, and small details. The brief/title remains visible.
+        bpy.ops.mesh.primitive_cube_add(size=1,location=(0,.15,-.92))
+        plinth=bpy.context.object; plinth.name="Concept display plinth"; plinth.scale=(5.8,1.25,.16); plinth.data.materials.append(dark)
+        if any(k in description for k in ("building","architecture","city","house","structure","bridge","tower")):
+            for i,(x,h,w) in enumerate([(-1.65,.9,.7),(-.65,1.35,.8),(.45,1.05,.75),(1.45,1.55,.8)]):
+                bpy.ops.mesh.primitive_cube_add(size=1,location=(x,.05,-.15+h/2))
+                obj=bpy.context.object; obj.name="Architectural mass"; obj.scale=(w,.48,h); obj.data.materials.append(hero_mat if i%2==0 else pale_mat)
+                for j in range(max(1,int(h*3))):
+                    bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.22,-.15+j*.27))
+                    obj=bpy.context.object; obj.name="Facade detail"; obj.scale=(.09,.035,.13); obj.data.materials.append(accent_mat)
+        elif any(k in description for k in ("mountain","landscape","continent","geography","earthquake","tectonic","canyon","cave","rock","mineral")):
+            for i,(x,z,s) in enumerate([(-1.7,-.05,.95),(-.55,.18,1.3),(.8,-.02,.85),(1.75,.05,.65)]):
+                bpy.ops.mesh.primitive_cone_add(vertices=7,radius1=s,radius2=.08,depth=s*1.6,location=(x,.15,z))
+                obj=bpy.context.object; obj.name="Terrain formation"; obj.data.materials.append([dark,hero_mat,pale_mat,green][i])
+            for i in range(8):
+                sphere("Terrain detail",(random.uniform(-2.5,2.5),-.35,random.uniform(-.75,.1)),(.045,.035,.04),accent_mat)
+        elif any(k in description for k in ("energy","force","motion","gravity","field","wave","radiation","particle","light")):
+            for i in range(5):
+                ring("Concept field line",(0,.0,.0),.42+i*.28,cyan)
+            for i in range(11):
+                a=i*2*math.pi/11
+                sphere("Concept particle",(math.cos(a)*(.65+(i%3)*.2),-.22,math.sin(a)*(.48+(i%2)*.16)),(.075,.065,.075),accent_mat if i%3==0 else hero_mat)
+            sphere("Concept core",(0,-.18,0),(.42,.3,.42),pale_mat)
+        else:
+            # Neutral exhibit of linked components; avoids falsely claiming the subject is a planet.
+            for i,(x,z,s) in enumerate([(-1.25,.15,.42),(-.55,.48,.55),(.25,.22,.68),(1.05,.48,.4)]):
+                sphere("Concept component",(x,-.12,z),(s,.22,s*.82),hero_mat if i%2==0 else accent_mat)
+            for a,b in [((-1.25,.15),(-.55,.48)),((-.55,.48),(.25,.22)),((.25,.22),(1.05,.48))]:
+                p1=Vector((a[0],-.22,a[1])); p2=Vector((b[0],-.22,b[1])); delta=p2-p1
+                bpy.ops.mesh.primitive_cylinder_add(vertices=16,radius=.025,depth=delta.length,location=(p1+p2)/2)
+                obj=bpy.context.object; obj.name="Concept connection"; obj.rotation_euler=delta.to_track_quat("Z","Y").to_euler(); obj.data.materials.append(pale_mat)
+            for i in range(18):
+                x=-2.1+i*.24
+                sphere("Fine detail",(x,-.34,-.48+(i%3)*.06),(.022,.02,.022),cyan)
     # Log the concrete visual brief to make topic mismatches easier to diagnose.
     print("Scene visual brief:", str(scene.get("visual",""))[:180], flush=True)
     # Clean 3D typography is part of the rendered still, not a moving overlay.
