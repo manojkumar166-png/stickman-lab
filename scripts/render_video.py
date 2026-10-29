@@ -30,14 +30,9 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
             clip=td/f"clip-{i:03d}.mp4"
             frames=max(2,math.ceil(per_scene*fps))
             
-            # Fix black bars: scale up to 110%, then pan left-to-right, then crop back to 1280x720
-            vf = (
-                f"scale=iw*1.1:ih*1.1,setsar=1,"
-                f"zoompan=z='1.05':x='(iw-iw/zoom)*(on/{frames})':y='(ih-ih/zoom)/2':"
-                f"d={frames}:s={width}x{height}:fps={fps},format=yuv420p"
-            )
+            # Keep the image perfectly still (stable)
+            vf = f"scale={width}:{height},format=yuv420p"
             
-            # Changed preset from ultrafast to medium, and crf to 18 for perfect quality
             run(["ffmpeg","-y","-loglevel","error","-loop","1","-i",str(img),"-vf",vf,
                  "-frames:v",str(frames),"-an","-c:v","libx264","-preset","medium","-crf","18",str(clip)])
             clips.append(clip)
@@ -48,7 +43,6 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
         run(["ffmpeg","-y","-loglevel","error","-f","concat","-safe","0","-i",str(concat),
              "-c","copy","-an",str(silent)])
              
-        # Final mux with the high-quality settings
         run(["ffmpeg","-y","-loglevel","error","-i",str(silent),"-i",str(audio_path),
              "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","medium","-crf","18",
              "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(output_path)])
