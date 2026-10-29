@@ -180,50 +180,78 @@ def _image_signature(data: bytes) -> str | None:
         return ".gif"
     return None
 def _scene_queries(topic: str, scene: dict) -> list[str]:
-    """Make image queries from what the scene actually says or shows."""
-    def clean(value: object) -> str:
+    """Build short, literal image searches from the topic and narration, not art-direction prose."""
+    def words(value: object) -> list[str]:
         value = re.sub(r"[^A-Za-z0-9\s'-]", " ", str(value or "")).lower()
-        return " ".join(value.split())
+        return [w for w in value.split() if w]
 
-    # Narration/title describe the script beat; use visual text only as a secondary clue.
-    script_text = clean(" ".join(str(scene.get(k) or "") for k in ("title", "narration")))
-    visual_text = clean(" ".join(str(scene.get(k) or "") for k in ("visual_description", "visual")))
-    topic_clean = clean(topic)
-    action_rules = [
-        (r"\b(dream|dreaming|dreams)\b", "anime person dreaming"),
-        (r"\b(wake|wakes|waking|awake|awaken)\b", "anime person waking up"),
-        (r"\b(sleep|sleeps|sleeping|asleep)\b", "anime person sleeping"),
-        (r"\b(think|thinks|thinking|thought|wonder|wonders|wondering)\b", "anime person thinking"),
-        (r"\b(walk|walks|walking|stroll|strolling)\b", "anime person walking"),
-        (r"\b(run|runs|running|jog|jogging)\b", "anime person running"),
-        (r"\b(cold|chill|chilly|shiver|shivers|shivering|goosebumps|gooseflesh)\b", "anime person cold shivering"),
-        (r"\b(scared|fear|afraid|fright|frightened|terrified|horror|creepy)\b", "anime person scared"),
-        (r"\b(remember|memory|memories|recall|recalling)\b", "anime person remembering"),
-        (r"\b(study|studies|studying|learn|learning|read|reading)\b", "anime person studying"),
-        (r"\b(eat|eats|eating|food|hungry)\b", "anime person eating"),
-        (r"\b(talk|talks|talking|speak|speaks|speaking|conversation)\b", "anime people talking"),
-        (r"\b(look|looks|looking|see|sees|seeing|watch|watching)\b", "anime person looking"),
-        (r"\b(heart|heartbeat|pulse|racing heart)\b", "anime person holding chest heartbeat"),
-        (r"\b(skin|hair|body|arm|arms|hair standing)\b", "anime close up skin arm hair"),
-    ]
+    # Do not search visual_description: it often contains irrelevant details like
+    # character colors, clothing, and poetic art direction.
+    topic_words = words(topic)
+    title_words = words(scene.get("title"))
+    narration_words = words(scene.get("narration"))
+
+    stop = {
+        "the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "at",
+        "for", "from", "with", "by", "as", "is", "are", "was", "were", "be",
+        "been", "being", "it", "its", "this", "that", "these", "those", "you",
+        "your", "we", "our", "they", "them", "their", "he", "she", "his", "her",
+        "i", "me", "my", "do", "does", "did", "how", "why", "what", "when",
+        "where", "which", "who", "can", "could", "will", "would", "may", "might",
+        "have", "has", "had", "not", "no", "if", "then", "than", "so", "very",
+        "just", "into", "about", "because", "there", "here", "through", "each",
+        "every", "some", "many", "much", "more", "most", "often", "like",
+        "scene", "introduction", "introduces", "shows", "show", "visual", "image",
+        "vibrant", "cyan", "yellow", "stickman", "wearing", "foreground",
+        "background", "stands", "standing", "looking", "curiously",
+    }
     candidates = []
-    for source in (script_text, visual_text):
-        for pattern, phrase in action_rules:
-            if re.search(pattern, source) and phrase not in candidates:
-                candidates.append(phrase)
-        # Keep a short phrase from actual script wording as a search candidate too.
-        if source:
-            candidates.append("anime " + " ".join(source.split()[:5]))
 
-    if topic_clean:
-        candidates.append("anime " + " ".join(topic_clean.split()[:6]))
-    # Remove duplicates and overly long queries; preserve script-derived order.
-    result = []
-    for query in candidates:
-        query = " ".join(query.split())[:90].strip()
-        if query and query not in result:
-            result.append(query)
-    return result or ["anime person", topic_clean[:70] or "science illustration"]
+    def add(query: str):
+        query = " ".join(query.split()).strip()
+        if query and query not in candidates:
+            candidates.append(query)
+
+    # First search the actual topic using ordinary subject words.
+    meaningful_topic = [w for w in topic_words if w not in stop]
+    if meaningful_topic:
+        add(" ".join(meaningful_topic[:5]))
+        if len(meaningful_topic) > 2:
+            add(" ".join(meaningful_topic[-3:]))
+
+    # Then use simple subject/action terms from the scene title and spoken script.
+    script_words = [w for w in title_words + narration_words if w not in stop]
+    if script_words:
+        add(" ".join(script_words[:4]))
+        # Keep a small number of distinctive words, not whole sentences.
+        for word in script_words:
+            if word not in candidates and len(word) > 3:
+                add(word)
+            if len(candidates) >= 8:
+                break
+
+    # Small science-specific expansions; these are simple phrases, not character art direction.
+    combined = " ".join(topic_words + title_words + narration_words)
+    expansions = [
+        (r"\b(star|stars|twinkle|twinkling|starlight)\b", ["stars", "night sky stars", "stars twinkling"]),
+        (r"\b(planet|planets|orbit|orbiting)\b", ["planet", "planet orbit"]),
+        (r"\b(moon|lunar)\b", ["moon in night sky"]),
+        (r"\b(sun|solar|sunlight)\b", ["sun", "sunlight"]),
+        (r"\b(cloud|clouds|cloudy)\b", ["clouds in sky"]),
+        (r"\b(rain|rainfall|raindrop|raindrops)\b", ["rain falling"]),
+        (r"\b(light|lightwave|refraction|atmosphere)\b", ["light through atmosphere"]),
+        (r"\b(ice|freezing|frozen)\b", ["ice"]),
+        (r"\b(electricity|electric|current|circuit)\b", ["electric circuit"]),
+        (r"\b(magnet|magnetic|magnetism)\b", ["magnet"]),
+        (r"\b(heart|heartbeat|blood)\b", ["human heart"]),
+        (r"\b(plant|plants|photosynthesis|leaf|leaves)\b", ["green plant"]),
+    ]
+    for pattern, phrases in expansions:
+        if re.search(pattern, combined):
+            for phrase in phrases:
+                add(phrase)
+
+    return candidates[:10] or [" ".join(topic_words[:5]) or "science"] 
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
