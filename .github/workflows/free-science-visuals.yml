@@ -6,7 +6,7 @@ on:
     - cron: "30 7 * * *" # 1:00 PM India Standard Time (UTC+5:30)
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: free-science-visuals
@@ -38,7 +38,7 @@ jobs:
 
       - name: Generate free science video
         env:
-          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python free_science_video.py
 
       - name: Upload video, story, narration, and image credits
@@ -52,3 +52,12 @@ jobs:
             output/free-science-image-credits-*.json
           retention-days: 7
           if-no-files-found: error
+
+      - name: Commit this workflow's topic history only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add free_topic_history.json
+          git commit -m "Update free science topic history [skip ci]" || exit 0
+          git pull --rebase origin main
+          git push
