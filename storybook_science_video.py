@@ -1,4 +1,4 @@
-"""Generate a science story video using freely reusable public-domain illustrations."""
+"""Generate a science story video using images found on public search pages."""
 import asyncio
 import hashlib
 import json
@@ -31,7 +31,7 @@ def main():
         raise RuntimeError("Story generator returned no scenes.")
     day = date.today().isoformat()
     topic = str(story.get("topic", "Science discovery"))
-    story["visual_style"] = "randomly selected CC0/Public Domain illustrations from Openverse; static images; no AI image generation"
+    story["visual_style"] = "static illustrations discovered through public image-search pages; review image licenses in the attribution manifest; no AI image generation"
     print(f"Topic: {topic}", flush=True)
 
     story_path = OUT / f"storybook-science-story-{day}.json"
@@ -42,8 +42,7 @@ def main():
     if image_dir.exists():
         shutil.rmtree(image_dir)
 
-    # Download and validate an eligible public-domain image for EVERY scene before
-    # narration synthesis. Any missing image aborts the run instead of using a fallback.
+    # Search public-facing image pages and validate downloaded image files before rendering.
     download_scene_illustrations(story, image_dir)
     width, height = int(config.get("width", 1280)), int(config.get("height", 720))
     rendered = asyncio.run(render_external_scenes(story, scene_dir, width, height))
