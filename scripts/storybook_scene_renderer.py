@@ -58,7 +58,7 @@ async def render_scenes(story: dict, output_dir: Path, width: int, height: int) 
         page=await browser.new_page(viewport={"width":width,"height":height},device_scale_factor=1)
         for i, scene in enumerate(scenes):
             title=_safe(scene.get("title") or story.get("topic") or "A Science Discovery")
-            caption=_safe(scene.get("visual") or scene.get("visual_description") or scene.get("narration") or "")
+            caption=_safe(scene.get("narration") or scene.get("visual_description") or "")
             topic=_safe(story.get("topic") or title)
             sceneText=_safe(title+" "+str(scene.get("visual") or scene.get("visual_description") or "")+" "+str(scene.get("narration") or ""))
             sceneClass="winter" if any(k in (topic+" "+sceneText).lower() for k in ("winter","snow","hibernate","migration","migrate","cold","frost","squirrel","bear","fox","bird")) else ""
