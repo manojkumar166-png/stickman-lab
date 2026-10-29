@@ -329,7 +329,10 @@ def prepare_scene(scene, topic, style, out_path, width, height, index):
     # Search concise scene labels, not narration paragraphs; this improves relevance
     # and avoids needlessly unique, long requests to Commons.
     query = " ".join(title.split()[:7]) or " ".join(topic.split()[:7])
-    candidates = commons_search(query, style)
+    # Cartoon episodes use our consistent locally rendered 3D animated-feature look.
+    # Avoid mixing flat Commons diagrams into a single episode; cinematic episodes
+    # can still use real photographs from free sources.
+    candidates = [] if style == "cartoon" else commons_search(query, style)
     scene_text = (topic + " " + title + " " + narration[:500]).lower()
     # Commons can rate-limit hosted runners. For space-related cinematic scenes,
     # try NASA's no-key image API before drawing a fallback.
