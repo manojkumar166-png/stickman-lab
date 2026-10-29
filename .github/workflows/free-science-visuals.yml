@@ -71,6 +71,18 @@ jobs:
           assert "ffmpeg" in assembler.lower(), (
               "Video assembler must use FFmpeg."
           )
+          assert "zoompan" not in assembler.lower(), (
+              "Still-image mode must not apply zoom or pan animation."
+          )
+          assert 'font:900 27px' in renderer and 'SCIENCE SHORT' in renderer, (
+              "TikTok-style bold narration subtitles/title styling is missing."
+          )
+          assert '.replace("TITLE",_safe(story.get("topic") or title))' in renderer, (
+              "The on-image title must come from the script topic, not a fixed label."
+          )
+          assert '.replace("CAPTION",caption[:150])' in renderer, (
+              "Scene subtitles must use the scene narration."
+          )
 
           blender_patterns = [
               r"import\s+bpy\b",
