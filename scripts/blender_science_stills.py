@@ -14,12 +14,8 @@ def material(name, color, roughness=0.3, metallic=0.0, emission=0.0):
     return m
 
 def sphere(name, loc, scale, mat):
-    # Tiny particles do not need the same mesh density as hero objects.
-    dims=scale if isinstance(scale,tuple) else (scale,)*3
-    largest=max(dims)
-    segments, rings = (12, 8) if largest <= .06 else ((16, 10) if largest <= .18 else ((24, 14) if largest <= .5 else (32, 20)))
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=loc)
-    o=bpy.context.object; o.name=name; o.scale=dims
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, location=loc)
+    o=bpy.context.object; o.name=name; o.scale=scale if isinstance(scale,tuple) else (scale,)*3
     o.data.materials.append(mat)
     for p in o.data.polygons: p.use_smooth=True
     return o
@@ -46,12 +42,6 @@ def setup(width,height):
     sc.render.engine = "BLENDER_EEVEE_NEXT" if bpy.app.version >= (4, 2, 0) else "BLENDER_EEVEE"
     sc.render.resolution_x=width; sc.render.resolution_y=height; sc.render.resolution_percentage=100
     sc.render.image_settings.file_format="PNG"; sc.view_settings.view_transform="AgX"
-    # Keep Eevee renders responsive on GitHub-hosted CPU/software graphics.
-    try:
-        if hasattr(sc, "eevee") and hasattr(sc.eevee, "taa_render_samples"):
-            sc.eevee.taa_render_samples = 16
-    except Exception:
-        pass
     sc.world.color=(.012,.02,.06)
     floor=material("Midnight stage",(.012,.025,.07),.6)
     bpy.ops.mesh.primitive_plane_add(size=200,location=(0,0,-1.4))
