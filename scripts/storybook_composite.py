@@ -224,13 +224,15 @@ def render_storybook_stills(story: dict, out_dir: Path, width: int, height: int)
             _science_overlay(image,key,title,rng)
         # Gentle color grade and fine grain provide a tactile illustrated feel.
         image=image.convert("RGB")
-        grain=Image.new("RGB",image.size)
-        gp=grain.load()
-        for y in range(height):
-            for x in range(width):
-                n=rng.choice((-2,-1,0,0,0,1,2))
-                gp[x,y]=(max(0,min(255,244+n)),max(0,min(255,238+n)),max(0,min(255,224+n)))
-        image=Image.blend(image,grain,0.035)
+        # Tiny noise tile enlarged with nearest-neighbour adds subtle paper grain cheaply.
+        tile=Image.new("RGB",(96,54))
+        gp=tile.load()
+        for gy in range(tile.height):
+            for gx in range(tile.width):
+                n=rng.choice((-12,-7,-3,0,0,0,3,7,12))
+                gp[gx,gy]=(max(0,min(255,238+n)),max(0,min(255,232+n)),max(0,min(255,218+n)))
+        grain=tile.resize(image.size,Image.Resampling.NEAREST)
+        image=Image.blend(image,grain,0.055)
         path=out_dir/f"scene-{i:03d}.png"
         image.save(path,"PNG",optimize=True)
         credits.append({"scene":i,"scene_title":title,"style":"original layered 2D storybook + science illustration","source":"Original Pillow illustration","license":"Created by this workflow; no external image assets","artist":"Workflow-generated","notes":"Conceptual schematic; not to scale. Verify scientific details against narration."})
