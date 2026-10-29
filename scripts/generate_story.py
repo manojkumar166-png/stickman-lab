@@ -43,23 +43,18 @@ def generate_story(root: Path, config: dict) -> dict:
     history_path = root / config.get("topic_history_file", "topic_history.json")
     history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
     
-    available = [t for t in topics if t not in history]
-    
-    if available:
-        topic = random.choice(available)
-        print(f"Selected topic from topics.txt: {topic}")
-        prompt_topic_instruction = f"Topic: {topic}"
-    else:
-        print("topics.txt is empty or fully used. Asking Gemini to invent a matching topic...")
-        # We pass the ENTIRE topics.txt file so Gemini knows the exact style.
-        example_topics = "\n".join(f"- {t}" for t in topics)
-        prompt_topic_instruction = f"""
-The user has exhausted their manual list of topics. Please invent ONE brand new science topic.
-You MUST match the exact style, tone, and format of these existing example topics:
-{example_topics}
+    if not topics:
+        raise RuntimeError("topics.txt has no topics. Add at least one topic, one per line.")
 
-IMPORTANT: The new topic must be a fascinating science question, just like the examples. Do NOT use any of these recent topics: {history[-50:]}.
-"""
+    available = [t for t in topics if t not in history]
+    # Never invent topics: when every listed topic has been used, reuse one from topics.txt.
+    topic = random.choice(available if available else topics)
+    if available:
+        print(f"Selected topic from topics.txt: {topic}")
+    else:
+        print(f"All listed topics were used; reusing topic from topics.txt: {topic}")
+    prompt_topic_instruction = f"""Use this exact topic from topics.txt: "{topic}".
+Do not invent, replace, broaden, or rename the topic. The returned JSON "topic" must match it exactly."""
 
     prompt = f"""
 Create an original, factually careful educational science explainer for a colorful stickman cartoon video.
@@ -127,8 +122,9 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
                     "action": "point",
                 }[key]
 
-    # Save the generated topic or the original one
-    final_topic = story.get("topic", topic)
+    # Enforce the selected topics.txt entry even if the model tries to rename it.
+    story["topic"] = topic
+    final_topic = topic
     history.append(final_topic)
     history_path.write_text(json.dumps(history[-100:], indent=2), encoding="utf-8")
     
