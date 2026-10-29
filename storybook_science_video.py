@@ -40,7 +40,7 @@ def main():
     credits = render_storybook_stills(story, scene_dir, width, height)
     credits_path = OUT / f"storybook-science-image-credits-{day}.json"
     credits_path.write_text(json.dumps(credits, ensure_ascii=False, indent=2), encoding="utf-8")
-    narration = "\\n\\n".join(str(s.get("narration", "")).strip() for s in story["scenes"] if s.get("narration"))
+    narration = "\n\n".join(str(s.get("narration", "")).strip() for s in story["scenes"] if s.get("narration"))
     if not narration:
         raise RuntimeError("The story contains no narration.")
     narration_path = OUT / f"storybook-science-narration-{day}.mp3"
