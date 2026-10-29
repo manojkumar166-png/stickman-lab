@@ -4,6 +4,7 @@ import math
 import re
 import subprocess
 import textwrap
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -12,7 +13,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 HEADERS = {"User-Agent": "FreeScienceVideoWorkflow/1.0 (educational video; contact via GitHub repository)"}
-TIMEOUT = 25
+TIMEOUT = 20
+_SEARCH_CACHE = {}
+_LAST_SEARCH_AT = 0.0
+_MIN_SEARCH_INTERVAL = 1.25
 
 CINEMATIC_WORDS = {
     "black hole", "galaxy", "galaxies", "universe", "planet", "planets", "space",
@@ -56,19 +60,48 @@ def font(size, bold=False):
     return ImageFont.load_default()
 
 def commons_search(query, style):
+    """Search Commons politely, reuse in-run results, and back off on rate limits."""
+    global _LAST_SEARCH_AT
+    clean_query = " ".join(query.lower().split())
+    cache_key = (clean_query, style)
+    if cache_key in _SEARCH_CACHE:
+        return _SEARCH_CACHE[cache_key]
     suffix = " educational illustration diagram" if style == "cartoon" else " photograph science"
     params = {
         "action": "query", "format": "json", "generator": "search",
         "gsrsearch": query + suffix, "gsrnamespace": 6, "gsrlimit": 10,
         "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": 1800,
     }
-    try:
-        response = requests.get(COMMONS_API, params=params, headers=HEADERS, timeout=TIMEOUT)
-        response.raise_for_status()
-        pages = response.json().get("query", {}).get("pages", {})
-    except (requests.RequestException, ValueError) as exc:
-        print(f"Commons search failed: {exc}")
-        return []
+    pages = {}
+    for attempt in range(4):
+        wait = _MIN_SEARCH_INTERVAL - (time.monotonic() - _LAST_SEARCH_AT)
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            response = requests.get(COMMONS_API, params=params, headers=HEADERS, timeout=TIMEOUT)
+            _LAST_SEARCH_AT = time.monotonic()
+            if response.status_code == 429 or response.status_code >= 500:
+                retry_after = response.headers.get("Retry-After", "")
+                try:
+                    delay = min(30.0, max(2.0, float(retry_after)))
+                except ValueError:
+                    delay = min(20.0, 2.0 ** (attempt + 1))
+                if attempt < 3:
+                    print(f"Commons rate/server limit ({response.status_code}); retrying in {delay:.0f}s.")
+                    time.sleep(delay)
+                    continue
+            response.raise_for_status()
+            pages = response.json().get("query", {}).get("pages", {})
+            break
+        except (requests.RequestException, ValueError) as exc:
+            if attempt < 3:
+                delay = min(20.0, 2.0 ** (attempt + 1))
+                print(f"Commons search attempt {attempt + 1} failed: {exc}; retrying in {delay:.0f}s.")
+                time.sleep(delay)
+                continue
+            print(f"Commons search failed after retries: {exc}; using original fallback illustration.")
+            _SEARCH_CACHE[cache_key] = []
+            return []
     results = []
     for page in pages.values():
         info = (page.get("imageinfo") or [{}])[0]
@@ -92,6 +125,7 @@ def commons_search(query, style):
             "artist": re.sub("<[^>]+>", "", meta.get("Artist", {}).get("value", ""))[:300],
             "description": re.sub("<[^>]+>", "", meta.get("ImageDescription", {}).get("value", ""))[:500],
         })
+    _SEARCH_CACHE[cache_key] = results
     return results
 
 def fallback_illustration(topic, scene_title, narration, width, height, index):
@@ -152,9 +186,12 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
 def prepare_scene(scene, topic, style, out_path, width, height, index):
     title = str(scene.get("title") or topic).strip()
     narration = str(scene.get("narration") or "").strip()
-    query = " ".join((title + " " + narration).split()[:13])
+    # Search concise scene labels, not narration paragraphs; this improves relevance
+    # and avoids needlessly unique, long requests to Commons.
+    query = " ".join(title.split()[:7]) or " ".join(topic.split()[:7])
     candidates = commons_search(query, style)
     selected = None
+    selected_bytes = None
     # First relevant Commons match. Downloads are bounded and failures fall through.
     for item in candidates[:5]:
         try:
@@ -168,6 +205,7 @@ def prepare_scene(scene, topic, style, out_path, width, height, index):
             if im.width < 400 or im.height < 250:
                 continue
             selected = item
+            selected_bytes = r.content
             break
         except Exception as exc:
             print(f"Skipping image {item.get('title')}: {exc}")
@@ -175,10 +213,8 @@ def prepare_scene(scene, topic, style, out_path, width, height, index):
         # Use original downloaded response again for clarity and keep fit/crop predictable.
         try:
             from io import BytesIO
-            r = requests.get(selected["url"], headers=HEADERS, timeout=TIMEOUT)
-            r.raise_for_status()
             from PIL import ImageOps
-            image = ImageOps.fit(Image.open(BytesIO(r.content)).convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
+            image = ImageOps.fit(Image.open(BytesIO(selected_bytes)).convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
             if style == "cinematic":
                 image = image.filter(ImageFilter.GaussianBlur(0.15))
                 shade = Image.new("RGB", image.size, "#000000")
