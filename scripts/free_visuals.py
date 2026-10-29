@@ -381,8 +381,8 @@ def render_motion_video(scene_dir, audio_path, output_path, config):
         tmp = Path(tmp)
         clips = []
         for i, image in enumerate(images):
-        if i == 0 or (i + 1) % 5 == 0 or i + 1 == len(images):
-            print(f"Rendering video clips: {i+1}/{len(images)}", flush=True)
+            if i == 0 or (i + 1) % 5 == 0 or i + 1 == len(images):
+                print(f"Rendering video clips: {i+1}/{len(images)}", flush=True)
             clip = tmp / f"clip-{i:03d}.mp4"
             frames = max(2, round(per_scene * fps))
             # Gentle Ken Burns zoom; reset for every image so style remains stable.
