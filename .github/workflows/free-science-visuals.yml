@@ -39,8 +39,6 @@ jobs:
       - name: Generate free science video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           PYTHONUNBUFFERED: "1"
         run: python -u free_science_video.py
 
