@@ -66,7 +66,7 @@ else if(/winter|snow|hibernate|migration|migrate|cold|frost|squirrel|bear|fox|bi
   else if(squirrel){ctx.fillStyle='#b8754f';ctx.beginPath();ctx.ellipse(ax,ay,48,60,-.2,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(ax-40,ay-52,30,49,-.65,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(ax+4,ay-53,33,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f3d4a5';ctx.beginPath();ctx.ellipse(ax+12,ay-43,20,15,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#342e2c';ctx.beginPath();ctx.arc(ax+14,ay-60,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e9c58b';ctx.beginPath();ctx.ellipse(ax+36,ay-6,13,18,0,0,Math.PI*2);ctx.fill()}
   else {ctx.fillStyle='#bd855d';ctx.beginPath();ctx.ellipse(ax,ay,87,57,-.08,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(ax+62,ay-40,43,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.moveTo(ax+40,ay-72);ctx.lineTo(ax+47,ay-112);ctx.lineTo(ax+65,ay-78);ctx.fill();ctx.beginPath();ctx.moveTo(ax+70,ay-76);ctx.lineTo(ax+98,ay-105);ctx.lineTo(ax+91,ay-62);ctx.fill();ctx.fillStyle='#f3e1ca';ctx.beginPath();ctx.ellipse(ax+82,ay-28,24,13,.15,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2e3030';ctx.beginPath();ctx.arc(ax+78,ay-49,4,0,Math.PI*2);ctx.fill()}
 }
-else {glow(cx,cy,145,'#fff0c866');ctx.strokeStyle='#f8e7bb';ctx.lineWidth=4;ctx.beginPath();ctx.arc(cx,cy,72,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,112,0,Math.PI*2);ctx.stroke();for(let j=0;j<8;j++){let a=j*Math.PI/4;line(cx+80*Math.cos(a),cy+80*Math.sin(a),cx+104*Math.cos(a),cy+104*Math.sin(a),'#f7d7a0',3)}}
+else {throw new Error('No scene-specific illustration matched: '+sceneText);}
 </script></body></html>"""
 
 def _safe(value: object) -> str:
@@ -75,6 +75,34 @@ def _safe(value: object) -> str:
 async def render_scenes(story: dict, output_dir: Path, width: int, height: int) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     scenes = story.get("scenes", [])
+    if not scenes:
+        raise ValueError("Story has no scenes; refusing to render a blank/generic video.")
+
+    # Fail fast instead of silently using the generic ring graphic or unrelated landscape.
+    # Each scene must contain a subject the hand-coded renderer actually supports.
+    supported = {
+        "magnetism": r"magnet|magnetic|compass|pole|attract|repel|iron filing|field line",
+        "ocean": r"ocean|sea|underwater|coral|whale|fish|salty|water cycle",
+        "flight": r"airplane|aircraft|flight|fly|wing|lift",
+        "bee": r"bee|pollinat|hive|honey",
+        "weather": r"cloud|rain|storm|weather|water cycle",
+        "volcano": r"volcano|eruption|lava|magma",
+        "brain": r"brain|memory|neuron|nerve|dream|sleep",
+        "fingerprint": r"fingerprint",
+        "plant": r"photosynth|plant|leaf|tree|seed|root|flower",
+        "space": r"space|planet|solar|moon|star|universe|gravity|black hole",
+        "chemistry": r"atom|molecule|chem|electron|element",
+        "winter_animals": r"winter|snow|hibernate|migration|migrate|cold|frost|squirrel|bear|fox|bird",
+    }
+    import re
+    for i, scene in enumerate(scenes, start=1):
+        scene_text = " ".join(str(scene.get(k) or "") for k in ("title", "visual", "visual_description", "narration")).lower()
+        if not any(re.search(pattern, scene_text) for pattern in supported.values()):
+            raise ValueError(
+                f"Scene {i} has no supported subject illustration: {scene.get('title')!r}. "
+                "Refusing to substitute mountains or a generic picture. Add a matching hand-coded illustration first."
+            )
+
     rendered=[]
     async with async_playwright() as p:
         browser=await p.chromium.launch()
