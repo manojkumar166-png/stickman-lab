@@ -27,13 +27,19 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main_gemini.py
 
+      - name: Get Video Topic
+        id: get_topic
+        run: |
+          TOPIC=$(python -c "import json,glob; print(json.load(open(glob.glob('output/story-*.json')[0]))['topic'])")
+          echo "topic_name=$TOPIC" >> $GITHUB_OUTPUT
+
       - name: Send Video to Telegram
         uses: PonomarevDA/telegram-upload@v1
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: output/gemini-experiment-*.mp4
-          message: "✨ New Gemini Science Video generated!"
+          message: "✨ New Gemini Science Video: ${{ steps.get_topic.outputs.topic_name }}"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

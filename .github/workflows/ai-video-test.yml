@@ -29,13 +29,19 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python main_ai.py
 
+      - name: Get Video Topic
+        id: get_topic
+        run: |
+          TOPIC=$(python -c "import json,glob; print(json.load(open(glob.glob('output/story-*.json')[0]))['topic'])")
+          echo "topic_name=$TOPIC" >> $GITHUB_OUTPUT
+
       - name: Send Video to Telegram
         uses: PonomarevDA/telegram-upload@v1
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: output/ai-experiment-*.mp4
-          message: "🎨 New AI Science Video generated!"
+          message: "🎨 New AI Science Video: ${{ steps.get_topic.outputs.topic_name }}"
 
       - name: Upload AI Video
         uses: actions/upload-artifact@v4
