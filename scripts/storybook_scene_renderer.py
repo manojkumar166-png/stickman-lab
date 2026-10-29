@@ -50,7 +50,19 @@ else if(/airplane|aircraft|flight|fly|wing|lift/.test(sceneText+" "+topic)){ctx.
 else if(/bee|pollinat|hive|honey/.test(sceneText+" "+topic)){ctx.fillStyle='#eebf54';ctx.beginPath();ctx.ellipse(cx,cy,43,28,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4b4b3e';ctx.fillRect(cx-18,cy-25,9,50);ctx.fillRect(cx+5,cy-26,9,52);ctx.fillStyle='#e6f2e9';ctx.beginPath();ctx.ellipse(cx-12,cy-34,20,11,-.5,0,Math.PI*2);ctx.ellipse(cx+20,cy-34,20,11,.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#f9e4a9';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,78,0,Math.PI*2);ctx.stroke()}
 else if(/cloud|rain|storm|weather|water cycle/.test(sceneText+" "+topic)){ctx.fillStyle='#e8f0e8';for(const [dx,dy,r] of [[-35,0,36],[0,-20,45],[37,0,33]]){ctx.beginPath();ctx.arc(cx+dx,cy+dy,r,0,Math.PI*2);ctx.fill()}for(let j=0;j<7;j++){line(cx-48+j*16,cy+42,cx-58+j*16,cy+62,'#8bd8e8',3)}glow(cx+135,cy-70,55,'#ffe5a0aa')}
 else if(/volcano|eruption|lava|magma/.test(sceneText+" "+topic)){ctx.fillStyle='#8b6253';ctx.beginPath();ctx.moveTo(cx-150,cy+105);ctx.lineTo(cx-40,cy-100);ctx.lineTo(cx+10,cy-30);ctx.lineTo(cx+70,cy-112);ctx.lineTo(cx+155,cy+105);ctx.closePath();ctx.fill();ctx.fillStyle='#f28a55';ctx.beginPath();ctx.moveTo(cx-42,cy-95);ctx.lineTo(cx+8,cy-27);ctx.lineTo(cx+70,cy-108);ctx.lineTo(cx+44,cy-42);ctx.lineTo(cx-15,cy-42);ctx.closePath();ctx.fill();for(let j=0;j<18;j++){ctx.fillStyle=j%2?'#ffd17c':'#ef8051';ctx.beginPath();ctx.arc(cx-55+(j*47)%130,cy-130+(j*31)%75,3+j%5,0,Math.PI*2);ctx.fill()}}
-else if(/magnet|magnetic|compass/.test(sceneText+" "+topic)){ctx.lineWidth=24;ctx.lineCap='butt';ctx.strokeStyle='#d96e64';ctx.beginPath();ctx.moveTo(cx-65,cy-65);ctx.lineTo(cx-65,cy+35);ctx.arc(cx,cy+35,65,Math.PI,0,true);ctx.lineTo(cx+65,cy-65);ctx.stroke();ctx.strokeStyle='#dce6d9';ctx.beginPath();ctx.moveTo(cx,cy+100);ctx.lineTo(cx,cy+140);ctx.stroke();ctx.strokeStyle='#f4d18c';for(let j=0;j<12;j++){let x=cx-115+j*21,y=cy+130+(j%3)*12;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+8,y-7);ctx.stroke()}}
+else if(/moon|lunar|terminator|crescent|waxing|waning|phase|illumination/.test(sceneText)){
+const mx=c.width*.53,my=c.height*.40,r=92;
+glow(mx,my,145,'#b8cfff33');
+ctx.fillStyle='#d8e0e4';ctx.beginPath();ctx.arc(mx,my,r,0,Math.PI*2);ctx.fill();
+for(let j=0;j<26;j++){const a=j*2.399,rr=18+(j%7)*10;ctx.fillStyle=j%3?'#aab8c1':'#8498a5';ctx.globalAlpha=.28;ctx.beginPath();ctx.arc(mx+Math.cos(a)*rr,my+Math.sin(a)*rr,3+(j%4)*2,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+const t=sceneText;ctx.fillStyle='#26364d';
+if(/new moon|dark moon/.test(t)){ctx.beginPath();ctx.arc(mx,my,r,0,Math.PI*2);ctx.fill()}
+else if(/crescent|thin sliver/.test(t)){ctx.beginPath();ctx.arc(mx,my,r,Math.PI*.72,Math.PI*1.28);ctx.arc(mx+44,my,r*.96,Math.PI*1.28,Math.PI*.72,true);ctx.closePath();ctx.fill()}
+else if(/quarter|half moon|terminator|line between|first quarter|last quarter/.test(t)){ctx.beginPath();ctx.arc(mx,my,r,-Math.PI/2,Math.PI/2);ctx.lineTo(mx,my-r);ctx.closePath();ctx.fill()}
+else if(/full moon/.test(t)){ctx.fillStyle='#f6f1d6';ctx.beginPath();ctx.arc(mx,my,r,0,Math.PI*2);ctx.fill()}
+else {ctx.beginPath();ctx.arc(mx,my,r,-Math.PI/2,Math.PI/2);ctx.arc(mx+48,my,r*.98,Math.PI/2,-Math.PI/2,true);ctx.closePath();ctx.fill()}
+ctx.strokeStyle='#fff0c0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(mx,my,r,0,Math.PI*2);ctx.stroke();
+}else if(/magnet|magnetic|compass/.test(sceneText+" "+topic)){ctx.lineWidth=24;ctx.lineCap='butt';ctx.strokeStyle='#d96e64';ctx.beginPath();ctx.moveTo(cx-65,cy-65);ctx.lineTo(cx-65,cy+35);ctx.arc(cx,cy+35,65,Math.PI,0,true);ctx.lineTo(cx+65,cy-65);ctx.stroke();ctx.strokeStyle='#dce6d9';ctx.beginPath();ctx.moveTo(cx,cy+100);ctx.lineTo(cx,cy+140);ctx.stroke();ctx.strokeStyle='#f4d18c';for(let j=0;j<12;j++){let x=cx-115+j*21,y=cy+130+(j%3)*12;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+8,y-7);ctx.stroke()}}
 else if(/brain|memory|neuron|nerve/.test(sceneText+" "+topic)){ctx.fillStyle='#e6a9a0';ctx.beginPath();ctx.arc(cx-35,cy-8,47,0,Math.PI*2);ctx.arc(cx+15,cy-40,43,0,Math.PI*2);ctx.arc(cx+55,cy+1,42,0,Math.PI*2);ctx.arc(cx+8,cy+33,43,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#a75e69';ctx.lineWidth=3;for(let j=0;j<5;j++){ctx.beginPath();ctx.moveTo(cx-55+j*24,cy-42);ctx.quadraticCurveTo(cx-25+j*20,cy+5,cx-48+j*25,cy+43);ctx.stroke()}glow(cx+20,cy,110,'#f7c3ad55')}
 else if(/fingerprint|fingerprints/.test(sceneText+" "+topic)){ctx.strokeStyle='#f1d7a0';ctx.lineWidth=5;for(let j=0;j<8;j++){ctx.beginPath();ctx.ellipse(cx,cy,25+j*12,35+j*13,0,Math.PI*.12,Math.PI*1.88);ctx.stroke()}ctx.beginPath();ctx.arc(cx,cy+20,12,Math.PI,Math.PI*2);ctx.stroke()}
 else if(/photosynth|plant|leaf|tree|seed|root|flower/.test(sceneText+" "+topic)){glow(cx,cy,140,'#d5e6a666');ctx.strokeStyle='#e8e0b1';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(cx,cy+115);ctx.lineTo(cx,cy-75);ctx.stroke();for(let j=0;j<6;j++){ctx.save();ctx.translate(cx,cy+60-j*24);ctx.rotate(j%2?-.6:.6);ctx.fillStyle=j%2?'#b9cb87':'#6c9d72';ctx.beginPath();ctx.ellipse(28,0,18,38,0,0,Math.PI*2);ctx.fill();ctx.restore()}glow(cx-65,cy-90,65,'#ffe9a077')}
@@ -90,6 +102,7 @@ async def render_scenes(story: dict, output_dir: Path, width: int, height: int) 
         "brain": r"brain|memory|neuron|nerve|dream|sleep",
         "fingerprint": r"fingerprint",
         "plant": r"photosynth|plant|leaf|tree|seed|root|flower",
+        "moon_phases": r"moon|lunar|terminator line|crescent|waxing|waning|quarter phase|illumination",
         "space": r"space|planet|solar|moon|star|universe|gravity|black hole",
         "chemistry": r"atom|molecule|chem|electron|element",
         "winter_animals": r"winter|snow|hibernate|migration|migrate|cold|frost|squirrel|bear|fox|bird",
