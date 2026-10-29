@@ -146,18 +146,112 @@ def create_subject(scene):
             sphere("Membrane pore",(1.43*math.cos(a),-.12,.1+.99*math.sin(a)),(.035,.035,.035),pearl)
         for p in [(-.65,-.48,-.35),(.35,-.48,.65),(-.75,-.48,.05),(.8,-.4,.05)]:
             sphere("Mitochondrion",p,(.16,.08,.09),gold)
-    elif any(k in words for k in ("volcano","eruption","lava","magma","fire","heat","lightning","storm")):
-        bpy.ops.mesh.primitive_cone_add(vertices=48,radius1=1.45,radius2=.15,depth=2.3,location=(0,0,-.05))
-        bpy.context.object.data.materials.append(dark)
-        sphere("Lava glow",(0,-.2,1.0),(.3,.15,.15),gold)
-        for i in range(12): sphere("Ember",(random.uniform(-.8,.8),-.1,random.uniform(.8,2)),(.06,)*3,gold)
-    elif any(k in words for k in ("ocean","water","rain","ice","sea","river","underwater","current")):
-        for i in range(6):
-            pts=[(x,-.1,-.8+i*.25+math.sin(x*2+i)*.1) for x in [j*.1-3 for j in range(61)]]
-            cu=bpy.data.curves.new("Wave","CURVE"); cu.dimensions="3D"; cu.bevel_depth=.025
+    elif any(k in words for k in ("ocean","sea floor","underwater","coral reef","deep sea","marine","tide","ocean current","sea life","whale","shark","dolphin")):
+        # Layered ocean diorama: deep water, textured waves, coral, fish, bubbles and seabed.
+        deep=material("Ocean depth",(.008,.075,.24),.24,.1)
+        teal=material("Tropical water",(.015,.34,.48),.22,.08)
+        coral=material("Reef coral",(1,.19,.22),.3)
+        sand=material("Seabed sand",(.55,.34,.14),.8)
+        bpy.ops.mesh.primitive_cube_add(size=1,location=(0,.35,-.95))
+        seabed=bpy.context.object; seabed.name="Ocean floor"; seabed.scale=(7,.7,.22); seabed.data.materials.append(sand)
+        for i in range(7):
+            pts=[(x,-.25,-.25+i*.12+math.sin(x*2.2+i*.8)*.1) for x in [j*.1-3.5 for j in range(71)]]
+            cu=bpy.data.curves.new("Layered ocean wave","CURVE"); cu.dimensions="3D"; cu.bevel_depth=.025 if i%2 else .04
             sp=cu.splines.new("POLY"); sp.points.add(len(pts)-1)
             for q,p in zip(sp.points,pts): q.co=(*p,1)
-            ob=bpy.data.objects.new("Wave",cu); bpy.context.collection.objects.link(ob); cu.materials.append(cyan)
+            ob=bpy.data.objects.new("Ocean wave",cu); bpy.context.collection.objects.link(ob); cu.materials.append(teal if i%2 else cyan)
+        # Branching coral and sea plants on the seabed.
+        for base_x,mat in [(-2.4,coral),(-1.8,pink),(2.3,gold)]:
+            for j in range(5):
+                height=.35+.12*(j%3)
+                bpy.ops.mesh.primitive_cylinder_add(vertices=10,radius=.045,depth=height,location=(base_x+(j-2)*.09,-.25,-.45+height/2))
+                bpy.context.object.data.materials.append(mat)
+                sphere("Coral tip",(base_x+(j-2)*.09,-.25,-.45+height),(.07,.07,.07),mat)
+        for i in range(9):
+            x=-2.8+i*.68; z=random.uniform(-.05,.8)
+            fish=sphere("Reef fish",(x,-.42,z),(.2,.07,.095),[gold,cyan,pink][i%3])
+            tail=sphere("Fish tail",(x-.19,-.4,z),(.08,.035,.07),[gold,cyan,pink][i%3])
+        for i in range(24):
+            x=random.uniform(-3.2,3.2); z=random.uniform(-.1,1.5)
+            sphere("Ocean bubble",(x,-.35,z),(.025,.025,.025),pearl)
+        for x in (-2.8,2.7):
+            for j in range(4):
+                sphere("Sea plant",(x+j*.08,-.3,-.55+j*.08),(.08,.05,.22),green)
+    elif any(k in words for k in ("weather","thunderstorm","cloud","rainfall","water cycle","hurricane","tornado","cyclone","lightning","storm","rain")):
+        cloud=material("Cloud white",(.78,.88,1),.8)
+        for x,z,s in [(-1.8,.8,.55),(-1.3,1,.65),(-.8,.8,.5),(.7,1,.6),(1.2,.8,.55)]:
+            sphere("Cloud",(x,.1,z),(s,.3,s*.55),cloud)
+        for i in range(22):
+            x=-2.1+(i%11)*.42; z=.2-(i//11)*.35
+            drop=sphere("Raindrop",(x,-.1,z),(.035,.035,.09),cyan); drop.rotation_euler[1]=math.radians(-12)
+        # Lightning forks and a sun peeking through the clouds.
+        if any(k in words for k in ("lightning","thunderstorm","storm","thunder")):
+            for x in (-.2,1.5):
+                for j in range(4):
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=8,radius=.025,depth=.28,location=(x-j*.07,-.05,.55-j*.24),rotation=(0,math.radians(18),0))
+                    bpy.context.object.data.materials.append(gold)
+        sphere("Sun through clouds",(2.5,.2,1.3),(.28,.2,.28),gold)
+    elif any(k in words for k in ("volcano","eruption","lava","magma","fire","heat","geothermal")):
+        rock=material("Volcanic rock",(.09,.07,.08),.9)
+        lava=material("Molten lava",(1,.12,.008),.22,.05,2.0)
+        bpy.ops.mesh.primitive_cone_add(vertices=64,radius1=1.55,radius2=.18,depth=2.4,location=(0,0,-.05))
+        mountain=bpy.context.object; mountain.name="Volcanic cone"; mountain.data.materials.append(rock)
+        sphere("Crater glow",(0,-.18,1.08),(.36,.12,.13),lava)
+        for i in range(20):
+            x=random.uniform(-1.0,1.0); z=random.uniform(.75,2.0)
+            sphere("Glowing ember",(x,-.25,z),(.035,.035,.045),gold if i%3 else lava)
+        for x in (-.55,.25,.7):
+            bpy.ops.mesh.primitive_cylinder_add(vertices=8,radius=.035,depth=random.uniform(.45,.9),location=(x,-.24,random.uniform(-.55,.35)),rotation=(0,random.uniform(-.45,.45),0))
+            bpy.context.object.data.materials.append(lava)
+    elif any(k in words for k in ("electricity","electric circuit","circuit board","light bulb","current","voltage","magnet","magnetic field","electromagnet")):
+        board=material("Circuit board",(.015,.16,.12),.3,.2)
+        bpy.ops.mesh.primitive_cube_add(size=1,location=(0,.15,-.15)); obj=bpy.context.object; obj.name="Circuit board"; obj.scale=(3.7,.18,1.35); obj.data.materials.append(board)
+        for i in range(9):
+            x=-1.55+i*.39
+            bpy.ops.mesh.primitive_cylinder_add(vertices=24,radius=.11,depth=.08,location=(x,-.08,.05+(i%3)*.18),rotation=(math.pi/2,0,0))
+            bpy.context.object.data.materials.append(gold if i%2 else cyan)
+        for i in range(8):
+            x=-1.7+i*.48
+            bpy.ops.mesh.primitive_cylinder_add(vertices=8,radius=.025,depth=.55,location=(x,-.12,.25),rotation=(0,math.pi/2,0))
+            bpy.context.object.data.materials.append(cyan)
+        if any(k in words for k in ("magnet","magnetic field","electromagnet")):
+            for x in (-.75,.75):
+                bpy.ops.mesh.primitive_cube_add(size=1,location=(x,-.35,.65)); obj=bpy.context.object; obj.scale=(.42,.18,.35); obj.data.materials.append(pink if x<0 else blue)
+            for i in range(5): ring("Magnetic field line",(0,-.2,.6),.5+i*.22,cyan)
+    elif any(k in words for k in ("insect","bee","bees","butterfly","ant","pollination","spider","ladybug")):
+        yellow=material("Insect gold",(1,.57,.04),.28)
+        sphere("Insect body",(0,0,.2),(.55,.25,.28),yellow)
+        sphere("Insect head",(.53,-.02,.28),(.23,.22,.22),dark)
+        for x in (-.25,.05,.3):
+            for side in (-1,1):
+                bpy.ops.mesh.primitive_cylinder_add(vertices=10,radius=.025,depth=.48,location=(x,-.05,.0),rotation=(0,math.radians(side*35),side*.3))
+                bpy.context.object.data.materials.append(dark)
+        for x in (-.18,.18):
+            wing=sphere("Translucent wing",(x,-.16,.58),(.28,.045,.19),pearl); wing.rotation_euler[1]=math.radians(x*90)
+        for i in range(12):
+            sphere("Pollen grain",(random.uniform(-1.4,1.4),-.25,random.uniform(-.25,1.1)),(.035,)*3,gold)
+    elif any(k in words for k in ("dinosaur","fossil","prehistoric","paleontology")):
+        bone=material("Fossil bone",(.78,.67,.46),.8)
+        sphere("Dinosaur torso",(-.1,0,.15),(.9,.35,.42),green)
+        sphere("Dinosaur head",(.8,-.02,.48),(.38,.3,.32),green)
+        sphere("Dinosaur jaw",(.95,-.12,.27),(.3,.2,.1),bone)
+        for x in (-.65,-.2,.25):
+            bpy.ops.mesh.primitive_cone_add(vertices=8,radius1=.12,radius2=.025,depth=.38,location=(x,-.02,.55),rotation=(0,math.radians(90),0))
+        for x in (-.55,.4):
+            bpy.ops.mesh.primitive_cylinder_add(vertices=12,radius=.09,depth=.48,location=(x,-.05,-.2),rotation=(0,math.radians(90),0))
+            bpy.context.object.data.materials.append(green)
+        for i in range(6):
+            sphere("Fossil fragment",(random.uniform(-1.8,1.8),-.2,random.uniform(-.9,-.55)),(.12,.05,.07),bone)
+    elif any(k in words for k in ("ocean","water","ice","sea","river","underwater","current","glacier","waterfall")):
+        # Detailed layered water scene for general water-related topics.
+        for i in range(8):
+            pts=[(x,-.1,-.8+i*.2+math.sin(x*2+i)*.1) for x in [j*.1-3 for j in range(61)]]
+            cu=bpy.data.curves.new("Water wave","CURVE"); cu.dimensions="3D"; cu.bevel_depth=.025
+            sp=cu.splines.new("POLY"); sp.points.add(len(pts)-1)
+            for q,p in zip(sp.points,pts): q.co=(*p,1)
+            ob=bpy.data.objects.new("Water wave",cu); bpy.context.collection.objects.link(ob); cu.materials.append(cyan if i%2 else blue)
+        for i in range(16):
+            sphere("Water particle",(random.uniform(-3,3),-.3,random.uniform(-.5,.8)),(.025,)*3,pearl)
     else:
         # Space / general science gets a detailed planet with an atmosphere and moon.
         sphere("Hero planet",(-.2,0,.25),(1.25,1,1.25),blue)
