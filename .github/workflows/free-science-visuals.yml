@@ -54,6 +54,7 @@ jobs:
           assembler = Path("scripts/render_video.py").read_text(encoding="utf-8")
           assert "download_scene_illustrations" in entry and "render_external_scenes" in entry
           assert '"cc0", "pdm"' in images
+          assert "_search_pexels" in images and "PEXELS_API_KEY" in images
           assert "image-attribution-manifest.json" in images
           assert "page.screenshot" in renderer and "object-fit:contain" in renderer
           assert "ffmpeg" in assembler.lower()
@@ -66,6 +67,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
