@@ -61,14 +61,16 @@ jobs:
           for forbidden_key in ("PIXABAY_API_KEY", "UNSPLASH_ACCESS_KEY", "PEXELS_API_KEY"):
               assert forbidden_key not in images, f"Provider API key still referenced: {forbidden_key}"
           assert "_scene_queries" in images
+          assert "_gemini_scene_queries" in images, "Gemini should suggest scene-specific search references"
+          assert "from scripts.generate_story import _call_gemini" in images, "Search references should reuse the story-text Gemini helper"
           assert 'styled.append("anime style " + query)' in images
           assert 'styled.append("ghibli style " + query)' in images
-          assert "gemini" not in images.lower(), "Image search must not call Gemini"
+          assert "image-generation" in images.lower() or "image generation" in images.lower(), "Image pipeline should explicitly distinguish search from image generation"
           assert "image-attribution-manifest.json" in images
           assert "page.screenshot" in renderer and "object-fit:contain" in renderer
           assert "ffmpeg" in assembler.lower()
           assert "zoompan" not in assembler.lower()
-          print("Verified: public website search pages only (no provider APIs or image Gemini), static illustrations, FFmpeg.")
+          print("Verified: Gemini text-only search references, public website search pages (no provider APIs), static illustrations, FFmpeg.")
           PY
 
       - name: Generate science video (no AI image generation)
