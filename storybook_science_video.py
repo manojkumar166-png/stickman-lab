@@ -1,5 +1,5 @@
 """Generate a science story video with hand-authored HTML/CSS/JS storybook scenes."""
-import json, os, shutil
+import json, os, shutil, hashlib
 from datetime import date
 from pathlib import Path
 from scripts.generate_story import generate_story
@@ -34,6 +34,13 @@ def main():
     rendered=__import__("asyncio").run(render_scenes(story,scene_dir,width,height))
     if len(rendered)!=len(story["scenes"]):
         raise RuntimeError(f"Expected {len(story['scenes'])} rendered scenes, got {len(rendered)}.")
+    hashes = {hashlib.sha256(path.read_bytes()).hexdigest() for path in rendered}
+    if len(rendered) > 1 and len(hashes) < 2:
+        raise RuntimeError("All scene images are identical; refusing to assemble a static single-image video.")
+    tiny = [path.name for path in rendered if path.stat().st_size < 8000]
+    if tiny:
+        raise RuntimeError(f"Unexpectedly small scene images: {tiny}")
+    print(f"Rendered {len(rendered)} scenes ({len(hashes)} distinct images).", flush=True)
     narration="\n\n".join(str(s.get("narration","")).strip() for s in story["scenes"] if s.get("narration"))
     if not narration: raise RuntimeError("The story contains no narration.")
     narration_path=OUT/f"storybook-science-narration-{day}.mp3"
