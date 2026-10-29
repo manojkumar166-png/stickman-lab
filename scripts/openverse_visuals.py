@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+from scripts.generate_story import _call_gemini
 
 TIMEOUT = 25
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
@@ -236,6 +237,65 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
                 break
     return list(dict.fromkeys(styled + candidates))[:16] or ["anime black hole illustration"]
 
+def _gemini_scene_queries(topic: str, scenes: list[dict]) -> dict[int, list[str]]:
+    """Ask Gemini for concise public image-search references based on each scene's actual script."""
+    import os
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("GEMINI_API_KEY missing; using local image-query fallback.", flush=True)
+        return {}
+
+    scene_briefs = []
+    for index, scene in enumerate(scenes, start=1):
+        scene_briefs.append({
+            "scene": index,
+            "title": str(scene.get("title") or ""),
+            "narration": str(scene.get("narration") or ""),
+            "visual": str(scene.get("visual") or scene.get("visual_description") or ""),
+            "background": str(scene.get("background") or ""),
+        })
+    prompt = f"""
+You are preparing search terms for finding existing still illustrations on ordinary public image-search websites.
+The science video topic is: {topic}
+For each numbered scene below, return 3 to 5 short, literal English image-search queries based on the actual science subject, objects, setting, and action in that scene.
+Prioritize concrete visual references and scenery over character descriptions. Include a mix of a specific science object/phenomenon and a relevant environment when appropriate. Search for existing hand-drawn 2D, anime, or storybook-style illustrations, but do not put all style words into every query.
+Do not write prompts for generating images. Do not suggest APIs, API endpoints, or image-generation services. Do not include full narration sentences, abstract phrases, character clothing/colors, or generic queries like "science illustration".
+Return ONLY JSON in this exact shape:
+{{"scenes":[{{"scene":1,"queries":["...","...","..."]}}]}}
+Include every scene number exactly once. Keep each query between 2 and 8 words.
+Scene data:
+{json.dumps(scene_briefs, ensure_ascii=False)}
+"""
+    models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
+    for model in models:
+        try:
+            print(f"Gemini: generating image-search references with {model}", flush=True)
+            response = _call_gemini(api_key, model, prompt, attempts=2)
+            raw = response["candidates"][0]["content"]["parts"][0]["text"]
+            parsed = json.loads(raw)
+            output = {}
+            for entry in parsed.get("scenes", []):
+                try:
+                    index = int(entry.get("scene"))
+                except (TypeError, ValueError):
+                    continue
+                queries = []
+                for value in entry.get("queries", []):
+                    query = re.sub(r"[^A-Za-z0-9 '-]", " ", str(value))
+                    query = " ".join(query.split()).strip()
+                    if 2 <= len(query.split()) <= 8 and query.lower() not in {q.lower() for q in queries}:
+                        queries.append(query)
+                if 1 <= index <= len(scenes) and queries:
+                    output[index] = queries[:5]
+            if output:
+                print(f"Gemini generated image-search references for {len(output)}/{len(scenes)} scenes.", flush=True)
+                return output
+            print(f"{model}: returned no usable search references; trying fallback model.", flush=True)
+        except Exception as exc:
+            print(f"{model}: image-reference generation failed ({exc}); trying fallback model.", flush=True)
+    print("Gemini image-reference generation unavailable; using local query fallback.", flush=True)
+    return {}
+
 def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     """Try free, no-key sources first; missing images become text-only scenes."""
     scenes = story.get("scenes") or []
@@ -245,9 +305,11 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     topic = str(story.get("topic") or "science")
     manifest, paths, used_ids = [], [], set()
     rng = random.SystemRandom()
+    gemini_queries = _gemini_scene_queries(topic, scenes)
 
     for index, scene in enumerate(scenes, start=1):
-        queries = _scene_queries(topic, scene)
+        queries = gemini_queries.get(index) or _scene_queries(topic, scene)
+        print(f"Scene {index}/{len(scenes)} image searches: {queries}", flush=True)
         base_query = queries[0]
         chosen = None
         errors = []
