@@ -37,7 +37,9 @@ def setup(width,height):
     for loc,energy,size in [((-4,-4,6),850,5),((4,-2,3),500,4),((0,3,4),900,3)]:
         bpy.ops.object.light_add(type="AREA",location=loc); l=bpy.context.object
         l.data.energy=energy; l.data.shape="DISK"; l.data.size=size
-    sc=bpy.context.scene; sc.render.engine="BLENDER_EEVEE_NEXT"
+    sc=bpy.context.scene
+    # EEVEE Next became the default engine in Blender 4.2; Blender 4.0/4.1 use BLENDER_EEVEE.
+    sc.render.engine = "BLENDER_EEVEE_NEXT" if bpy.app.version >= (4, 2, 0) else "BLENDER_EEVEE"
     sc.render.resolution_x=width; sc.render.resolution_y=height; sc.render.resolution_percentage=100
     sc.render.image_settings.file_format="PNG"; sc.view_settings.view_transform="AgX"
     sc.world.color=(.012,.02,.06)
