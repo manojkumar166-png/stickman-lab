@@ -205,14 +205,14 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
     tops = [(9, 17, 43), (12, 29, 54), (20, 19, 54), (7, 34, 52)]
     bottoms = [(28, 53, 85), (29, 38, 83), (49, 28, 76), (10, 61, 72)]
     palette_idx = index % len(tops)
-    image = Image.new("RGB", (W, H))
-    pix = image.load()
+    # Build the gradient as a narrow strip and resize in Pillow's optimized C code.
     top, bottom = tops[palette_idx], bottoms[palette_idx]
+    strip = Image.new("RGB", (1, H))
+    sp = strip.load()
     for y in range(H):
         t = y / max(1, H - 1)
-        row = tuple(int(top[c] * (1-t) + bottom[c] * t) for c in range(3))
-        for x in range(W):
-            pix[x, y] = row
+        sp[0, y] = tuple(int(top[ch] * (1-t) + bottom[ch] * t) for ch in range(3))
+    image = strip.resize((W, H))
     # Atmospheric glow and soft, out-of-focus background lights.
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
@@ -300,13 +300,14 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
     # Cinematic depth vignette and soft light bloom.
     image = image.convert("RGB")
     image = ImageEnhance.Contrast(image).enhance(1.06)
-    vignette = Image.new("L", (W,H), 0)
-    vp = vignette.load()
-    for y in range(H):
-        for x in range(W):
-            nx = (x-W/2)/(W/2)
-            ny = (y-H/2)/(H/2)
-            vp[x,y] = max(0, min(255, int(255 * max(0.58, 1 - 0.23*(nx*nx+ny*ny)))))
+    # Soft vignette made from nested ellipses; avoids millions of Python pixel operations.
+    vignette = Image.new("L", (W, H), 148)
+    vd = ImageDraw.Draw(vignette)
+    for j in range(18):
+        inset_x = int(W * (0.025 + j * 0.018))
+        inset_y = int(H * (0.025 + j * 0.018))
+        shade = int(255 - j * 6.0)
+        vd.ellipse((inset_x, inset_y, W-inset_x, H-inset_y), fill=max(148, shade))
     dark = Image.new("RGB", (W,H), (0,0,0))
     image = Image.composite(image, dark, vignette)
     # Subtle bottom title panel with a clean movie-poster treatment.
