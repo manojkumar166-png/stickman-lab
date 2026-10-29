@@ -179,12 +179,39 @@ def _image_signature(data: bytes) -> str | None:
     if data.startswith((b"GIF87a", b"GIF89a")):
         return ".gif"
     return None
-def _scene_query(topic: str, scene: dict) -> str:
-    visual = str(scene.get("visual_description") or scene.get("visual") or "")
-    if not visual:
-        visual = str(scene.get("title") or scene.get("narration") or "")
-    cleaned = re.sub(r"[^\w\s,-]", " ", " ".join(visual.split()))
-    return " ".join(cleaned.split()[:12])[:120] or topic[:120]
+def _scene_queries(topic: str, scene: dict) -> list[str]:
+    """Build short search phrases from scene meaning, not Gemini's poetic art direction."""
+    text = " ".join(str(scene.get(key) or "") for key in ("title", "narration", "visual_description", "visual"))
+    text = re.sub(r"[^A-Za-z0-9\s'-]", " ", text).lower()
+    text = " ".join(text.split())
+    topic_clean = re.sub(r"[^A-Za-z0-9\s'-]", " ", topic).lower()
+    topic_clean = " ".join(topic_clean.split())
+
+    actions = [
+        (r"\b(dream|dreaming|dreams)\b", "anime man dreaming"),
+        (r"\b(wake|wakes|waking|awake|awakes|awaken)\b", "anime man waking up"),
+        (r"\b(sleep|sleeps|sleeping|asleep)\b", "anime man sleeping"),
+        (r"\b(think|thinks|thinking|thought|wonder|wonders|wondering)\b", "anime man thinking"),
+        (r"\b(walk|walks|walking|stroll|strolling)\b", "anime man walking"),
+        (r"\b(run|runs|running|jog|jogging)\b", "anime man running"),
+        (r"\b(cold|chill|chilly|shiver|shivers|shivering|goosebumps|gooseflesh)\b", "anime person feeling cold shivering"),
+        (r"\b(scared|fear|afraid|fright|frightened|terrified)\b", "anime person scared"),
+        (r"\b(remember|memory|memories|recall|recalling)\b", "anime person remembering thinking"),
+        (r"\b(study|studies|studying|learn|learning|read|reading)\b", "anime person studying"),
+        (r"\b(eat|eats|eating|food|hungry)\b", "anime person eating"),
+        (r"\b(talk|talks|talking|speak|speaks|speaking|conversation)\b", "anime people talking"),
+        (r"\b(look|looks|looking|see|sees|seeing|watch|watching)\b", "anime person looking"),
+    ]
+    candidates = []
+    for pattern, phrase in actions:
+        if re.search(pattern, text):
+            candidates.append(phrase)
+    # Short topical phrases help find subject-specific images after the generic action search.
+    if topic_clean:
+        candidates.extend([f"anime {topic_clean[:55]}", topic_clean[:70]])
+    # Keep short, plain searches and try each only once.
+    return list(dict.fromkeys(q.strip() for q in candidates if q.strip())) or ["anime man thinking", "anime person", topic_clean[:70] or "science illustration"]
+
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
@@ -217,15 +244,8 @@ def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     rng = random.SystemRandom()
 
     for index, scene in enumerate(scenes, start=1):
-        base_query = _scene_query(topic, scene)
-        words = base_query.split()
-        queries = list(dict.fromkeys([
-            base_query,
-            " ".join(words[:6]),
-            " ".join(words[:3]),
-            str(scene.get("title") or topic)[:80],
-            topic[:80],
-        ]))
+        queries = _scene_queries(topic, scene)
+        base_query = queries[0]
         chosen = None
         errors = []
         for query in queries:
