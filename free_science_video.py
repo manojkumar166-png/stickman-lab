@@ -6,7 +6,8 @@ from pathlib import Path
 
 from scripts.generate_story import generate_story
 from scripts.make_voice import make_voice
-from scripts.free_visuals import choose_style, prepare_scene
+from scripts.free_visuals import choose_style
+from scripts.render_3d_stills import render_3d_stills
 from scripts.render_video import render_video
 
 ROOT = Path(__file__).resolve().parent
@@ -43,25 +44,8 @@ def main():
     scene_dir.mkdir(parents=True)
 
     width, height = int(config.get("width", 1280)), int(config.get("height", 720))
-    # Use the same free-tier Cloudflare image provider already used by the other
-    # experimental generator, when its existing secrets are configured. If the
-    # provider/quota is unavailable, each scene falls back independently.
-    ai_images = generate_ai_images(story["scenes"], width, height, workers=3)
-    credits = []
-    for i, scene in enumerate(story["scenes"], 1):
-        image_path = scene_dir / f"scene-{i:03d}.png"
-        image_bytes = ai_images.get(i)
-        if image_bytes:
-            try:
-                credit = save_ai_image(image_bytes, scene, image_path, width, height)
-                credit["scene"] = i
-            except Exception as exc:
-                print(f"Could not process AI image for scene {i}: {exc}; using fallback.", flush=True)
-                credit = prepare_scene(scene, topic, style, image_path, width, height, i)
-        else:
-            credit = prepare_scene(scene, topic, style, image_path, width, height, i)
-        credits.append(credit)
-        print(f"Prepared scene {i}/{len(story['scenes'])}: {credit['title']}", flush=True)
+    # Generate static scene images locally with Blender; no API-based image generation.
+    credits = render_3d_stills(story, scene_dir, width, height)
 
     credits_path = OUT / f"free-science-image-credits-{day}.json"
     credits_path.write_text(json.dumps(credits, ensure_ascii=False, indent=2), encoding="utf-8")
