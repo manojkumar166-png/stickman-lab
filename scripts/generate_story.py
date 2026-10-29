@@ -43,23 +43,28 @@ def generate_story(root: Path, config: dict) -> dict:
     history_path = root / config.get("topic_history_file", "topic_history.json")
     history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
     
-    # Find available topics that have NOT been used
     available = [t for t in topics if t not in history]
     
     if available:
         topic = random.choice(available)
         print(f"Selected topic from topics.txt: {topic}")
+        prompt_topic_instruction = f"Topic: {topic}"
     else:
-        topic = "A brand new science topic (read history and invent something new)"
-        print("topics.txt is empty or fully used. Asking Gemini to invent a completely new topic...")
+        print("topics.txt is empty or fully used. Asking Gemini to invent a matching topic...")
+        # We pass the ENTIRE topics.txt file so Gemini knows the exact style.
+        example_topics = "\n".join(f"- {t}" for t in topics)
+        prompt_topic_instruction = f"""
+The user has exhausted their manual list of topics. Please invent ONE brand new science topic.
+You MUST match the exact style, tone, and format of these existing example topics:
+{example_topics}
+
+IMPORTANT: The new topic must be a fascinating science question, just like the examples. Do NOT use any of these recent topics: {history[-50:]}.
+"""
 
     prompt = f"""
 Create an original, factually careful educational science explainer for a colorful stickman cartoon video.
-Topic: {topic}
+{prompt_topic_instruction}
 Target narration duration: about {config.get('target_minutes', 8)} minutes, approximately 1200-1350 spoken words.
-
-IMPORTANT: If the topic is "A brand new science topic", invent a fascinating, specific science question that is NOT in this list of recent topics: {history[-50:]}. 
-
 Return ONLY valid JSON with this schema:
 {{
  "topic": "a concise title",
@@ -122,8 +127,9 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
                     "action": "point",
                 }[key]
 
-    # Save the exact topic that was chosen (not the AI's fancy title)
-    history.append(topic)
+    # Save the generated topic or the original one
+    final_topic = story.get("topic", topic)
+    history.append(final_topic)
     history_path.write_text(json.dumps(history[-100:], indent=2), encoding="utf-8")
     
     return story
