@@ -1,4 +1,4 @@
-name: Free Science Visuals — Public Domain Storybook
+name: Free Science Visuals — Public Search Storybook
 on:
   workflow_dispatch:
   schedule:
@@ -53,8 +53,13 @@ jobs:
           renderer = Path("scripts/external_image_scene_renderer.py").read_text(encoding="utf-8")
           assembler = Path("scripts/render_video.py").read_text(encoding="utf-8")
           assert "download_scene_illustrations" in entry and "render_external_scenes" in entry
-          assert '"cc0", "pdm"' in images
-          assert "_search_pexels" in images and "PEXELS_API_KEY" in images
+          assert "PUBLIC_SEARCHES" in images
+          assert "_search_public_page" in images
+          assert "sync_playwright" in images
+          for forbidden in ("api.openverse.org", "w/api.php", "pixabay.com/api/", "api.unsplash.com", "api.pexels.com"):
+              assert forbidden not in images, f"Provider API endpoint still present: {forbidden}"
+          for forbidden_key in ("PIXABAY_API_KEY", "UNSPLASH_ACCESS_KEY", "PEXELS_API_KEY"):
+              assert forbidden_key not in images, f"Provider API key still referenced: {forbidden_key}"
           assert "_scene_queries" in images
           assert 'styled.append("anime style " + query)' in images
           assert 'styled.append("ghibli style " + query)' in images
@@ -63,15 +68,12 @@ jobs:
           assert "page.screenshot" in renderer and "object-fit:contain" in renderer
           assert "ffmpeg" in assembler.lower()
           assert "zoompan" not in assembler.lower()
-          print("Verified: rule-based anime-style image search (no Gemini), CC0/Public Domain filter, static illustrations, FFmpeg.")
+          print("Verified: public website search pages only (no provider APIs or image Gemini), static illustrations, FFmpeg.")
           PY
 
       - name: Generate science video (no AI image generation)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
