@@ -1,4 +1,4 @@
-name: Daily Stickman Science Video — AI Storybook 2D
+name: Daily Stickman Science Video — Storybook 2D
 
 on:
   workflow_dispatch:
@@ -19,45 +19,36 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Set up Node.js for browser rendering
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-
-      - name: Install Python dependencies and browser
+      - name: Install Python dependencies and Chromium
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install playwright
           python -m playwright install --with-deps chromium
-
-      - name: Generate daily AI storybook science video
+      - name: Generate daily storybook science video (no AI image generation)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PYTHONUNBUFFERED: "1"
           TOPIC_HISTORY_FILE: storybook_topic_history.json
         run: python -u storybook_science_video.py
-
       - name: Get Video Topic
         id: get_topic
         run: |
           TOPIC=$(python -c "import json,glob; print(json.load(open(glob.glob('output/storybook-science-story-*.json')[0]))['topic'])")
           echo "topic_name=$TOPIC" >> $GITHUB_OUTPUT
-
       - name: Send Video to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -69,8 +60,7 @@ jobs:
           chat_id: ${{ env.TELEGRAM_CHAT_ID }}
           files: output/storybook-science-*.mp4
           message: "🌿 New Storybook Science Video: ${{ steps.get_topic.outputs.topic_name }}"
-
-      - name: Upload video, story, narration, and image credits
+      - name: Upload video and story artifacts
         uses: actions/upload-artifact@v4
         with:
           name: daily-stickman-storybook-2d
@@ -78,10 +68,8 @@ jobs:
             output/storybook-science-*.mp4
             output/storybook-science-story-*.json
             output/storybook-science-narration-*.mp3
-            output/storybook-science-image-credits-*.json
           retention-days: 7
           if-no-files-found: error
-
       - name: Commit this workflow's topic history only
         run: |
           git config user.name 'github-actions[bot]'
