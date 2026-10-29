@@ -128,6 +128,43 @@ def commons_search(query, style):
     _SEARCH_CACHE[cache_key] = results
     return results
 
+def nasa_search(query):
+    """Search NASA's free public image library without an API key."""
+    try:
+        response = requests.get(
+            "https://images-api.nasa.gov/search",
+            params={"q": query, "media_type": "image", "page_size": 8},
+            headers=HEADERS, timeout=12,
+        )
+        response.raise_for_status()
+        items = response.json().get("collection", {}).get("items", [])
+        found = []
+        for item in items:
+            data = (item.get("data") or [{}])[0]
+            links = item.get("links") or []
+            image_url = next((x.get("href") for x in links if x.get("render") == "image"), None)
+            if not image_url:
+                image_url = next((x.get("href") for x in links if x.get("rel") == "preview"), None)
+            if not image_url or not image_url.startswith("https://"):
+                continue
+            found.append({
+                "title": data.get("title", "NASA image"),
+                "url": image_url,
+                "source_url": "https://images.nasa.gov/",
+                "license": "NASA media (verify item-specific usage notes)",
+                "artist": data.get("photographer") or data.get("center") or "NASA",
+                "description": (data.get("description") or "")[:500],
+            })
+        return found
+    except Exception as exc:
+        print(f"NASA image search unavailable: {exc}")
+        return []
+
+
+SPACE_TERMS = ("space", "astronaut", "planet", "jupiter", "mars", "sun", "solar", "universe",
+               "satellite", "spacecraft", "vacuum", "plasma", "nebula", "galaxy", "moon")
+
+
 def fallback_illustration(topic, scene_title, narration, width, height, index):
     """Create a clean, original diagram-like illustration when no good free file is found."""
     image = Image.new("RGB", (width, height), "#101b35")
@@ -210,6 +247,28 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
                 draw.line((cx, cy, x, y), fill="#8fb9d9", width=8)
             r = 35 if j == 0 else 26
             draw.ellipse((x-r, y-r, x+r, y+r), fill=palette[j], outline="#ffffff", width=3)
+    elif any(x in key for x in ("sound", "noise", "explosion", "boom", "bell", "wave", "vibration", "ear", "eardrum", "music", "roar", "whisper", "silence", "train", "radio")):
+        # Sound-wave scene: wavefronts and a source object, not the generic node map.
+        for radius, color in ((90, "#ffd166"), (155, "#55d6be"), (225, "#6cb6ff")):
+            draw.arc((cx-radius, cy-radius, cx+radius, cy+radius), 235, 125, fill=color, width=9)
+        if any(x in key for x in ("explosion", "boom", "loud")):
+            draw.polygon([(cx,cy-125),(cx+35,cy-40),(cx+110,cy-75),(cx+65,cy+5),(cx+130,cy+55),(cx+40,cy+60),(cx+15,cy+145),(cx-25,cy+65),(cx-105,cy+90),(cx-60,cy+15),(cx-120,cy-35),(cx-35,cy-45)], fill="#ff7b4a", outline="#ffd166")
+        elif any(x in key for x in ("ear", "eardrum", "internal", "body")):
+            draw.ellipse((cx-65,cy-100,cx+65,cy+100), fill="#ffb5a7", outline="#ffe1da", width=6)
+            draw.arc((cx-35,cy-65,cx+40,cy+65), 250, 110, fill="#9b4357", width=8)
+            draw.line((cx+10,cy-35,cx+70,cy-10,cx+10,cy+25), fill="#9b4357", width=7)
+        elif any(x in key for x in ("radio", "astronaut", "space", "star wars", "vacuum", "planet", "mars", "jupiter", "sun")):
+            draw.ellipse((cx-90,cy-90,cx+90,cy+90), fill="#c65d4d", outline="#ffb28a", width=5)
+            draw.arc((cx-185,cy-135,cx+185,cy+135), 190, 350, fill="#6cb6ff", width=7)
+            draw.arc((cx-235,cy-175,cx+235,cy+175), 10, 170, fill="#55d6be", width=6)
+            draw.ellipse((cx+150,cy-95,cx+177,cy-68), fill="#ffffff")
+        else:
+            # Repeating pressure wave through air or another material.
+            pts = [(x, cy + int(90 * math.sin((x-cx)/38))) for x in range(50, width-50, 5)]
+            draw.line(pts, fill="#55d6be", width=9)
+            draw.line((50, cy+150, width-50, cy+150), fill="#6cb6ff", width=5)
+            for x in range(100, width-80, 110):
+                draw.ellipse((x-9,cy+135,x+9,cy+165), fill="#ffd166")
     elif any(x in key for x in ("ocean", "water", "rain", "cloud", "ice")):
         for j in range(5):
             y = cy - 100 + j * 48
@@ -245,6 +304,14 @@ def prepare_scene(scene, topic, style, out_path, width, height, index):
     # and avoids needlessly unique, long requests to Commons.
     query = " ".join(title.split()[:7]) or " ".join(topic.split()[:7])
     candidates = commons_search(query, style)
+    scene_text = (topic + " " + title + " " + narration[:500]).lower()
+    # Commons can rate-limit hosted runners. For space-related cinematic scenes,
+    # try NASA's no-key image API before drawing a fallback.
+    if not candidates and style == "cinematic" and any(term in scene_text for term in SPACE_TERMS):
+        nasa_query = " ".join((title + " " + topic).split()[:8])
+        candidates = nasa_search(nasa_query)
+        if candidates:
+            print(f"NASA supplied {len(candidates)} candidate image(s) for scene {index}: {title}")
     selected = None
     selected_bytes = None
     # First relevant Commons match. Downloads are bounded and failures fall through.
@@ -314,23 +381,27 @@ def render_motion_video(scene_dir, audio_path, output_path, config):
         tmp = Path(tmp)
         clips = []
         for i, image in enumerate(images):
+        if i == 0 or (i + 1) % 5 == 0 or i + 1 == len(images):
+            print(f"Rendering video clips: {i+1}/{len(images)}", flush=True)
             clip = tmp / f"clip-{i:03d}.mp4"
             frames = max(2, round(per_scene * fps))
             # Gentle Ken Burns zoom; reset for every image so style remains stable.
             zoompan = f"scale={width*2}:{height*2}:force_original_aspect_ratio=increase,crop={width*2}:{height*2},zoompan=z='min(zoom+0.00035,1.08)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={fps},format=yuv420p"
             subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(image), "-vf", zoompan,
-                 "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", str(clip)],
+                 "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", str(clip)],
                 check=True
             )
             clips.append(clip)
         concat = tmp / "concat.txt"
         concat.write_text("".join(f"file '{p.as_posix()}'\n" for p in clips), encoding="utf-8")
         silent = tmp / "silent.mp4"
+        print("Combining scene clips...", flush=True)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(silent)], check=True)
+        print("Adding narration and finalizing MP4...", flush=True)
         subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error", "-i", str(silent), "-i", str(audio_path),
-             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
              "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(output_path)],
             check=True
         )
