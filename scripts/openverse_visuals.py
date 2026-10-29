@@ -251,14 +251,14 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
             for phrase in phrases:
                 add(phrase)
 
-    # Prefer hand-drawn, cinematic anime backgrounds/characters rather than realistic stock photos.
-    # Keep subject words first so search providers still understand what the scene is about.
+    # Anime characters/illustrations only: never add sky/background-only style queries.
+    # Keep the actual script subject and action in every query.
     styled = []
     for query in candidates[:6]:
-        styled.append("ghibli inspired anime illustration " + query)
-        styled.append("hand drawn anime background " + query)
+        styled.append("anime character illustration " + query)
+        styled.append("ghibli style anime character " + query)
     candidates = styled + candidates
-    return candidates[:12] or ["ghibli inspired anime science illustration"]
+    return candidates[:12] or ["anime character science illustration"]
 def _search_all(query: str) -> list[dict]:
     # Collect candidates from every provider, not just the first provider that
     # responds. If its image URLs fail during download, later providers remain
