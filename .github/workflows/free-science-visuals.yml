@@ -55,11 +55,15 @@ jobs:
           assert "download_scene_illustrations" in entry and "render_external_scenes" in entry
           assert '"cc0", "pdm"' in images
           assert "_search_pexels" in images and "PEXELS_API_KEY" in images
+          assert "_scene_queries" in images
+          assert 'styled.append("anime style " + query)' in images
+          assert 'styled.append("ghibli style " + query)' in images
+          assert "gemini" not in images.lower(), "Image search must not call Gemini"
           assert "image-attribution-manifest.json" in images
           assert "page.screenshot" in renderer and "object-fit:contain" in renderer
           assert "ffmpeg" in assembler.lower()
           assert "zoompan" not in assembler.lower()
-          print("Verified: CC0/Public Domain source filter, per-scene download, static illustrations, FFmpeg.")
+          print("Verified: rule-based anime-style image search (no Gemini), CC0/Public Domain filter, static illustrations, FFmpeg.")
           PY
 
       - name: Generate science video (no AI image generation)
