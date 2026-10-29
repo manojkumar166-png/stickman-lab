@@ -236,27 +236,6 @@ def _scene_queries(topic: str, scene: dict) -> list[str]:
                 break
     return list(dict.fromkeys(styled + candidates))[:16] or ["anime black hole illustration"]
 
-def _search_all(query: str) -> list[dict]:
-    # Collect candidates from every provider, not just the first provider that
-    # responds. If its image URLs fail during download, later providers remain
-    # available as fallback candidates.
-    providers = [
-        ("Openverse CC0/Public Domain", _search_openverse),
-        ("Wikimedia Commons Public Domain/CC0", _search_wikimedia),
-        ("Pixabay", _search_pixabay),
-        ("Unsplash", _search_unsplash),
-        ("Pexels", _search_pexels),
-    ]
-    all_results = []
-    for provider_name, search_fn in providers:
-        try:
-            results = search_fn(query)
-            all_results.extend(results)
-            print(f"{provider_name}: found {len(results)} candidates for {query!r}", flush=True)
-        except Exception as exc:
-            print(f"{provider_name}: search unavailable ({exc}); continuing with other providers", flush=True)
-    return all_results
-
 def download_scene_illustrations(story: dict, output_dir: Path) -> list[Path]:
     """Try free, no-key sources first; missing images become text-only scenes."""
     scenes = story.get("scenes") or []
