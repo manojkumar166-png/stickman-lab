@@ -145,7 +145,7 @@ def fallback_illustration(topic, scene_title, narration, width, height, index):
     scene_key = (scene_title + " " + narration).lower()
     # Topic-specific fallback art for sleep, dreams, and neuroscience. Draw a
     # different visual cue for each scene instead of reusing generic node diagrams.
-    if any(x in key for x in ("dream", "sleep", "rem", "nightmare", "brain", "neural", "lucid")):
+    if any(x in scene_key for x in ("dream", "sleep", "rem", "nightmare", "brain", "neural", "lucid", "memory", "forget", "animal", "baby", "fear", "threat", "falling", "flying", "paralyzed", "muscle", "movie", "cinema")):
         draw.ellipse((cx-260, cy-170, cx+260, cy+170), fill="#182b50", outline="#6cb6ff", width=5)
         if any(x in scene_key for x in ("rem", "paralyzed", "muscle")):
             # Eyes and REM movement lines.
