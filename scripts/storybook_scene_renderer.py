@@ -70,7 +70,23 @@ async def render_scenes(story: dict, output_dir: Path, width: int, height: int) 
             caption=_safe(scene.get("narration") or scene.get("visual_description") or "")
             topic=_safe(story.get("topic") or title)
             sceneText=_safe(title+" "+str(scene.get("visual") or scene.get("visual_description") or "")+" "+str(scene.get("narration") or ""))
-            sceneClass="winter" if any(k in (topic+" "+sceneText).lower() for k in ("winter","snow","hibernate","migration","migrate","cold","frost","squirrel","bear","fox","bird")) else ""
+            env_hint=str(scene.get("background") or "").lower()
+            searchable=(topic+" "+sceneText+" "+env_hint).lower()
+            if any(k in searchable for k in ("winter","snow","hibernate","migration","migrate","cold","frost","squirrel","bear","fox","bird")):
+                sceneClass="winter"
+            else:
+                env=next((name for name,words in {
+                    "ocean":("ocean","sea","underwater","coral","whale","fish"),
+                    "space":("space","planet","solar","moon","star","universe","gravity","black hole"),
+                    "lab":("lab","laboratory","experiment","chemical","atom","molecule","electron"),
+                    "desert":("desert","sand dune","arid"),
+                    "city":("city","traffic","building","urban"),
+                    "home":("home","house","bedroom","kitchen","indoors"),
+                    "cave":("cave","den","underground"),
+                    "mountain":("mountain","volcano","summit","glacier"),
+                    "forest":("forest","tree","plant","leaf","bee","ecosystem"),
+                }.items() if env_hint==name or any(word in searchable for word in words)), "")
+                sceneClass=env
             html_doc=(PAGE.replace("WIDTH",str(width)).replace("HEIGHT",str(height))
                       .replace("TITLE",title).replace("CAPTION",caption[:210])
                       .replace("INDEX",f"{i+1:02d} / {len(scenes):02d}")
