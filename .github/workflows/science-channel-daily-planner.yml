@@ -81,35 +81,53 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
           mapfile -t BRANCHES < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ | grep -v '^$' | sort -u)
           synced=()
           failed=()
+          index=0
+
           for branch in "${BRANCHES[@]}"; do
             if [ "$branch" = "$GITHUB_REF_NAME" ]; then
               synced+=("$branch (source)")
               continue
             fi
+
+            index=$((index + 1))
+            target_dir="/tmp/science-branch-sync-$index"
             echo "Publishing generated episode to $branch"
-            if ! git checkout -B "$branch" "origin/$branch"; then
-              failed+=("$branch: checkout failed")
+
+            if ! git worktree add --detach "$target_dir" "refs/remotes/origin/$branch"; then
+              failed+=("$branch: worktree creation failed")
               continue
             fi
-            if ! git checkout "$SOURCE_COMMIT" -- "$EPISODE_PATH"; then
+
+            if ! git archive "$SOURCE_COMMIT" "$EPISODE_PATH" | tar -x -C "$target_dir"; then
               failed+=("$branch: package copy failed")
+              git worktree remove --force "$target_dir" || true
               continue
             fi
-            git add "$EPISODE_PATH"
-            if git diff --cached --quiet; then
+
+            git -C "$target_dir" config user.name "github-actions[bot]"
+            git -C "$target_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$target_dir" add -- "$EPISODE_PATH"
+
+            if git -C "$target_dir" diff --cached --quiet; then
               synced+=("$branch (already current)")
+              git worktree remove --force "$target_dir" || true
               continue
             fi
-            if git commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME" && git push origin "HEAD:$branch"; then
+
+            if git -C "$target_dir" commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME" &&
+               git -C "$target_dir" push origin "HEAD:refs/heads/$branch"; then
               synced+=("$branch")
             else
               failed+=("$branch: commit or push failed")
             fi
+
+            git worktree remove --force "$target_dir" || true
           done
+
           {
             echo "## Episode branch synchronization"
             echo ""
