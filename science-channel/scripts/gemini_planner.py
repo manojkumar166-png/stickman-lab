@@ -103,7 +103,22 @@ For example, a scene about flying in dreams should show a human figure soaring t
 clouds and skies, not a man standing and explaining dreams.
 Keep all 48 images visually varied and specific to their own scene; do not force a character into
 scenes that do not need one.
-Use a 16:9 cinematic 3D family-animation aesthetic, composed for a 1920x1080 landscape frame.
+COPYRIGHT-SAFETY RULES — apply these to EVERY one of the 48 prompts:
+- Create a genuinely original scientific illustration from the scene description. Use original compositions,
+  visual metaphors, object arrangements, environments, lighting and details.
+- Do NOT imitate or request the style of Disney, Pixar, Marvel, any other studio/franchise, a famous artist,
+  a living artist, or any identifiable illustrator. Use only a broad, generic visual description.
+- Do NOT include copyrighted characters, franchise-specific designs, recognizable branded mascots,
+  company logos, trademarks, or watermarks.
+- Do NOT recreate, trace, closely copy, or make a variation of an existing online image, artwork,
+  thumbnail, poster, book illustration, or another creator's work. Do not use image URLs or references
+  as a source to reproduce.
+- If a scene concept risks resembling a protected character or recognizable artwork, redesign it as
+  an original generic scientific visualization while preserving the scientific meaning.
+- Do not claim that an image is guaranteed copyright-free or legally cleared. These prompt rules reduce
+  avoidable similarity risks but cannot guarantee that a generated result will never receive a claim.
+Use an original cinematic 3D scientific-illustration aesthetic, composed for a 1920x1080 landscape frame.
+Do not emulate any particular animation studio, franchise or artist.
 Generate each image in WebP when the image tool supports it, because WebP usually gives an excellent
 quality-to-file-size balance. Otherwise use any available format supported by the renderer: PNG, JPG/JPEG,
 BMP, GIF, TIF or TIFF. Do not require JPG/JPEG and do not sacrifice visual quality just to meet a file-size
