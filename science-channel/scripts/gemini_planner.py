@@ -99,6 +99,7 @@ Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dum
     )
     (images/".gitkeep").write_text("")
     history.setdefault("topics",[]).append(final_title)
+    seen_topics.append(final_title)
     print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload any 3 image files to images/incoming/")
 HISTORY.parent.mkdir(parents=True,exist_ok=True)
 HISTORY.write_text(json.dumps(history,indent=2,ensure_ascii=False)+"\n")
