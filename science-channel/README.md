@@ -149,7 +149,7 @@ Open the episode folder in GitHub and click a file to view it. To edit, click th
 
 ### Image style: no default presenter
 
-New Gemini-generated image prompts are instructed **not** to add a presenter, host, teacher, narrator, talking-head character, or recurring man by default. Images should show the actual scientific subject, action, environment, objects, or visual metaphor for that scene. They also request a **1920×1080 landscape (16:9) JPG/JPEG**, with a rough image-size target of **500 KB–2 MB** where the image tool supports export settings. These are prompt targets, not guarantees; the preparation utility below performs the actual resize and compression.
+New Gemini-generated image prompts are instructed **not** to add a presenter, host, teacher, narrator, talking-head character, or recurring man by default. Images should show the actual scientific subject, action, environment, objects, or visual metaphor for that scene. They request a **1920×1080 landscape (16:9) composition**, with **WebP preferred** when the image tool supports it because it usually offers an excellent quality-to-size balance. PNG, JPG/JPEG, BMP, GIF, TIF and TIFF are also accepted by the renderer. JPG is not required. The rough **500 KB–2 MB** image-size target is guidance, not a reason to sacrifice quality.
 
 A human figure may appear when the scene itself calls for one, but should be part of the scene rather than standing in front of the viewer and explaining it. For example, a dream-flying scene should show a person soaring through dreamlike clouds and skies, not a man presenting an explanation.
 
@@ -159,7 +159,7 @@ This prompt rule applies to **newly generated episodes**. Existing episode promp
 
 Open that episode's `image-prompts.md`. It contains one prompt for each numbered scene. Generate one image for each prompt, keeping the scene numbers clear.
 
-The prompts request **1920×1080, 16:9 JPG/JPEG** images and suggest roughly **500 KB–2 MB per image** as a quality target. Image generators do not always honor exact file format, dimensions or file size, so run the local preparation utility before uploading. It converts the 48 source images to numbered 1920×1080 JPGs and adjusts JPEG quality as needed to target a ZIP under **23 MiB**, leaving room below GitHub's 25 MB browser-upload limit.
+The prompts request a **1920×1080 landscape (16:9) composition**, preferring **WebP** when available for its quality-to-size balance. The renderer accepts PNG, JPG/JPEG, WebP, BMP, GIF, TIF and TIFF; JPG is not mandatory. The suggested **500 KB–2 MB per image** is only a practical target. You can upload supported images directly, or optionally run the local preparation utility to resize/convert them into numbered JPGs and create a ZIP targeting under **23 MiB**, leaving room below GitHub's 25 MB browser-upload limit.
 
 ### Prepare a browser-upload-friendly ZIP
 
