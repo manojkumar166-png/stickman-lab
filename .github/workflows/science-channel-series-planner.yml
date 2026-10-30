@@ -1,0 +1,62 @@
+name: Science Channel — Create Fictional Series Part
+on:
+  workflow_dispatch:
+    inputs:
+      series_title:
+        description: Series title (required for a new series)
+        required: false
+        type: string
+      series_slug:
+        description: Existing series folder slug
+        required: false
+        type: string
+      genre:
+        description: Genre for a new series
+        required: false
+        default: zombie outbreak survival thriller
+        type: string
+      season_number:
+        description: Season number
+        required: true
+        default: '1'
+        type: string
+      part_number:
+        description: Part number
+        required: true
+        default: '1'
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: science-channel-series-planner
+  cancel-in-progress: false
+jobs:
+  create-part:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: adaptive-cinematic-effects
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install planner dependency
+        run: python -m pip install --upgrade requests
+      - name: Generate series part
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.SCIENCE_GEMINI_MODEL }}
+          SERIES_TITLE: ${{ inputs.series_title }}
+          SERIES_SLUG: ${{ inputs.series_slug }}
+          SERIES_GENRE: ${{ inputs.genre }}
+          SEASON_NUMBER: ${{ inputs.season_number }}
+          PART_NUMBER: ${{ inputs.part_number }}
+        run: python science-channel/scripts/series_planner.py
+      - name: Commit series package
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+users.noreply.github.com"
+          git add science-channel/series/
+          git commit -m "Create fictional series part"
+          git push origin HEAD:adaptive-cinematic-effects
