@@ -43,6 +43,8 @@ jobs:
           python-version: '3.11'
       - name: Install planner dependency
         run: python -m pip install --upgrade requests
+      - name: Validate planner syntax
+        run: python -m py_compile science-channel/scripts/series_planner.py
       - name: Generate series part
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
