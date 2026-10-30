@@ -2,6 +2,90 @@
 
 This guide explains how to create an episode, edit its script, generate and upload images, render the video, and download or delete the result. The pipeline is isolated to `science-channel/` and its two dedicated GitHub Actions workflows.
 
+## How the complete workflow operates
+
+The Science Channel pipeline has two separate GitHub Actions workflows. The first plans an episode and prepares the material; the second turns the completed episode package and its 48 images into a narrated video. Image generation and uploading are the human-in-the-loop part between those two workflows.
+
+### The end-to-end process
+
+```text
+Daily schedule or manual start
+            |
+            v
+1. GEMINI DAILY PLANNER
+   Chooses one unused science topic
+   Writes episode details and 48-scene narration
+   Creates 48 matching image prompts
+            |
+            v
+2. EPISODE PACKAGE IS COMMITTED TO GITHUB
+   science-channel/daily-episodes/YYYY-MM-DD/episode-001/
+   episode.json | script.md | scenes.json | image-prompts.md
+   images/incoming/
+            |
+            v
+3. YOU REVIEW / EDIT THE EPISODE
+   Correct the title, narration, scenes and image prompts
+   Keep all 48 scenes in the same order
+            |
+            v
+4. YOU GENERATE AND UPLOAD 48 IMAGES
+   One ZIP with 48 images OR 48 separate image files
+   Upload into that episode's images/incoming/ folder
+            |
+            v
+5. RENDER WORKFLOW STARTS
+   Automatically after a qualifying image/READY commit,
+   or manually when you provide the episode_path
+            |
+            v
+6. VALIDATE AND RENDER
+   Checks 48 scenes, narration sections and images
+   Makes 16:9 visuals + Edge TTS narration
+   Combines them into final-video.mp4 (no subtitles)
+            |
+            v
+7. OUTPUT ARTIFACT IS UPLOADED
+   Topic-based artifact name; retained for 2 days
+            |
+            v
+8. POST-RENDER TASKS
+   Attempts Telegram video delivery (non-blocking)
+   Attempts to delete processed ZIP from the Git repository
+```
+
+### Workflow A — Daily Gemini Planner
+
+- **When it runs:** Automatically every day at 01:15 UTC (06:45 India Standard Time), or when you manually run **Science Channel — Daily Gemini Planner** from the Actions tab.
+- **What Gemini does:** Selects one topic that is not in the generated-topic history, writes the episode metadata and a complete narration script, and creates exactly 48 numbered scene records.
+- **Image prompts:** A second Gemini request creates exactly one visual prompt for each finalized scene. New prompts are told not to add a presenter or talking-head explainer by default; the image should depict the science concept, action, environment or visual metaphor in that scene.
+- **What gets saved:** The planner creates the episode folder and its five starter items: `episode.json`, `script.md`, `scenes.json`, `image-prompts.md`, and `images/incoming/.gitkeep`. It also updates the topic history so the topic is not selected again.
+- **How it finishes:** The workflow optionally sends `image-prompts.md` to Telegram, then commits the generated Science Channel package to the repository. Telegram is non-blocking: a missing Telegram secret or a send failure does not prevent the episode package commit.
+- **What it does not do:** The planner does not generate the 48 image files and does not render the MP4. You generate the images and upload them before rendering.
+
+### The manual creative stage — your review and images
+
+After the planner finishes, you control the episode before it becomes a video. You can edit the title, narration, scene descriptions and image prompts in the episode folder. Generate one image for each final scene prompt, then upload the 48 images into that same episode's `images/incoming/` directory. The renderer does not generate images for you.
+
+If you revise narration after generating images, revise the matching prompt and replace the image too. This keeps what viewers see aligned with what they hear.
+
+### Workflow B — Free Science Visuals Renderer
+
+- **How it starts:** It can run from a push that changes an episode's `images/incoming/` files or its `READY.txt` marker, or you can start **Free Science Visuals — Render Ready Episode** manually in Actions.
+- **Choosing the episode:** For a manual run, enter the exact folder in the optional `episode_path` field. If left blank, it chooses the newest episode it finds with a READY marker or incoming image files. For a push run, the changed files must identify exactly one episode; commits affecting multiple episodes are rejected.
+- **Validation:** It checks the episode metadata and scene data, requires exactly 48 ordered scene records, checks for 48 numbered narration sections in `script.md`, and requires exactly 48 supported images (either one ZIP or individual files, not a mixture).
+- **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It does not add subtitles or burn captions into the video.**
+- **Artifact upload:** After rendering and resolving the topic-based artifact name, it uploads the contents of the episode's `output/` folder as a GitHub Actions artifact. The artifact includes the final MP4 and supporting render files and is retained for **2 days**.
+- **After upload:** Telegram video delivery is attempted but is non-blocking. The workflow then tries to delete any processed ZIP archive from the Git repository, with up to three attempts. Individual image files are not automatically deleted.
+
+### What happens if a step fails?
+
+- If the planner fails before committing, a new complete episode package may not be available. Check the planner run's logs in Actions.
+- If you have not uploaded all 48 images, or the script/scenes do not pass validation, rendering stops and the rendered artifact is not uploaded.
+- If rendering or artifact-name generation fails before the upload step, there is no rendered-video artifact from that run.
+- If artifact upload succeeds and a later Telegram or ZIP-cleanup step fails, the workflow run can show **Failed**, but the artifact that was already uploaded remains available until manually deleted or its 2-day retention expires.
+- The planner's episode files and uploaded individual images are repository files. The rendered artifact is a separate downloadable item under the Actions run; it is not automatically committed as a video file in the episode folder.
+
 ## Quick workflow
 
 1. Run the **Science Channel — Daily Gemini Planner** workflow (or wait for its daily schedule).
