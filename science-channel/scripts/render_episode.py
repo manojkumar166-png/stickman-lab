@@ -156,7 +156,7 @@ if cinematic_enabled:
         run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(clip_list),"-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(silent)])
         cinematic_used = True
         print(f"Adaptive cinematic profile: {plan['topic']}")
-        if effects_settings.get("sound_effects", True):
+        if effects_settings.get("sound_effects", False):
             create_sound_effect_track(soundtrack, duration, durations, plan["scenes"])
     except Exception as exc:
         print(f"WARNING: Cinematic rendering failed; using original renderer: {exc}")
