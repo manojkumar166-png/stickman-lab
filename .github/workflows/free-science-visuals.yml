@@ -49,7 +49,7 @@ jobs:
           test -n "$P" || { echo "No episode with READY.txt or incoming images was found."; exit 1; }
           case "$P" in science-channel/daily-episodes/*) ;; *) echo "Invalid episode path: $P"; exit 1;; esac
           echo "path=$P" >> "$GITHUB_OUTPUT"
-      - name: Validate, narrate, subtitle and render
+      - name: Validate, narrate and render
         run: python science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
       - name: Upload rendered outputs
         uses: actions/upload-artifact@v4
