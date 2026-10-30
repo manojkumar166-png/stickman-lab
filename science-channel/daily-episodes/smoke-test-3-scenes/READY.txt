@@ -1,1 +1,3 @@
 Smoke test fixture: renderer generates three synthetic frames; this is not a production episode.
+
+Retry after full-history checkout fix.
