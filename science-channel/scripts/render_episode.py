@@ -93,16 +93,16 @@ else:
     normalized.mkdir(exist_ok=True)
     visual_paths = [normalize(src, n, normalized) for n, src in enumerate(ordered, 1)]
 
-# Narration and subtitle text come only from script.md. image-prompts.md is never opened.
+# Narration text comes only from script.md. No subtitle track is generated or burned into the video.
 script = (episode/"script.md").read_text()
-blocks = re.findall(r"^## Scene\s+(\d+)\s*\n+([\s\S]*?)(?=^## Scene\s+\d+\s*$|\Z)", script, re.M)
+blocks = re.findall(r"^## Scene\\s+(\\d+)\\s*\\n+([\\s\\S]*?)(?=^## Scene\\s+\\d+\\s*$|\\Z)", script, re.M)
 if len(blocks) != scene_count:
     raise SystemExit(f"script.md must contain exactly {scene_count} Scene sections")
 narration = []
 for i, (num, body) in enumerate(blocks, 1):
     if int(num) != i:
         raise SystemExit("script.md scene order mismatch")
-    text = re.sub(r"\s+", " ", body).strip()
+    text = re.sub(r"\\s+", " ", body).strip()
     if not text:
         raise SystemExit(f"Empty narration in script scene {i}")
     narration.append(text)
@@ -124,20 +124,11 @@ durations = [duration*w/total for w in weights]
 concat = out/"images.txt"
 with concat.open("w") as f:
     for path, seconds in zip(visual_paths, durations):
-        f.write(f"file '{path.resolve()}'\nduration {seconds:.4f}\n")
-    f.write(f"file '{visual_paths[-1].resolve()}'\n")
+        f.write(f"file '{path.resolve()}'\\nduration {seconds:.4f}\\n")
+    f.write(f"file '{visual_paths[-1].resolve()}'\\n")
 silent = out/"visuals.mp4"
 run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
 
-srt = out/"subtitles.srt"
-cursor = 0.0
-def stamp(t):
-    ms=round(t*1000); h=ms//3600000; ms%=3600000; m=ms//60000; ms%=60000; sec=ms//1000; ms%=1000
-    return f"{h:02}:{m:02}:{sec:02},{ms:03}"
-with srt.open("w") as f:
-    for i, (text, seconds) in enumerate(zip(narration, durations), 1):
-        f.write(f"{i}\n{stamp(cursor)} --> {stamp(cursor+seconds)}\n{text}\n\n")
-        cursor += seconds
 video = out/"final-video.mp4"
-run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={srt}:force_style='FontName=Arial,FontSize=22,Outline=2,Shadow=1,MarginV=42'","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-print(f"Rendered {video}")
+run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+print(f"Rendered {video} (no subtitles)")
