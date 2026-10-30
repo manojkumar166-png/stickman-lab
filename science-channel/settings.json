@@ -26,7 +26,7 @@
     "adaptive_camera": true,
     "adaptive_particles": true,
     "selective_impacts": true,
-    "sound_effects": true,
+    "sound_effects": false,
     "max_major_impacts": 6,
     "preserve_karaoke_subtitles": true,
     "fallback_to_original": true
@@ -35,7 +35,7 @@
     "enabled": true,
     "mode": "adaptive",
     "intensity": "balanced",
-    "source": "verified-youtube-audio-library-only",
+    "source": "youtube-audio-library-manually-downloaded-only",
     "topic_detection": true,
     "mood_detection": true,
     "intelligent_scene_transitions": true,
@@ -45,6 +45,7 @@
     "cinematic_ending": true,
     "require_human_license_verification": true,
     "require_attribution_not_required": true,
-    "fallback_to_no_bgm": true
+    "fallback_to_no_bgm": true,
+    "require_license_url": true
   }
 }
