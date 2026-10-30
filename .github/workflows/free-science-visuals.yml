@@ -51,7 +51,7 @@ jobs:
                   candidate="${f%%/images/incoming/*}"
                 fi
                 if [ -z "$P" ] || [[ "$candidate" > "$P" ]]; then P="$candidate"; fi
-              done < <(find science-channel/daily-episodes -type f \( -name READY.txt -o -path '*/images/incoming/*' \) | sort)
+              done < <(find science-channel/daily-episodes -type f \( -name READY.txt -o \( -path '*/images/incoming/*' ! -name '.gitkeep' \) \) | sort)
             fi
           else
             git diff-tree --no-commit-id --name-only -r "${{ github.event.before }}" "${{ github.sha }}" > /tmp/changed.txt
