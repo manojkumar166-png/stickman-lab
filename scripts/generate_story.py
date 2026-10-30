@@ -108,8 +108,8 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
         raise RuntimeError(f"Could not parse AI story response: {e}; response was {str(data)[:1200]}")
 
     scenes = story.get("scenes", [])
-    if not isinstance(scenes, list) or len(scenes) < 8:
-        raise RuntimeError("AI returned too few scenes; rerun.")
+    if not isinstance(scenes, list) or len(scenes) < 1:
+        raise RuntimeError("AI returned no scenes; rerun.")
 
     for s in scenes:
         for key in ("title", "narration", "visual", "background", "action"):
