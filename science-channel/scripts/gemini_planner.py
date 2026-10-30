@@ -104,11 +104,13 @@ clouds and skies, not a man standing and explaining dreams.
 Keep all 48 images visually varied and specific to their own scene; do not force a character into
 scenes that do not need one.
 Use a 16:9 cinematic 3D family-animation aesthetic, composed for a 1920x1080 landscape frame.
-Generate/export each image as a high-quality JPG/JPEG where the image tool allows format selection;
-aim for roughly 500 KB–2 MB per image without sacrificing important scientific detail. Avoid
-unnecessarily huge textures or empty high-detail backgrounds. Keep the full visual readable at 1920x1080.
-No text, captions, logos or watermarks. The requested format and size are targets, not guaranteed by
-the image model; the image-preparation utility will resize and compress the finished files before upload.
+Generate each image in WebP when the image tool supports it, because WebP usually gives an excellent
+quality-to-file-size balance. Otherwise use any available format supported by the renderer: PNG, JPG/JPEG,
+BMP, GIF, TIF or TIFF. Do not require JPG/JPEG and do not sacrifice visual quality just to meet a file-size
+target. Aim for a manageable size (roughly 500 KB–2 MB per image when practical). Avoid unnecessarily
+huge textures or empty high-detail backgrounds. Keep the full visual readable at 1920x1080.
+No text, captions, logos or watermarks. The optional image-preparation utility can resize and convert
+supported source images to numbered JPGs for smaller browser uploads; conversion is not required.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
 Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), 0.55)
 prompts = prompt_data.get("prompts", [])
