@@ -42,7 +42,7 @@ Daily schedule or manual start
 6. VALIDATE AND RENDER
    Checks 48 scenes, narration sections and images
    Makes 16:9 visuals + Edge TTS narration
-   Combines them into final-video.mp4 (no subtitles)
+   Applies topic-aware cinematic camera movement, adaptive color grading and selective impact flashes, adds lightweight synchronized procedural sound effects, and burns karaoke captions into final-video.mp4. If the cinematic render fails, it retries with the original visual-rendering path.
             |
             v
 7. OUTPUT ARTIFACT IS UPLOADED
@@ -63,6 +63,13 @@ Daily schedule or manual start
 - **How it finishes:** The workflow optionally sends `image-prompts.md` to Telegram, then commits the generated Science Channel package to the repository. Telegram is non-blocking: a missing Telegram secret or a send failure does not prevent the episode package commit.
 - **What it does not do:** The planner does not generate the 48 image files and does not render the MP4. You generate the images and upload them before rendering.
 
+
+### Adaptive cinematic effects and fallback
+
+The renderer supports topic-aware effects controlled in science-channel/settings.json under cinematic_effects. The default test configuration enables adaptive mode with balanced intensity. It classifies the episode using the title and narration (space, biology, chemistry, technology, earth/nature, or a neutral general profile), then applies a matching color/contrast treatment and gentle alternating camera movement. Narration cues can trigger a brief impact flash; major impacts are capped to avoid visual fatigue. A quiet procedural whoosh is added every few scenes, with a soft impact tone for selected moments. No paid API or additional Python package is required for the effects engine.
+
+To return to the original visual style, set cinematic_effects.enabled to false and run the renderer again. If the adaptive visual/effect generation itself fails, the renderer automatically falls back to the original still-image render path while preserving narration and karaoke captions. The original image inputs and narration are not overwritten. The first test can be run from the adaptive-cinematic-effects branch using workflow_dispatch; the workflow checks out the selected branch for manual tests.
+
 ### The manual creative stage — your review and images
 
 After the planner finishes, you control the episode before it becomes a video. You can edit the title, narration, scene descriptions and image prompts in the episode folder. Generate one image for each final scene prompt, then upload the 48 images into that same episode's `images/incoming/` directory. The renderer does not generate images for you.
@@ -74,7 +81,7 @@ If you revise narration after generating images, revise the matching prompt and 
 - **How it starts:** It can run from a push that adds real files to an episode's `images/incoming/` folder (the `.gitkeep` placeholder alone is ignored) or changes its `READY.txt` marker, or you can start **Free Science Visuals — Render Ready Episode** manually in Actions.
 - **Choosing the episode:** For a manual run, enter the exact folder in the optional `episode_path` field. If left blank, it chooses the newest episode it finds with a READY marker or incoming image files. For a push run, the changed files must identify exactly one episode; commits affecting multiple episodes are rejected.
 - **Validation:** It checks the episode metadata and scene data, requires exactly 48 ordered scene records, checks for 48 numbered narration sections in `script.md`, and requires exactly 48 supported images (either one ZIP or individual files, not a mixture).
-- **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It uses faster-whisper Small on CPU to align narration word-by-word, then burns phrase-based karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline.**
+- **Rendering:** It converts the images into 16:9 frames and creates narration using Edge TTS. When cinematic_effects.enabled is true, it classifies the episode topic and applies a matching color/contrast profile, gentle camera movement, and up to six selective impact flashes based on scene narration. It adds a quiet, procedurally generated whoosh/impact soundtrack when enabled. It then uses faster-whisper Small on CPU to align narration word-by-word and burns phrase-based karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline. If the cinematic render fails, the renderer automatically retries the original visuals + narration + karaoke-caption path.
 - **Artifact upload:** After rendering and resolving the topic-based artifact name, it uploads the contents of the episode's `output/` folder as a GitHub Actions artifact. The artifact includes the final MP4 and supporting render files and is retained for **2 days**.
 - **After upload:** Telegram video delivery is attempted but is non-blocking. The workflow then tries to delete any processed ZIP archive from the Git repository, with up to three attempts. Individual image files are not automatically deleted.
 
