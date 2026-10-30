@@ -26,6 +26,24 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.SCIENCE_GEMINI_MODEL }}
         run: python science-channel/scripts/gemini_planner.py
+      - name: Send image-prompts.md to StickmanLab Telegram bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          PROMPT_FILE="$(find science-channel/daily-episodes -type f -name image-prompts.md -printf '%T@ %p\\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+          if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
+            echo "Could not find the newly generated image-prompts.md"
+            exit 1
+          fi
+          EPISODE_DIR="$(dirname "$PROMPT_FILE")"
+          TITLE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("title", "New science episode"))' "$EPISODE_DIR/episode.json")"
+          curl --fail --silent --show-error \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${PROMPT_FILE};filename=image-prompts.md" \
+            -F "caption=🖼️ Image prompts ready: ${TITLE}" \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
       - name: Commit new science-channel packages
         run: |
           git config user.name "github-actions[bot]"
