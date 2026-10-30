@@ -33,7 +33,7 @@ Commit the 48 images and a `READY.txt` marker together in the exact episode fold
 
 **Subtitles are intentionally not generated or added.**
 
-The rendered output folder is uploaded as a GitHub Actions artifact named from the episode topic, with **14-day retention**. It includes the final MP4 and the renderer's supporting output files.
+The rendered output folder is uploaded as a GitHub Actions artifact named from the episode topic, with **2-day retention**. It includes the final MP4 and the renderer's supporting output files.
 
 You can run the renderer manually from GitHub Actions. The optional `episode_path` input lets you specify the exact episode folder; if left blank, the workflow selects the newest episode with a READY marker or incoming images.
 
