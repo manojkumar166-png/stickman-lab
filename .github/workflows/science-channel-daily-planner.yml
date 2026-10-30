@@ -11,50 +11,90 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Install planner dependencies
         run: python -m pip install --upgrade requests
+      - name: Mark start time
+        run: touch /tmp/planner-start
       - name: Generate one unique episode package
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.SCIENCE_GEMINI_MODEL }}
         run: python science-channel/scripts/gemini_planner.py
-      - name: Send image-prompts.md to StickmanLab Telegram bot
+      - name: Identify generated episode
+        id: generated
+        shell: bash
+        run: |
+          mapfile -t FILES < <(find science-channel/daily-episodes -type f -name episode.json -newer /tmp/planner-start | sort)
+          if [ "${#FILES[@]}" -ne 1 ]; then
+            echo "Expected exactly one newly generated episode.json; found ${#FILES[@]}."
+            printf '%s\n' "${FILES[@]}"
+            exit 1
+          fi
+          EPISODE_DIR="$(dirname "${FILES[0]}")"
+          echo "path=$EPISODE_DIR" >> "$GITHUB_OUTPUT"
+      - name: Send image prompts to Telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
         run: |
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
             echo "Telegram secrets are not configured; skipping prompt delivery."
             exit 0
           fi
-          PROMPT_FILE="$(find science-channel/daily-episodes -type f -name image-prompts.md -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
-          if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
-            echo "Could not find the newly generated image-prompts.md"
-            exit 1
-          fi
-          EPISODE_DIR="$(dirname "$PROMPT_FILE")"
-          TITLE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("title", "New science episode"))' "$EPISODE_DIR/episode.json")"
+          PROMPT_FILE="$EPISODE_PATH/image-prompts.md"
+          test -f "$PROMPT_FILE"
+          TITLE="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["EPISODE_PATH"],"episode.json"), encoding="utf-8")).get("title", "New science episode"))')"
           curl --fail --silent --show-error \
             -F "chat_id=${TELEGRAM_CHAT_ID}" \
             -F "document=@${PROMPT_FILE};filename=image-prompts.md" \
             -F "caption=🖼️ Image prompts ready: ${TITLE}" \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
-      - name: Commit new science-channel packages
+      - name: Commit generated episode to the run branch
+        id: source_commit
+        env:
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add science-channel/
-          if ! git diff --cached --quiet; then
-            git commit -m "Add daily science channel episode plans"
-            git push origin HEAD:main
-          fi
+          git add "$EPISODE_PATH"
+          git commit -m "Add Gemini-planned episode"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Publish the same episode package to every other branch
+        env:
+          SOURCE_COMMIT: ${{ steps.source_commit.outputs.sha }}
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+          mapfile -t BRANCHES < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ | grep -v '^$' | sort -u)
+          for branch in "${BRANCHES[@]}"; do
+            if [ "$branch" = "$GITHUB_REF_NAME" ]; then
+              echo "Already published on $branch"
+              continue
+            fi
+            echo "Publishing generated episode to $branch"
+            git checkout -B "$branch" "origin/$branch"
+            git checkout "$SOURCE_COMMIT" -- "$EPISODE_PATH"
+            git add "$EPISODE_PATH"
+            if git diff --cached --quiet; then
+              echo "No changes needed on $branch"
+              continue
+            fi
+            git commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME"
+            git push origin "HEAD:$branch"
+          done
