@@ -8,7 +8,7 @@
   "width": 1920,
   "height": 1080,
   "fps": 30,
-  "gemini_model": "gemini-2.5-flash",
+  "gemini_model": "gemini-3.5-flash-lite",
   "voice": "en-US-AndrewMultilingualNeural",
   "speech_rate": "+0%",
   "topic_file": "science-channel/topics.txt",
