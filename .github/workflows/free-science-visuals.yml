@@ -66,16 +66,34 @@ jobs:
           TOPIC_HISTORY_FILE: free_topic_history.json
         run: python -u storybook_science_video.py
 
-      - name: Upload video, story, narration, and rendered scenes
+      - name: Rename final video to the exact topic
+        id: artifact
+        run: |
+          python - <<'PY'
+          import glob, json, os, re
+          from pathlib import Path
+          stories = sorted(glob.glob("output/storybook-science-story-*.json"))
+          videos = sorted(glob.glob("output/storybook-science-*.mp4"))
+          if len(stories) != 1 or len(videos) != 1:
+              raise SystemExit(f"Expected one story JSON and one video; found {len(stories)} stories and {len(videos)} videos")
+          topic = str(json.loads(Path(stories[0]).read_text(encoding="utf-8")).get("topic", "")).strip()
+          if not topic:
+              raise SystemExit("Generated story is missing its topic")
+          filename = re.sub(r'[<>:"/\\|?*]', "", topic).strip().rstrip(".")
+          if not filename:
+              raise SystemExit("Could not create a valid MP4 filename from the topic")
+          target = Path("output") / f"{filename}.mp4"
+          Path(videos[0]).rename(target)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"filename={target.name}\n")
+          PY
+
+      - name: Upload final MP4 only
         uses: actions/upload-artifact@v4
         with:
           name: free-science-public-domain-storybook
-          path: |
-            output/storybook-science-*.mp4
-            output/storybook-science-story-*.json
-            output/storybook-science-narration-*.mp3
-            output/storybook-science-source-images-*
-            output/storybook-science-scenes-*
+          path: output/${{ steps.artifact.outputs.filename }}
+          compression-level: 0
           retention-days: 7
           if-no-files-found: error
 
