@@ -5,8 +5,7 @@ from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
 from karaoke_subtitles import generate_karaoke_ass
-from cinematic_effects import analyze_scenes, render_scene_clip, create_sound_effect_track
-from bgm_engine import create_background_music
+from cinematic_effects import analyze_scenes, render_scene_clip
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT/"settings.json").read_text())
@@ -136,7 +135,6 @@ video = out/"final-video.mp4"
 effects_settings = SETTINGS.get("cinematic_effects", {})
 cinematic_enabled = bool(effects_settings.get("enabled", False))
 cinematic_used = False
-soundtrack = out/"cinematic-sfx.wav"
 
 def render_original_visuals():
     run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
@@ -156,71 +154,22 @@ if cinematic_enabled:
         run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(clip_list),"-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(silent)])
         cinematic_used = True
         print(f"Adaptive cinematic profile: {plan['topic']}")
-        if effects_settings.get("sound_effects", False):
-            create_sound_effect_track(soundtrack, duration, durations, plan["scenes"])
     except Exception as exc:
         print(f"WARNING: Cinematic rendering failed; using original renderer: {exc}")
         cinematic_used = False
-        soundtrack.unlink(missing_ok=True)
         render_original_visuals()
 else:
     render_original_visuals()
 
-bgm_path = out/"background-music.wav"
-bgm_settings = SETTINGS.get("bgm", {})
-try:
-    create_background_music(bgm_path, str(meta.get("title", "")), narration, durations, bgm_settings)
-except Exception as exc:
-    print(f"WARNING: BGM generation failed; continuing without music: {exc}")
-    bgm_path.unlink(missing_ok=True)
-
 def mux_final_audio():
-    cmd = ["ffmpeg", "-y", "-i", str(silent), "-i", str(audio)]
-    has_sfx = cinematic_used and soundtrack.exists()
-    has_bgm = bgm_path.exists()
-    sfx_index = None
-    bgm_index = None
-    if has_sfx:
-        sfx_index = 2
-        cmd += ["-i", str(soundtrack)]
-    if has_bgm:
-        bgm_index = 3 if has_sfx else 2
-        cmd += ["-i", str(bgm_path)]
+    # Narration is the only audio source. No BGM or generated SFX are mixed.
+    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),
+         "-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
+         "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast",
+         "-crf","21","-c:a","aac","-b:a","192k","-shortest",
+         "-movflags","+faststart",str(video)])
 
-    filters = []
-    if has_bgm:
-        filters.append(f"[{bgm_index}:a]volume=0.18[bgmquiet]")
-        filters.append(f"[bgmquiet][1:a]sidechaincompress=threshold=0.025:ratio=8:attack=25:release=600[ducked]")
-    if has_sfx:
-        filters.append(f"[{sfx_index}:a]volume=0.22[sfxquiet]")
-        filters.append("[1:a][sfxquiet]amix=inputs=2:weights='1 1':normalize=0[voice_sfx]")
-        if has_bgm:
-            filters.append("[voice_sfx][ducked]amix=inputs=2:weights='1 1':normalize=0[aout]")
-        else:
-            filters.append("[voice_sfx]anull[aout]")
-    elif has_bgm:
-        filters.append("[1:a][ducked]amix=inputs=2:weights='1 1':normalize=0[aout]")
-
-    cmd += ["-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu"]
-    if filters:
-        cmd += ["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]"]
-    else:
-        cmd += ["-map", "0:v:0", "-map", "1:a:0"]
-    cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-            "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(video)]
-    run(cmd)
-
-try:
-    mux_final_audio()
-except Exception as exc:
-    print(f"WARNING: Final audio mix failed; retrying with original narration only: {exc}")
-    bgm_path.unlink(missing_ok=True)
-    soundtrack.unlink(missing_ok=True)
-    if cinematic_used:
-        cinematic_used = False
-        render_original_visuals()
-    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+mux_final_audio()
 
 mode = "adaptive cinematic" if cinematic_used else "original fallback"
-music_mode = "with adaptive BGM" if bgm_path.exists() else "without BGM (safe fallback)"
-print(f"Rendered {video} in {mode} mode {music_mode} with karaoke captions ({word_count} timed words)")
+print(f"Rendered {video} in {mode} mode with narration-only audio and karaoke captions ({word_count} timed words)")
