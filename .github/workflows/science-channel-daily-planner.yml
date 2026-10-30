@@ -27,11 +27,16 @@ jobs:
           GEMINI_MODEL: ${{ vars.SCIENCE_GEMINI_MODEL }}
         run: python science-channel/scripts/gemini_planner.py
       - name: Send image-prompts.md to StickmanLab Telegram bot
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets are not configured; skipping prompt delivery."
+            exit 0
+          fi
           PROMPT_FILE="$(find science-channel/daily-episodes -type f -name image-prompts.md -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
           if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
             echo "Could not find the newly generated image-prompts.md"
