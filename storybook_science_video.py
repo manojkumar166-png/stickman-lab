@@ -1,4 +1,4 @@
-"""Generate a science story video using images found on public search pages."""
+"""Generate a science story video with procedural SVG artwork."""
 import asyncio
 import hashlib
 import json
@@ -8,7 +8,6 @@ from datetime import date
 from pathlib import Path
 
 from scripts.generate_story import generate_story
-from scripts.openverse_visuals import download_scene_illustrations
 from scripts.external_image_scene_renderer import render_external_scenes
 from scripts.make_voice import make_voice
 from scripts.render_video import render_video
@@ -31,19 +30,13 @@ def main():
         raise RuntimeError("Story generator returned no scenes.")
     day = date.today().isoformat()
     topic = str(story.get("topic", "Science discovery"))
-    story["visual_style"] = "static illustrations discovered through public image-search pages; review image licenses in the attribution manifest; no AI image generation"
+    story["visual_style"] = "procedural scene-aware SVG stickman science illustrations; no AI image generation or external image search"
     print(f"Topic: {topic}", flush=True)
 
     story_path = OUT / f"storybook-science-story-{day}.json"
     scene_dir = OUT / f"storybook-science-scenes-{day}"
     if scene_dir.exists():
         shutil.rmtree(scene_dir)
-    image_dir = OUT / f"storybook-science-source-images-{day}"
-    if image_dir.exists():
-        shutil.rmtree(image_dir)
-
-    # Search public-facing image pages and validate downloaded image files before rendering.
-    download_scene_illustrations(story, image_dir)
     width, height = int(config.get("width", 1280)), int(config.get("height", 720))
     rendered = asyncio.run(render_external_scenes(story, scene_dir, width, height))
     if len(rendered) != len(story["scenes"]):
@@ -55,7 +48,7 @@ def main():
     if tiny:
         raise RuntimeError(f"Unexpectedly small scene images: {tiny}")
     story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Rendered {len(rendered)} static illustrated scenes ({len(hashes)} distinct frames).", flush=True)
+    print(f"Rendered {len(rendered)} procedural SVG scenes ({len(hashes)} distinct frames).", flush=True)
 
     narration = "\n\n".join(str(s.get("narration", "")).strip() for s in story["scenes"] if s.get("narration"))
     if not narration:
