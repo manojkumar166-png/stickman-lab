@@ -11,7 +11,6 @@ MODEL = os.getenv("GEMINI_MODEL") or SETTINGS["gemini_model"]
 API = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 HISTORY = ROOT / "history/generated-topics.json"
 TOPICS = ROOT / "topics.txt"
-PRESENTER = (ROOT / "character/presenter-reference.md").read_text()
 TODAY = datetime.date.today().isoformat()
 
 def gemini(prompt, temperature=0.7):
@@ -92,10 +91,21 @@ if any(not str(s.get("narration", "")).strip() for s in scenes):
 # Derive exactly one image prompt from each finalized narration scene.
 prompt_data = gemini("""Create exactly 48 image prompts from this finalized 48-scene narration.
 Do not rewrite, reorder, merge, or add scenes. Each prompt must depict its corresponding narration
-and visual beat. Include the same recurring presenter identity in every prompt when he appears.
-16:9 cinematic 3D family-animation aesthetic; no text, captions, logos or watermarks.
+and visual beat as a cinematic visual, not as a person explaining the narration.
+IMPORTANT: Do NOT add a presenter, host, narrator, teacher, spokesperson, talking-head character,
+or recurring man/person by default. Do not show anyone facing the camera and explaining the topic.
+Do not include the presenter-reference character. There is no on-screen explainer.
+Show the actual subject, scientific concept, action, environment, objects, or visual metaphor
+described by that specific scene. Human figures are allowed only when the scene itself calls for
+a person or when a human figure is essential to communicate the visual idea; in that case, show
+them participating in the scene rather than presenting or explaining to the viewer.
+For example, a scene about flying in dreams should show a human figure soaring through dreamlike
+clouds and skies, not a man standing and explaining dreams.
+Keep all 48 images visually varied and specific to their own scene; do not force a character into
+scenes that do not need one.
+Use a 16:9 cinematic 3D family-animation aesthetic; no text, captions, logos or watermarks.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
-Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dumps(scenes, ensure_ascii=False), 0.55)
+Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), 0.55)
 prompts = prompt_data.get("prompts", [])
 if len(prompts) != 48 or [p.get("scene_number") for p in prompts] != list(range(1,49)):
     raise ValueError("Expected exactly 48 ordered image prompts")
