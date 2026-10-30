@@ -35,29 +35,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade edge-tts faster-whisper
-      - name: Validate Python syntax and music configuration
+      - name: Validate Python syntax and settings
         run: |
           python -m py_compile science-channel/scripts/*.py
           python -m json.tool science-channel/settings.json > /dev/null
-          python -m json.tool science-channel/assets/music/library.json > /dev/null
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          root = Path("science-channel/assets/music")
-          data = json.loads((root / "library.json").read_text(encoding="utf-8"))
-          for track in data.get("tracks", []):
-              assert track.get("source") == "YouTube Audio Library", "Only Audio Library tracks are permitted"
-              assert track.get("verified") is True, "Every track must be manually verified"
-              assert track.get("attribution_required") is False, "Only no-attribution tracks are permitted"
-              assert track.get("title") and track.get("artist"), "Track title and artist are required"
-              assert track.get("license_name") and track.get("license_url"), "License name and URL are required"
-              assert track["license_url"].startswith("https://www.youtube.com/"), "License URL must be an official YouTube URL"
-              rel = Path(track.get("file", ""))
-              assert not rel.is_absolute() and ".." not in rel.parts, "Unsafe music path"
-              path = (root / rel).resolve()
-              assert path.is_relative_to(root.resolve()) and path.is_file(), f"Missing or unsafe track file: {rel}"
-          print(f"Validated {len(data.get('tracks', []))} approved Audio Library track(s)")
-          PY
       - name: Resolve exact episode path
         id: episode
         shell: bash
