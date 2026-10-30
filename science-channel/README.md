@@ -144,6 +144,18 @@ Open the episode folder in GitHub and click a file to view it. To edit, click th
 | `image-prompts.md` | Image-generation instructions | Edit each scene's prompt so the image matches the final narration and visual beat. |
 | `images/incoming/` | Input images | Upload the 48 finished scene images here. |
 
+### Copyright-conscious Gemini image prompts
+
+The daily planner now adds these rules to the Gemini request that creates all 48 image prompts:
+
+- Create original scientific illustrations with original compositions and visual concepts.
+- Do not imitate Disney, Pixar, Marvel, another studio or franchise, famous artists, living artists, or identifiable illustrators.
+- Do not include copyrighted characters, franchise-specific designs, branded mascots, company logos, trademarks, or watermarks.
+- Do not recreate, trace, closely copy, or make variations of images found online, existing artwork, thumbnails, posters, or book illustrations.
+- If a scene could resemble protected intellectual property, redesign it as a generic, original scientific visualization.
+
+These are risk-reduction instructions, not a legal guarantee. Gemini may still produce a result that resembles protected material, so inspect generated images for recognizable characters, logos, and unusually close similarities before publishing. Use your own scene concepts and keep the original prompts and generated files.
+
 ### Script-editing rules
 
 - Keep all 48 scene headings in `script.md`, numbered in order from 01 to 48. Do not remove or duplicate a scene.
