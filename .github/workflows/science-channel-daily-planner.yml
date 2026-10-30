@@ -14,6 +14,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -136,8 +139,8 @@ jobs:
           printf '%s\n' "${synced[*]:-none}" > /tmp/episode-synced.txt
           printf '%s\n' "${failed[*]:-none}" > /tmp/episode-failed.txt
           if [ "${#failed[@]}" -gt 0 ]; then exit 1; fi
-      - name: Send branch failure alert to Telegram
-        if: always() && steps.branch_sync.outcome == 'failure'
+      - name: Send branch synchronization report to Telegram
+        if: always()
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -145,17 +148,13 @@ jobs:
           EPISODE_PATH: ${{ steps.generated.outputs.path }}
           SYNC_OUTCOME: ${{ steps.branch_sync.outcome }}
         run: |
-          set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured; skipping failure alert."
+            echo "Telegram secrets are not configured; skipping sync report."
             exit 0
           fi
           SYNCED="$(cat /tmp/episode-synced.txt 2>/dev/null || echo unavailable)"
           FAILED="$(cat /tmp/episode-failed.txt 2>/dev/null || echo unavailable)"
-          TEXT="⚠️ Episode sync failed
-Episode: ${EPISODE_PATH}
-Updated/current: ${SYNCED}
-Failed: ${FAILED}"
+          TEXT="Episode sync: ${SYNC_OUTCOME}\nEpisode: ${EPISODE_PATH}\nUpdated/current: ${SYNCED}\nFailed: ${FAILED}"
           curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${TEXT}"
