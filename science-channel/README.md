@@ -295,3 +295,12 @@ Science Channel code, settings, topics, history and episode files are kept under
 - `.github/workflows/free-science-visuals.yml`
 
 Unrelated repository workflows, scripts, topics, shared configuration and dependencies are outside this pipeline's scope and should not be edited for normal episode production.
+
+
+## Copyright-conscious adaptive background music
+
+The renderer supports automatic topic/mood-based BGM selection and mixing, but it never downloads or scrapes music. Download approved tracks manually from the official [YouTube Audio Library](https://www.youtube.com/audiolibrary), preferably tracks marked **Attribution not required**, then add the audio files under `assets/music/` and register them in `assets/music/library.json`.
+
+Each entry must include the exact title, artist, `source: "YouTube Audio Library"`, license name and URL, `verified: true`, and `attribution_required: false`. Tracks that fail these checks are ignored. The workflow selects tracks by episode topic and narration mood, crossfades when the selection changes, ducks music under narration, and fades out at the end. If no approved local track is available, it renders without BGM. Selected track details are saved in `output/bgm-track-record.txt`.
+
+This reduces avoidable music-rights risk but cannot guarantee zero copyright claims or strikes. Review the track's current license and YouTube Studio checks before public release.
