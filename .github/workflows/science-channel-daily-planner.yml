@@ -41,7 +41,7 @@ jobs:
           fi
           EPISODE_DIR="$(dirname "${FILES[0]}")"
           echo "path=$EPISODE_DIR" >> "$GITHUB_OUTPUT"
-      - name: Send image prompts to Telegram
+      - name: Send episode package and image prompts to Telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -59,7 +59,7 @@ jobs:
           curl --fail --silent --show-error \
             -F "chat_id=${TELEGRAM_CHAT_ID}" \
             -F "document=@${PROMPT_FILE};filename=image-prompts.md" \
-            -F "caption=🖼️ Image prompts ready: ${TITLE}" \
+            -F "caption=🖼️ Episode package ready: ${TITLE} | Upload 48 numbered images to ${EPISODE_PATH}/images/incoming/" \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
       - name: Commit generated episode to the run branch
         id: source_commit
@@ -74,27 +74,69 @@ jobs:
           git push origin "HEAD:${GITHUB_REF_NAME}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Publish the same episode package to every other branch
+        id: branch_sync
         env:
           SOURCE_COMMIT: ${{ steps.source_commit.outputs.sha }}
           EPISODE_PATH: ${{ steps.generated.outputs.path }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           git fetch origin '+refs/heads/*:refs/remotes/origin/*'
           mapfile -t BRANCHES < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ | grep -v '^$' | sort -u)
+          synced=()
+          failed=()
           for branch in "${BRANCHES[@]}"; do
             if [ "$branch" = "$GITHUB_REF_NAME" ]; then
-              echo "Already published on $branch"
+              synced+=("$branch (source)")
               continue
             fi
             echo "Publishing generated episode to $branch"
-            git checkout -B "$branch" "origin/$branch"
-            git checkout "$SOURCE_COMMIT" -- "$EPISODE_PATH"
-            git add "$EPISODE_PATH"
-            if git diff --cached --quiet; then
-              echo "No changes needed on $branch"
+            if ! git checkout -B "$branch" "origin/$branch"; then
+              failed+=("$branch: checkout failed")
               continue
             fi
-            git commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME"
-            git push origin "HEAD:$branch"
+            if ! git checkout "$SOURCE_COMMIT" -- "$EPISODE_PATH"; then
+              failed+=("$branch: package copy failed")
+              continue
+            fi
+            git add "$EPISODE_PATH"
+            if git diff --cached --quiet; then
+              synced+=("$branch (already current)")
+              continue
+            fi
+            if git commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME" && git push origin "HEAD:$branch"; then
+              synced+=("$branch")
+            else
+              failed+=("$branch: commit or push failed")
+            fi
           done
+          {
+            echo "## Episode branch synchronization"
+            echo ""
+            echo "- Episode: $EPISODE_PATH"
+            echo "- Source branch: $GITHUB_REF_NAME"
+            echo "- Updated/current: ${synced[*]:-none}"
+            echo "- Failed: ${failed[*]:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "${synced[*]:-none}" > /tmp/episode-synced.txt
+          printf '%s\n' "${failed[*]:-none}" > /tmp/episode-failed.txt
+          if [ "${#failed[@]}" -gt 0 ]; then exit 1; fi
+      - name: Send branch synchronization report to Telegram
+        if: always()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
+          SYNC_OUTCOME: ${{ steps.branch_sync.outcome }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets are not configured; skipping sync report."
+            exit 0
+          fi
+          SYNCED="$(cat /tmp/episode-synced.txt 2>/dev/null || echo unavailable)"
+          FAILED="$(cat /tmp/episode-failed.txt 2>/dev/null || echo unavailable)"
+          TEXT="Episode sync: ${SYNC_OUTCOME}%0AEpisode: ${EPISODE_PATH}%0AUpdated/current: ${SYNCED}%0AFailed: ${FAILED}"
+          curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}"
