@@ -1,5 +1,4 @@
-run-name: Gemini Science Episode Planner (${{ github.ref_name }})
-name: Gemini Science Episode Planner
+name: Science Channel — Daily Gemini Planner
 on:
   schedule:
     - cron: "15 1 * * *"
