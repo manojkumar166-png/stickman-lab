@@ -86,7 +86,7 @@ def main():
             continue
         text = (msg.get("text") or "").strip()
         if text.startswith("/start") or text.startswith("/help"):
-            send("Send /episode YYYY-MM-DD/episode-001 to select an episode. Then send up to 48 images. Caption an image scene-01 through scene-48, or I’ll assign the next missing scene. I create READY.txt only when all 48 are present.")
+            send("I automatically select the newest episode. Send up to 48 images with captions scene-01 through scene-48, or I’ll assign the next missing scene. You can optionally use /episode YYYY-MM-DD/episode-001 to choose a different episode. I create READY.txt only when all 48 are present.")
             continue
         if text.startswith("/episode"):
             value = text.split(maxsplit=1)[1] if len(text.split(maxsplit=1)) == 2 else ""
