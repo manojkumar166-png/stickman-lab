@@ -4,6 +4,7 @@ import json, re, sys, subprocess, zipfile
 from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
+from karaoke_subtitles import generate_karaoke_ass
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT/"settings.json").read_text())
@@ -93,7 +94,7 @@ else:
     normalized.mkdir(exist_ok=True)
     visual_paths = [normalize(src, n, normalized) for n, src in enumerate(ordered, 1)]
 
-# Narration text comes only from script.md. No subtitle track is generated or burned into the video.
+# Narration text comes only from script.md; Whisper aligns word timestamps to the generated narration.
 script = (episode/"script.md").read_text()
 blocks = re.findall(r"^## Scene\s+(\d+)\s*\n+([\s\S]*?)(?=^## Scene\s+\d+\s*$|\Z)", script, re.M)
 if len(blocks) != scene_count:
@@ -129,6 +130,8 @@ with concat.open("w") as f:
 silent = out/"visuals.mp4"
 run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
 
+captions = out/"karaoke-captions.ass"
+word_count = generate_karaoke_ass(audio, captions, SETTINGS["width"], SETTINGS["height"])
 video = out/"final-video.mp4"
-run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-print(f"Rendered {video} (no subtitles)")
+run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+print(f"Rendered {video} with karaoke captions ({word_count} timed words)")
