@@ -35,6 +35,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade edge-tts faster-whisper
+      - name: Validate Python syntax and music configuration
+        run: |
+          python -m py_compile science-channel/scripts/*.py
+          python -m json.tool science-channel/settings.json > /dev/null
+          python -m json.tool science-channel/assets/music/library.json > /dev/null
       - name: Resolve exact episode path
         id: episode
         shell: bash
