@@ -1,6 +1,6 @@
 {
   "episodes_per_day": 3,
-  "scene_count": 47,
+  "scene_count": 48,
   "target_minutes_min": 8,
   "target_minutes_max": 10,
   "language": "English",
@@ -14,5 +14,7 @@
   "topic_file": "science-channel/topics.txt",
   "history_file": "science-channel/history/generated-topics.json",
   "episode_root": "science-channel/daily-episodes",
-  "shorts_enabled": false
+  "shorts_enabled": false,
+  "required_uploaded_images": 3,
+  "uploaded_image_folder": "images/incoming"
 }
