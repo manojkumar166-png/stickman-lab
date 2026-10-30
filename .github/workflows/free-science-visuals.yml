@@ -67,30 +67,39 @@ jobs:
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.episode.outputs.path }}/output/*.mp4
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
-      - name: Remove uploaded ZIP after render and artifact save
+      - name: Delete processed ZIPs from GitHub (API, retrying)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          shopt -s nullglob
-          zips=("${{ steps.episode.outputs.path }}"/images/incoming/*.zip "${{ steps.episode.outputs.path }}"/images/incoming/*.ZIP)
-          if [ ${#zips[@]} -gt 0 ]; then
-            git rm -- "${zips[@]}"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Remove processed image ZIP for rendered episode"
-            # Another workflow may update main while this render is running.
-            # Rebase the ZIP-deletion commit onto the latest remote before pushing.
+          shopt -s nullglob nocaseglob
+          zips=(${{ steps.episode.outputs.path }}/images/incoming/*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No ZIP archive to remove."
+            exit 0
+          fi
+          for file in "${zips[@]}"; do
+            echo "Deleting $file from main..."
+            deleted=false
             for attempt in 1 2 3; do
-              git fetch origin main
-              git rebase origin/main
-              if git push origin HEAD:main; then
+              sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$file?ref=main" --jq .sha 2>/dev/null || true)
+              if [ -z "$sha" ]; then
+                echo "$file is already absent from main."
+                deleted=true
                 break
               fi
-              if [ "$attempt" -eq 3 ]; then
-                echo "Could not push ZIP cleanup after 3 attempts. The rendered artifact is already saved."
-                exit 1
+              if gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$file" \\
+                -f message="Delete processed image ZIP after render" \\
+                -f sha="$sha" \\
+                -f branch=main; then
+                deleted=true
+                break
               fi
-              sleep 2
+              echo "Delete attempt $attempt failed; retrying..."
+              sleep 3
             done
-          else
-            echo "No ZIP archive to remove."
-          fi
+            if [ "$deleted" != true ]; then
+              echo "ERROR: Could not delete $file after 3 attempts."
+              exit 1
+            fi
+          done
