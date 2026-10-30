@@ -14,6 +14,12 @@ TOPICS = ROOT / "topics.txt"
 PRESENTER = (ROOT / "character/presenter-reference.md").read_text()
 TODAY = datetime.date.today().isoformat()
 
+
+def topic_slug(value):
+    """Create a readable, filesystem-safe folder suffix from an episode topic."""
+    slug = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
+    return slug[:70].strip("-") or "untitled-topic"
+
 def gemini(prompt, temperature=0.7):
     payload = {"contents":[{"parts":[{"text":prompt}]}],
                "generationConfig":{"temperature":temperature,"responseMimeType":"application/json"}}
@@ -64,11 +70,12 @@ Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dum
     if len(prompts)!=48 or [p.get("scene_number") for p in prompts]!=list(range(1,48)):
         raise ValueError(f"Episode {idx}: expected exactly 48 ordered image prompts")
     day_root = ROOT / "daily-episodes" / TODAY
-    folder = day_root / f"episode-{idx:03d}"
+    final_title = str(episode.get("title", title)).strip()
+    folder = day_root / f"episode-{idx:03d}-{topic_slug(final_title)}"
     images = folder / "images" / "incoming"
     images.mkdir(parents=True,exist_ok=True)
-    (folder/"episode.json").write_text(json.dumps({"episode_id":f"{TODAY}-episode-{idx:03d}","date":TODAY,"title":episode.get("title",title),"description":episode.get("description",""),"scene_count":48,"target_minutes":"8-10","status":"awaiting_images"},indent=2,ensure_ascii=False)+"\n")
-    script = [f"# {episode.get('title',title)}","",episode.get("description",""),""]
+    (folder/"episode.json").write_text(json.dumps({"episode_id":f"{TODAY}-episode-{idx:03d}","date":TODAY,"title":final_title,"description":episode.get("description",""),"scene_count":48,"target_minutes":"8-10","status":"awaiting_images"},indent=2,ensure_ascii=False)+"\n")
+    script = [f"# {final_title}","",episode.get("description",""),""]
     for s in scenes: script += [f"## Scene {s['scene_number']:02d}","",s["narration"].strip(),""]
     (folder/"script.md").write_text("\n".join(script))
     (folder/"scenes.json").write_text(json.dumps(scenes,indent=2,ensure_ascii=False)+"\n")
