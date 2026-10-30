@@ -140,7 +140,8 @@ def create_background_music(output_path, title, narration_scenes, scene_duration
     fade_out = min(4.0, max(0.5, total_duration))
     filters.append(
         f"[{current}]atrim=duration={total_duration:.4f},"
-        f"afade=t=in:st=0:d={min(1.8, total_duration):.4f},"\n        f"afade=t=out:st={max(0.0, total_duration-fade_out):.4f}:d={fade_out:.4f},"
+        f"afade=t=in:st=0:d={min(1.8, total_duration):.4f},"
+        f"afade=t=out:st={max(0.0, total_duration-fade_out):.4f}:d={fade_out:.4f},"
         f"aresample=48000, aformat=sample_fmts=s16:channel_layouts=stereo[out]"
     )
     cmd += ["-filter_complex", ";".join(filters), "-map", "[out]", "-c:a", "pcm_s16le", str(output_path)]
