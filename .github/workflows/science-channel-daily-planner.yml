@@ -32,7 +32,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
-          PROMPT_FILE="$(find science-channel/daily-episodes -type f -name image-prompts.md -printf '%T@ %p\\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+          PROMPT_FILE="$(find science-channel/daily-episodes -type f -name image-prompts.md -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
           if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
             echo "Could not find the newly generated image-prompts.md"
             exit 1
