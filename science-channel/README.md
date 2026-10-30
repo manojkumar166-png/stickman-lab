@@ -35,7 +35,7 @@ Daily schedule or manual start
             |
             v
 5. RENDER WORKFLOW STARTS
-   Automatically after a qualifying image/READY commit,
+   Automatically after a real image/ZIP or READY commit (the `.gitkeep` placeholder is ignored),
    or manually when you provide the episode_path
             |
             v
@@ -71,7 +71,7 @@ If you revise narration after generating images, revise the matching prompt and 
 
 ### Workflow B — Free Science Visuals Renderer
 
-- **How it starts:** It can run from a push that changes an episode's `images/incoming/` files or its `READY.txt` marker, or you can start **Free Science Visuals — Render Ready Episode** manually in Actions.
+- **How it starts:** It can run from a push that adds real files to an episode's `images/incoming/` folder (the `.gitkeep` placeholder alone is ignored) or changes its `READY.txt` marker, or you can start **Free Science Visuals — Render Ready Episode** manually in Actions.
 - **Choosing the episode:** For a manual run, enter the exact folder in the optional `episode_path` field. If left blank, it chooses the newest episode it finds with a READY marker or incoming image files. For a push run, the changed files must identify exactly one episode; commits affecting multiple episodes are rejected.
 - **Validation:** It checks the episode metadata and scene data, requires exactly 48 ordered scene records, checks for 48 numbered narration sections in `script.md`, and requires exactly 48 supported images (either one ZIP or individual files, not a mixture).
 - **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It does not add subtitles or burn captions into the video.**
@@ -215,7 +215,7 @@ Important:
 
 For automatic rendering, add an empty file named exactly `READY.txt` in the episode folder (beside `episode.json`), then commit it together with the image upload whenever possible.
 
-The render workflow also watches changes under `images/incoming/`. It validates the selected episode and will fail if the image count or script structure is incomplete. Upload images for **one episode per commit**: a push that changes more than one episode is rejected to prevent rendering the wrong one.
+The render workflow also watches real uploaded files under `images/incoming/`; the planner's `.gitkeep` folder placeholder does not trigger rendering by itself. It validates the selected episode and will fail if the image count or script structure is incomplete. Upload images for **one episode per commit**: a push that changes more than one episode is rejected to prevent rendering the wrong one.
 
 ### Manual rendering (choose the exact episode)
 
