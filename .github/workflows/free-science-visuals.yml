@@ -58,7 +58,7 @@ jobs:
           path: |
             ${{ steps.episode.outputs.path }}/output/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 2
       - name: Send finished video to Telegram (non-blocking)
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@v1
