@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent Gemini planner for the Science Channel pipeline."""
-import json, os, re, time, datetime
+import json, os, re, time, datetime, difflib
 from pathlib import Path
 import requests
 
@@ -34,7 +34,14 @@ def gemini(prompt, temperature=0.7):
     r.raise_for_status()
 
 history = json.loads(HISTORY.read_text()) if HISTORY.exists() else {"topics":[]}
-seen = {x.strip().casefold() for x in history.get("topics",[])}
+seen_topics = list(history.get("topics",[]))
+def is_duplicate_topic(candidate):
+    key = re.sub(r"[^a-z0-9]+", " ", candidate.casefold()).strip()
+    return any(
+        key == re.sub(r"[^a-z0-9]+", " ", old.casefold()).strip()
+        or difflib.SequenceMatcher(None, key, re.sub(r"[^a-z0-9]+", " ", old.casefold()).strip()).ratio() >= 0.88
+        for old in seen_topics
+    )
 seed_topics = [x.strip() for x in TOPICS.read_text().splitlines() if x.strip() and not x.lstrip().startswith("#")]
 topic_data = gemini("""Create exactly 3 distinct, compelling, accurate science-explainer topics for a general YouTube audience.
 Avoid all previously used topics and close paraphrases. You may use these seed ideas but are not limited to them.
@@ -45,7 +52,7 @@ topics = topic_data.get("topics",[])
 if len(topics) != 3: raise ValueError(f"Expected exactly 3 topics, got {len(topics)}")
 for idx, item in enumerate(topics,1):
     title = item["title"].strip()
-    if title.casefold() in seen: raise ValueError("Gemini returned a previously used topic: "+title)
+    if is_duplicate_topic(title): raise ValueError("Gemini returned a duplicate or near-duplicate topic: "+title)
     # Stage 1: create the complete narration script and exactly 48 ordered scenes.
     script_prompt = f"""Write a complete 8–10 minute English science explainer episode titled {title!r}.
 Angle: {item.get('angle','')}. Audience: curious general viewers. Scientifically accurate, engaging,
@@ -56,7 +63,7 @@ Narration across all 48 scenes must form a coherent complete script of about 1,1
 No image prompt in this stage. Number scenes consecutively from 1 to 48."""
     episode = gemini(script_prompt,0.65)
     scenes = episode.get("scenes",[])
-    if len(scenes) != 48 or [s.get("scene_number") for s in scenes] != list(range(1,48)):
+    if len(scenes) != 48 or [s.get("scene_number") for s in scenes] != list(range(1,49)):
         raise ValueError(f"Episode {idx}: script did not contain exactly 48 correctly numbered scenes")
     if any(not str(s.get("narration","")).strip() for s in scenes): raise ValueError("Empty narration scene")
     # Stage 2: derive prompts from the finalized narration; exact one-to-one scene mapping.
@@ -82,8 +89,16 @@ Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dum
     prompt_lines = [f"# Image prompts — {title}","", "Generate each image manually in Meta AI. Keep scene numbering unchanged.",""]
     for p in prompts: prompt_lines += [f"## Scene {p['scene_number']:02d}","",p["prompt"].strip(),""]
     (folder/"image-prompts.md").write_text("\n".join(prompt_lines))
+    (folder/"README.md").write_text(
+        f"# {final_title}\n\n- Episode: {idx:03d}\n- Date: {TODAY}\n"
+        "- Scenes/images required: 48\n- Status: Awaiting images\n\n"
+        "## Upload images\nUpload exactly 48 images into images/incoming/ using numbered names "
+        "(scene-001.webp through scene-048.webp).\n\n"
+        "## Package files\n- episode.json: metadata\n- script.md: narration\n"
+        "- scenes.json: ordered scenes\n- image-prompts.md: image prompts\n"
+    )
     (images/".gitkeep").write_text("")
-    history.setdefault("topics",[]).append(title)
+    history.setdefault("topics",[]).append(final_title)
     print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload any 3 image files to images/incoming/")
 HISTORY.parent.mkdir(parents=True,exist_ok=True)
 HISTORY.write_text(json.dumps(history,indent=2,ensure_ascii=False)+"\n")
