@@ -60,7 +60,7 @@ def _load_approved_tracks():
             continue
         if item.get("attribution_required") is not False:
             continue
-        if not item.get("title") or not item.get("artist") or not item.get("license_name"):
+        if not item.get("title") or not item.get("artist") or not item.get("license_name") or not item.get("license_url"):
             continue
         rel = Path(str(item.get("file", "")))
         if rel.is_absolute() or ".." in rel.parts:
@@ -119,7 +119,7 @@ def create_background_music(output_path, title, narration_scenes, scene_duration
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fade = min(max(0.5, float(settings.get("crossfade_seconds", 2.5))), 4.0)
+    shortest_segment = min(duration for _, duration in segments)\n    fade = min(max(0.1, float(settings.get("crossfade_seconds", 2.5))), 4.0, shortest_segment * 0.45)
     total_duration = sum(duration for _, duration in segments)
     cmd = ["ffmpeg", "-y"]
     for track, _ in segments:
