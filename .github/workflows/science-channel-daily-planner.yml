@@ -140,7 +140,7 @@ jobs:
           printf '%s\n' "${failed[*]:-none}" > /tmp/episode-failed.txt
           if [ "${#failed[@]}" -gt 0 ]; then exit 1; fi
       - name: Send branch synchronization report to Telegram
-        if: always()
+        if: always() && steps.branch_sync.outcome == 'failure'
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
