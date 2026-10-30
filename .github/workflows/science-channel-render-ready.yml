@@ -3,7 +3,7 @@ on:
   push:
     branches: [storybook-2d-science]
     paths:
-      - "science-channel/daily-episodes/**/READY.txt"\n      - "science-channel/daily-episodes/**/images/incoming/**"
+      - "science-channel/daily-episodes/**/READY.txt"
   workflow_dispatch:
     inputs:
       episode_path:
