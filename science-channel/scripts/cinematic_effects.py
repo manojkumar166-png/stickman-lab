@@ -78,6 +78,10 @@ def render_scene_clip(image, output, seconds, width, height, fps, profile, scene
         "eq=saturation={:.3f}:contrast={:.3f}:brightness={:.3f}".format(saturation, contrast, brightness),
         "vignette=PI/5",
         "noise=alls=1.2:allf=t",
+        "drawbox=x=(120+t*13)%iw:y=(180+t*9)%ih:w=3:h=3:color=white@0.18:t=fill",
+        "drawbox=x=(420+t*8)%iw:y=(360+t*12)%ih:w=2:h=2:color=white@0.14:t=fill",
+        "drawbox=x=(760+t*11)%iw:y=(120+t*7)%ih:w=3:h=3:color=white@0.16:t=fill",
+        "drawbox=x=(980+t*6)%iw:y=(520+t*10)%ih:w=2:h=2:color=white@0.12:t=fill",
     ]
     if scene_plan.get("impact"):
         filters.append("drawbox=x=0:y=0:w=iw:h=ih:color=white@0.22:t=fill:enable='lt(t,0.075)'")
