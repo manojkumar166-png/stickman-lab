@@ -107,8 +107,10 @@ Use a 16:9 cinematic 3D family-animation aesthetic, composed for a 1920x1080 lan
 Generate each image in WebP when the image tool supports it, because WebP usually gives an excellent
 quality-to-file-size balance. Otherwise use any available format supported by the renderer: PNG, JPG/JPEG,
 BMP, GIF, TIF or TIFF. Do not require JPG/JPEG and do not sacrifice visual quality just to meet a file-size
-target. Aim for a manageable size (roughly 500 KB–2 MB per image when practical). Avoid unnecessarily
-huge textures or empty high-detail backgrounds. Keep the full visual readable at 1920x1080.
+target. **Image file-size target: 500 KB–2 MB per image.** If the image tool offers format,
+quality or compression controls, use settings that stay in this range while preserving fine scientific
+details. Treat this as a target, not a hard limit; never make an image visibly worse just to hit it.
+Avoid unnecessarily huge textures or empty high-detail backgrounds. Keep the full visual readable at 1920x1080.
 No text, captions, logos or watermarks. The optional image-preparation utility can resize and convert
 supported source images to numbered JPGs for smaller browser uploads; conversion is not required.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
