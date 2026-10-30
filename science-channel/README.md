@@ -1,46 +1,185 @@
-# Independent Science Channel pipeline
+# Science Channel — complete operating guide
 
-This additive-only pipeline is isolated to `science-channel/` and its two dedicated GitHub Actions workflows. It does not depend on or modify the repository's unrelated workflows, scripts, topic files, or shared configuration.
+This guide explains how to create an episode, edit its script, generate and upload images, render the video, and download or delete the result. The pipeline is isolated to `science-channel/` and its two dedicated GitHub Actions workflows.
 
-## Daily Gemini planner
+## Quick workflow
 
-The daily planner runs at **01:15 UTC (06:45 India Standard Time)** and creates **one episode per run** under:
+1. Run the **Science Channel — Daily Gemini Planner** workflow (or wait for its daily schedule).
+2. Open the new episode folder under `science-channel/daily-episodes/YYYY-MM-DD/episode-00N/`.
+3. Review or edit `script.md`, `scenes.json`, `episode.json`, and `image-prompts.md`.
+4. Generate exactly 48 images from the image prompts.
+5. Upload one ZIP containing the 48 images, or upload 48 individual images, into that episode's `images/incoming/` folder.
+6. Add an empty `READY.txt` file in the episode folder and commit the images and marker. Alternatively, run the render workflow manually and enter the episode folder path.
+7. Open the render workflow run, download the artifact, and save the MP4.
 
-`science-channel/daily-episodes/YYYY-MM-DD/episode-00N/`
+## 1. Create a new episode
 
-Gemini first writes a complete narration script with exactly 48 numbered scenes, then derives exactly 48 matching image prompts from that finalized script. Each episode package contains `episode.json`, `script.md`, `scenes.json`, `image-prompts.md`, and an empty `images/incoming/` folder.
+The planner runs automatically every day at **01:15 UTC (06:45 India Standard Time)**. It creates **one new episode per run**. You can also start it manually:
 
-The planner uses `science-channel/topics.txt`, its own generated-topic history, episode metadata, and the presenter reference for image-prompt consistency. Previously used topics are checked to reduce repeats.
+1. Open the repository's **Actions** tab.
+2. Select **Science Channel — Daily Gemini Planner**.
+3. Click **Run workflow**, select the `main` branch, and start it.
+4. Wait for the run to finish. Open the commit or browse to `science-channel/daily-episodes/` to find the new episode.
 
-Required GitHub secret: `GEMINI_API_KEY`. Optional repository variable: `SCIENCE_GEMINI_MODEL`.
+The folder format is:
 
-Telegram prompt delivery uses `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. These are optional: if they are missing or Telegram delivery fails, the generated episode is still committed to the repository.
+```text
+science-channel/
+└── daily-episodes/
+    └── YYYY-MM-DD/
+        └── episode-001/
+            ├── episode.json
+            ├── script.md
+            ├── scenes.json
+            ├── image-prompts.md
+            └── images/
+                └── incoming/
+```
 
-## Images: ZIP or individual files
+If more than one episode is created on the same date, the planner uses the next available number (for example, `episode-002`) rather than overwriting an earlier folder.
 
-For each episode, generate all 48 images from `image-prompts.md`. Upload either:
+The planner requires the GitHub Actions secret `GEMINI_API_KEY`. The optional repository variable `SCIENCE_GEMINI_MODEL` overrides the model in `science-channel/settings.json`.
 
-- **One ZIP** containing exactly 48 supported image files; or
-- **48 individual image files**.
+Telegram delivery of `image-prompts.md` is optional. It uses `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; missing secrets or a Telegram delivery failure do not prevent the episode package from being committed.
 
-Supported image formats are PNG, JPG, JPEG, WebP, BMP, GIF, TIF, and TIFF. Place the ZIP or all individual images inside that episode's `images/incoming/` folder. Do not mix ZIP archives and individual images in the same incoming folder.
+## 2. Understand and manually edit the episode files
 
-The renderer uses explicit scene numbers when it can identify a complete, unique sequence from 1 to 48 (for example, `scene-001.png`). Otherwise, it sorts filenames in natural order (so `image2` comes before `image10`).
+Open the episode folder in GitHub and click a file to view it. To edit, click the pencil icon, make your changes, then click **Commit changes**.
 
-## Render
+| File | Purpose | What you may edit |
+|---|---|---|
+| `episode.json` | Episode metadata | Title, description, date and other episode details. Keep `scene_count` at 48. |
+| `script.md` | Spoken narration | Edit the title, description and narration under each `## Scene 01` through `## Scene 48` heading. |
+| `scenes.json` | Structured scene plan | Keep exactly 48 objects numbered consecutively from 1 to 48. Update narration and visual beats to match your script. |
+| `image-prompts.md` | Image-generation instructions | Edit each scene's prompt so the image matches the final narration and visual beat. |
+| `images/incoming/` | Input images | Upload the 48 finished scene images here. |
 
-Commit the 48 images and a `READY.txt` marker together in the exact episode folder. The render workflow validates the image count and the 48 ordered, non-empty script sections, converts the images to 16:9, generates narration with Edge TTS, and renders the video.
+### Script-editing rules
 
-**Subtitles are intentionally not generated or added.**
+- Keep all 48 scene headings in `script.md`, numbered in order from 01 to 48. Do not remove or duplicate a scene.
+- Put only the words to be narrated under each scene heading. The renderer reads the narration from `script.md`.
+- Keep `scenes.json` at exactly 48 ordered scene records. If you change a scene's narration or visual idea, update its matching record too.
+- If you change the script after images have already been generated, also revise the corresponding image prompt and replace that scene's image. Otherwise the narration and visuals may no longer match.
+- Editing the script or prompts alone does **not** render a video. Upload the finished images and start the render workflow after your edits.
 
-The rendered output folder is uploaded as a GitHub Actions artifact named from the episode topic, with **2-day retention**. It includes the final MP4 and the renderer's supporting output files.
+### Image style: no default presenter
 
-You can run the renderer manually from GitHub Actions. The optional `episode_path` input lets you specify the exact episode folder; if left blank, the workflow selects the newest episode with a READY marker or incoming images.
+New Gemini-generated image prompts are instructed **not** to add a presenter, host, teacher, narrator, talking-head character, or recurring man by default. Images should show the actual scientific subject, action, environment, objects, or visual metaphor for that scene.
 
-For automatic push-triggered rendering, upload or update exactly one episode per commit. The workflow stops with a clear error if a single push changes more than one episode, rather than silently rendering the wrong one.
+A human figure may appear when the scene itself calls for one, but should be part of the scene rather than standing in front of the viewer and explaining it. For example, a dream-flying scene should show a person soaring through dreamlike clouds and skies, not a man presenting an explanation.
 
-After a successful render, the workflow attempts to delete a processed ZIP archive from the repository. Individual image files are not automatically deleted. ZIP cleanup retries up to three times.
+This prompt rule applies to **newly generated episodes**. Existing episode prompt files are not rewritten automatically. Edit an older `image-prompts.md` yourself if you want to apply the new visual direction to that episode.
 
-## Isolation
+## 3. Generate the 48 images
 
-All Science Channel scripts, settings, topics, history, and episode data remain under `science-channel/`. Only the two dedicated Science Channel workflow files are used for planning and rendering; unrelated repository workflows, scripts, configuration, and dependencies are left untouched.
+Open that episode's `image-prompts.md`. It contains one prompt for each numbered scene. Generate one image for each prompt, keeping the scene numbers clear.
+
+Recommended filenames:
+
+```text
+scene-001.png
+scene-002.png
+scene-003.png
+...
+scene-048.png
+```
+
+Use the same numbering for JPG, JPEG or WebP files if you prefer those formats. Clear scene numbering helps the renderer match each image to the right narration scene.
+
+Supported image formats: **PNG, JPG, JPEG, WebP, BMP, GIF, TIF and TIFF**.
+
+## 4. Upload images to the correct folder
+
+Upload images only into the current episode's:
+
+```text
+science-channel/daily-episodes/YYYY-MM-DD/episode-001/images/incoming/
+```
+
+Replace the date and episode number with the folder you are working on. Do not upload images into the general `daily-episodes` folder, another date's folder, or `output/`.
+
+You can upload in either of these ways:
+
+**Option A — one ZIP (usually easiest)**
+
+1. Put exactly 48 supported image files in one ZIP archive.
+2. Keep the scene numbers in the filenames, such as `scene-001.png` through `scene-048.png`.
+3. Upload that single ZIP into `images/incoming/`.
+
+**Option B — 48 individual files**
+
+1. Upload exactly 48 supported image files directly into `images/incoming/`.
+2. Use numbered filenames so the order is clear.
+
+Important:
+- Upload either **one ZIP** or **48 individual images** in an episode's incoming folder. Do not mix ZIPs and individual images.
+- A ZIP must contain exactly 48 supported image files. Avoid duplicate filenames inside the ZIP.
+- Do not upload multiple ZIP archives for one episode.
+- The renderer first uses a complete, unique scene-number sequence (for example, `scene-001.png`). If it cannot find one, it sorts filenames naturally (`image2` before `image10`).
+- The renderer converts the source images into 16:9 video frames.
+
+### Upload using the GitHub website
+
+1. Browse to the episode's `images/incoming/` folder.
+2. Click **Add file → Upload files**.
+3. Drag in the ZIP or select the 48 images.
+4. Click **Commit changes**.
+
+## 5. Start video rendering
+
+### Automatic rendering
+
+For automatic rendering, add an empty file named exactly `READY.txt` in the episode folder (beside `episode.json`), then commit it together with the image upload whenever possible.
+
+The render workflow also watches changes under `images/incoming/`. It validates the selected episode and will fail if the image count or script structure is incomplete. Upload images for **one episode per commit**: a push that changes more than one episode is rejected to prevent rendering the wrong one.
+
+### Manual rendering (choose the exact episode)
+
+1. Open the repository's **Actions** tab.
+2. Select **Free Science Visuals — Render Ready Episode**.
+3. Click **Run workflow** and choose the `main` branch.
+4. In the optional `episode_path` field, enter the full folder path, for example:
+
+   `science-channel/daily-episodes/2026-10-31/episode-001`
+
+5. Click **Run workflow**.
+
+Entering the exact path is recommended when you have multiple episode folders. If you leave it blank, the workflow selects the newest episode it finds with a `READY.txt` marker or uploaded incoming image files.
+
+The renderer checks that there are 48 ordered scene records in `scenes.json`, 48 corresponding scene sections with narration in `script.md`, and exactly 48 input images. It generates narration using Edge TTS and renders the video.
+
+**Subtitles are intentionally not generated or burned into the video.**
+
+## 6. Find and download the rendered video
+
+1. Open **Actions** and select the completed **Free Science Visuals — Render Ready Episode** run.
+2. Scroll to the **Artifacts** section near the bottom of the run page.
+3. Click the artifact named from the episode topic (it starts with `science-channel-`) to download it.
+4. Unzip the downloaded artifact. The final video is `final-video.mp4` inside the episode's `output/` contents. Other supporting render files may also be included.
+
+Artifacts are retained for **2 days**. Download the video before the retention period expires. You can delete an artifact earlier from the workflow run's Artifacts section using its delete/trash control.
+
+The artifact upload happens before Telegram delivery and ZIP cleanup. Therefore, if a later Telegram or ZIP-cleanup step fails, an artifact that was already uploaded remains available until it expires or is manually deleted. If rendering or artifact creation fails before the upload step, no rendered-video artifact is created.
+
+## 7. ZIP cleanup and repository files
+
+After the artifact upload, the render workflow attempts to delete processed ZIP archives from the repository's `images/incoming/` folder, retrying up to three times. Individual image files are not automatically deleted. A ZIP-cleanup failure can make the workflow run show as failed even though the video artifact was already uploaded.
+
+## 8. GitHub Actions settings required
+
+In **Settings → Secrets and variables → Actions**:
+
+- Add repository secret `GEMINI_API_KEY` for the planner.
+- Optionally add repository variable `SCIENCE_GEMINI_MODEL` to choose the Gemini model.
+- Optionally add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as repository secrets if you want Telegram delivery.
+
+The render workflow installs FFmpeg and Edge TTS itself; no extra repository dependency setup is required.
+
+## 9. What this pipeline changes
+
+Science Channel code, settings, topics, history and episode files are kept under `science-channel/`. Planning and rendering use only these dedicated workflows:
+
+- `.github/workflows/science-channel-daily-planner.yml`
+- `.github/workflows/free-science-visuals.yml`
+
+Unrelated repository workflows, scripts, topics, shared configuration and dependencies are outside this pipeline's scope and should not be edited for normal episode production.
