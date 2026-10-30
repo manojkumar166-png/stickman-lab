@@ -165,9 +165,19 @@ if cinematic_enabled:
 else:
     render_original_visuals()
 
-if cinematic_used and soundtrack.exists():
-    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-i",str(soundtrack),"-filter_complex","[1:a][2:a]amix=inputs=2:weights='1 0.22':normalize=0[aout]","-map","0:v:0","-map","[aout]","-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-else:
+def mux_original_audio():
     run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+
+if cinematic_used and soundtrack.exists():
+    try:
+        run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-i",str(soundtrack),"-filter_complex","[1:a][2:a]amix=inputs=2:weights='1 0.22':normalize=0[aout]","-map","0:v:0","-map","[aout]","-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+    except Exception as exc:
+        print(f"WARNING: Cinematic audio mix failed; retrying original render: {exc}")
+        cinematic_used = False
+        soundtrack.unlink(missing_ok=True)
+        render_original_visuals()
+        mux_original_audio()
+else:
+    mux_original_audio()
 mode = "adaptive cinematic" if cinematic_used else "original fallback"
 print(f"Rendered {video} in {mode} mode with karaoke captions ({word_count} timed words)")
