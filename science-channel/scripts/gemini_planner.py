@@ -13,6 +13,12 @@ HISTORY = ROOT / "history/generated-topics.json"
 TOPICS = ROOT / "topics.txt"
 TODAY = datetime.date.today().isoformat()
 
+
+def topic_slug(value):
+    """Create a readable, filesystem-safe folder suffix from an episode topic."""
+    slug = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
+    return slug[:70].strip("-") or "untitled-topic"
+
 def gemini(prompt, temperature=0.7):
     payload = {"contents":[{"parts":[{"text":prompt}]}],
                "generationConfig":{"temperature":temperature,"responseMimeType":"application/json"}}
@@ -68,7 +74,7 @@ day_root = episode_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
 existing_numbers = []
 for path in day_root.glob("episode-*"):
-    match = re.fullmatch(r"episode-(\d+)", path.name)
+    match = re.fullmatch(r"episode-(\d+)(?:-[a-z0-9-]+)?", path.name)
     if match:
         existing_numbers.append(int(match.group(1)))
 episode_number = max(existing_numbers, default=0) + 1
@@ -134,10 +140,10 @@ prompts = prompt_data.get("prompts", [])
 if len(prompts) != 48 or [p.get("scene_number") for p in prompts] != list(range(1,49)):
     raise ValueError("Expected exactly 48 ordered image prompts")
 
-folder = day_root / f"episode-{episode_number:03d}"
+final_title = episode.get("title", title).strip()
+folder = day_root / f"episode-{episode_number:03d}-{topic_slug(final_title)}"
 images = folder / "images" / "incoming"
 images.mkdir(parents=True, exist_ok=False)
-final_title = episode.get("title", title).strip()
 (folder / "episode.json").write_text(json.dumps({
     "episode_id": f"{TODAY}-episode-{episode_number:03d}",
     "date": TODAY, "title": final_title,
