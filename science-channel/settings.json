@@ -30,22 +30,5 @@
     "max_major_impacts": 6,
     "preserve_karaoke_subtitles": true,
     "fallback_to_original": true
-  },
-  "bgm": {
-    "enabled": true,
-    "mode": "adaptive",
-    "intensity": "balanced",
-    "source": "youtube-audio-library-manually-downloaded-only",
-    "topic_detection": true,
-    "mood_detection": true,
-    "intelligent_scene_transitions": true,
-    "automatic_ducking": true,
-    "narration_priority": true,
-    "crossfade_seconds": 2.5,
-    "cinematic_ending": true,
-    "require_human_license_verification": true,
-    "require_attribution_not_required": true,
-    "fallback_to_no_bgm": true,
-    "require_license_url": true
   }
 }
