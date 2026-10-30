@@ -1,24 +1,23 @@
 # Independent Science Channel pipeline
 
-This is an additive-only pipeline. It does not read, edit, import, or invoke the repository's existing workflows, topic files, scripts, or config.
+This additive-only pipeline does not use or modify the repository's existing workflows, topic files, scripts, or shared config.
 
-## Workflow A — daily Gemini planner
-`.github/workflows/science-channel-daily-planner.yml` runs daily and creates three episodes under `science-channel/daily-episodes/YYYY-MM-DD/episode-00N/`. It uses only `science-channel/topics.txt` and `science-channel/history/generated-topics.json`. It first writes the full 47-scene narration script, then derives exactly 47 matching image prompts from that finalized script.
+## Daily Gemini planner
+The daily planner creates three episodes under `science-channel/daily-episodes/YYYY-MM-DD/episode-00N/`. Gemini writes the complete narration first, as exactly 48 numbered scenes, then derives exactly 48 matching image prompts. It uses only `science-channel/topics.txt` and its own generated-topic history.
 
-Required repository secret: `GEMINI_API_KEY`. Optional repository variable: `SCIENCE_GEMINI_MODEL` (defaults to `gemini-2.5-flash`).
+Required secret: `GEMINI_API_KEY`. Optional variable: `SCIENCE_GEMINI_MODEL`.
 
-## Manual Meta AI step
-Generate the 47 prompts in `image-prompts.md` manually in Meta AI. Upload PNG files as `images/scene-001.png` through `images/scene-047.png`. Only after all 47 are present, add `READY.txt` to that episode folder and commit it.
+## Your image step — only three images
+For each episode, copy the first three prompts from `image-prompts.md` into Meta AI. Upload exactly three image files (PNG, JPG, JPEG or WebP) into:
 
-## Workflow B — render ready episode
-A push containing a READY.txt under the new episode directory starts the render workflow for that exact folder. It validates all 47 images and script sections, uses only `script.md` for narration/subtitles, and never reads `image-prompts.md`. Output is placed in that episode's `output/` directory and uploaded as a 14-day Actions artifact.
+`images/incoming/`
 
-You can also run it manually with an exact `episode_path`.
+You may keep any filenames. The renderer sorts filenames alphabetically and assigns them to scenes 001, 002 and 003. For predictable ordering, use names such as `1.png`, `2.png`, `3.png`.
 
-## Independence guarantee
-All new code and data live under `science-channel/`; the two workflow files have unique names. Existing workflow YAML, scripts, settings, topic files, secrets, and schedules are not modified. The render workflow has read-only repository permissions. The planner only commits under `science-channel/`.
+## Render
+After uploading the three images, add `READY.txt` to that exact episode folder and commit. The renderer uses the three uploads for scenes 1–3 and creates non-blank science-themed visual cards for scenes 4–48. Narration and subtitles are read from `script.md` only; `image-prompts.md` is never used for audio or subtitles. Outputs are uploaded as a 14-day GitHub Actions artifact.
 
-## Notes
-- The first render is a pilot; verify narration pacing, subtitle alignment, and output quality before relying on 3 episodes/day.
-- Edge TTS is the existing low-friction voice option and depends on Microsoft's public service availability.
-- Do not commit READY.txt until all 47 exact filenames have been uploaded.
+You can also run the renderer manually by providing the exact `episode_path`.
+
+## Isolation
+All pipeline scripts, settings, topics, history and episode data live under `science-channel/`; the two workflow files have unique names. Existing workflow YAMLs, scripts, configs, topics, secrets, schedules and dependencies are left untouched.
