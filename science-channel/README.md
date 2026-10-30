@@ -148,15 +148,35 @@ Open the episode folder in GitHub and click a file to view it. To edit, click th
 
 ### Image style: no default presenter
 
-New Gemini-generated image prompts are instructed **not** to add a presenter, host, teacher, narrator, talking-head character, or recurring man by default. Images should show the actual scientific subject, action, environment, objects, or visual metaphor for that scene.
+New Gemini-generated image prompts are instructed **not** to add a presenter, host, teacher, narrator, talking-head character, or recurring man by default. Images should show the actual scientific subject, action, environment, objects, or visual metaphor for that scene. They also request a **1920×1080 landscape (16:9) JPG/JPEG**, with a rough image-size target of **500 KB–2 MB** where the image tool supports export settings. These are prompt targets, not guarantees; the preparation utility below performs the actual resize and compression.
 
 A human figure may appear when the scene itself calls for one, but should be part of the scene rather than standing in front of the viewer and explaining it. For example, a dream-flying scene should show a person soaring through dreamlike clouds and skies, not a man presenting an explanation.
 
 This prompt rule applies to **newly generated episodes**. Existing episode prompt files are not rewritten automatically. Edit an older `image-prompts.md` yourself if you want to apply the new visual direction to that episode.
 
-## 3. Generate the 48 images
+## 3. Generate and prepare the 48 images
 
 Open that episode's `image-prompts.md`. It contains one prompt for each numbered scene. Generate one image for each prompt, keeping the scene numbers clear.
+
+The prompts request **1920×1080, 16:9 JPG/JPEG** images and suggest roughly **500 KB–2 MB per image** as a quality target. Image generators do not always honor exact file format, dimensions or file size, so run the local preparation utility before uploading. It converts the 48 source images to numbered 1920×1080 JPGs and adjusts JPEG quality as needed to target a ZIP under **23 MiB**, leaving room below GitHub's 25 MB browser-upload limit.
+
+### Prepare a browser-upload-friendly ZIP
+
+1. Download the 48 generated images into one local folder. Keep filenames numbered by scene if possible (for example, `scene-001.png` through `scene-048.png`).
+2. Install Python 3 and Pillow once:
+   `python -m pip install Pillow`
+3. From the repository root, run:
+
+   ```bash
+   python science-channel/scripts/prepare_images.py "/path/to/48-original-images" "science-channel-images.zip"
+   ```
+
+   On Windows, use a folder path such as `"C:\\Users\\YourName\\Pictures\\science-images"`.
+4. The script checks for exactly 48 supported images, orders them by scene number when possible, converts them to 1920×1080 JPGs, and creates one ZIP with filenames `scene-001.jpg` through `scene-048.jpg`.
+5. Check the printed ZIP size. The default target is 23 MiB. If it reports that the ZIP is still larger, use Git command line or run it again with a lower target, for example `--max-mb 20`.
+6. Upload the resulting ZIP to that episode's `images/incoming/` folder.
+
+The utility creates the ZIP locally; it does not upload files to GitHub automatically. The renderer still validates the 48 images and creates its own 1280×720 working frames for the video.
 
 Recommended filenames:
 
