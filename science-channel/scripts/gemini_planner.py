@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent Gemini planner for the Science Channel pipeline."""
-import json, os, re, time, datetime
+import json, os, re, time, datetime, difflib
 from pathlib import Path
 import requests
 
@@ -50,6 +50,12 @@ def topic_key(value):
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 seen = {topic_key(x) for x in used_topics if x.strip()}
+def is_duplicate_topic(candidate):
+    key = topic_key(candidate)
+    return key in seen or any(
+        difflib.SequenceMatcher(None, key, topic_key(old)).ratio() >= 0.88
+        for old in used_topics if old.strip()
+    )
 seed_topics = [x.strip() for x in TOPICS.read_text().splitlines() if x.strip() and not x.lstrip().startswith("#")]
 
 # One planner run selects exactly ONE new topic. Retry if Gemini suggests a
@@ -62,7 +68,7 @@ Return JSON only: {"title":"...","angle":"one-sentence distinctive angle"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics[-1000:], ensure_ascii=False) +
 "\nSeed ideas (optional inspiration): " + json.dumps(seed_topics, ensure_ascii=False), 0.7)
     candidate = topic_data.get("title", "").strip()
-    if candidate and topic_key(candidate) not in seen:
+    if candidate and not is_duplicate_topic(candidate):
         topic = {"title": candidate, "angle": topic_data.get("angle", "")}
         break
 if topic is None:
@@ -163,6 +169,15 @@ prompt_lines = [f"# Image prompts — {final_title}", "",
 for prompt in prompts:
     prompt_lines += [f"## Scene {prompt['scene_number']:02d}", "", prompt["prompt"].strip(), ""]
 (folder / "image-prompts.md").write_text("\n".join(prompt_lines))
+(folder / "README.md").write_text(
+    f"# {final_title}\n\n- Episode: {episode_number:03d}\n- Date: {TODAY}\n"
+    "- Scenes/images required: 48\n- Status: Awaiting images\n\n"
+    "## Upload images\nUpload exactly 48 images, or one ZIP containing 48 images, into images/incoming/. "
+    "Use numbered filenames such as scene-001.webp through scene-048.webp to preserve scene order. "
+    "Then add READY.txt when the package is ready to render.\n\n"
+    "## Package files\n- episode.json: metadata\n- script.md: narration\n"
+    "- scenes.json: ordered scene data\n- image-prompts.md: image prompts\n"
+)
 (images / ".gitkeep").write_text("")
 
 # Persist the topic immediately after successfully creating its package.
