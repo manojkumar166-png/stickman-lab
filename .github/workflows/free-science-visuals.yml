@@ -51,10 +51,27 @@ jobs:
           echo "path=$P" >> "$GITHUB_OUTPUT"
       - name: Validate, narrate and render
         run: python science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
+      - name: Resolve topic-based artifact name
+        id: artifact
+        env:
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          metadata = json.loads((Path(os.environ["EPISODE_PATH"]) / "episode.json").read_text(encoding="utf-8"))
+          title = str(metadata.get("title", "")).strip()
+          if not title:
+              raise SystemExit("episode.json is missing its topic title")
+          slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80].strip("-")
+          if not slug:
+              raise SystemExit("Could not create a valid artifact name from the episode title")
+          print(f"name=science-channel-{slug}" >> os.environ["GITHUB_OUTPUT"])
+          PY
       - name: Upload rendered outputs
         uses: actions/upload-artifact@v4
         with:
-          name: science-channel-${{ github.run_id }}
+          name: ${{ steps.artifact.outputs.name }}
           path: |
             ${{ steps.episode.outputs.path }}/output/
           if-no-files-found: error
