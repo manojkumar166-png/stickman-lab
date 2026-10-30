@@ -40,34 +40,34 @@ if len(topics) != 3: raise ValueError(f"Expected exactly 3 topics, got {len(topi
 for idx, item in enumerate(topics,1):
     title = item["title"].strip()
     if title.casefold() in seen: raise ValueError("Gemini returned a previously used topic: "+title)
-    # Stage 1: create the complete narration script and exactly 47 ordered scenes.
+    # Stage 1: create the complete narration script and exactly 48 ordered scenes.
     script_prompt = f"""Write a complete 8–10 minute English science explainer episode titled {title!r}.
 Angle: {item.get('angle','')}. Audience: curious general viewers. Scientifically accurate, engaging,
 clear and conversational. Return JSON only with keys title, description, scenes.
-scenes must contain EXACTLY 47 objects, each with scene_number (1..47), narration (spoken narration only,
+scenes must contain EXACTLY 48 objects, each with scene_number (1..48), narration (spoken narration only,
 about 20–30 words), and visual_beat (brief description of what the narration is showing).
-Narration across all 47 scenes must form a coherent complete script of about 1,100–1,350 words.
-No image prompt in this stage. Number scenes consecutively from 1 to 47."""
+Narration across all 48 scenes must form a coherent complete script of about 1,100–1,350 words.
+No image prompt in this stage. Number scenes consecutively from 1 to 48."""
     episode = gemini(script_prompt,0.65)
     scenes = episode.get("scenes",[])
-    if len(scenes) != 47 or [s.get("scene_number") for s in scenes] != list(range(1,48)):
-        raise ValueError(f"Episode {idx}: script did not contain exactly 47 correctly numbered scenes")
+    if len(scenes) != 48 or [s.get("scene_number") for s in scenes] != list(range(1,48)):
+        raise ValueError(f"Episode {idx}: script did not contain exactly 48 correctly numbered scenes")
     if any(not str(s.get("narration","")).strip() for s in scenes): raise ValueError("Empty narration scene")
     # Stage 2: derive prompts from the finalized narration; exact one-to-one scene mapping.
-    prompt_data = gemini("""Create exactly 47 image prompts from this finalized 47-scene narration.
+    prompt_data = gemini("""Create exactly 48 image prompts from this finalized 48-scene narration.
 Do not rewrite, reorder, merge, or add scenes. Each prompt must depict its corresponding narration
 and visual beat. Include the same recurring presenter identity in every prompt when he appears.
 16:9 cinematic 3D family-animation aesthetic; no text, captions, logos or watermarks.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
 Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dumps(scenes,ensure_ascii=False),0.55)
     prompts = prompt_data.get("prompts",[])
-    if len(prompts)!=47 or [p.get("scene_number") for p in prompts]!=list(range(1,48)):
-        raise ValueError(f"Episode {idx}: expected exactly 47 ordered image prompts")
+    if len(prompts)!=48 or [p.get("scene_number") for p in prompts]!=list(range(1,48)):
+        raise ValueError(f"Episode {idx}: expected exactly 48 ordered image prompts")
     day_root = ROOT / "daily-episodes" / TODAY
     folder = day_root / f"episode-{idx:03d}"
-    images = folder / "images"
+    images = folder / "images" / "incoming"
     images.mkdir(parents=True,exist_ok=True)
-    (folder/"episode.json").write_text(json.dumps({"episode_id":f"{TODAY}-episode-{idx:03d}","date":TODAY,"title":episode.get("title",title),"description":episode.get("description",""),"scene_count":47,"target_minutes":"8-10","status":"awaiting_images"},indent=2,ensure_ascii=False)+"\n")
+    (folder/"episode.json").write_text(json.dumps({"episode_id":f"{TODAY}-episode-{idx:03d}","date":TODAY,"title":episode.get("title",title),"description":episode.get("description",""),"scene_count":48,"target_minutes":"8-10","status":"awaiting_images"},indent=2,ensure_ascii=False)+"\n")
     script = [f"# {episode.get('title',title)}","",episode.get("description",""),""]
     for s in scenes: script += [f"## Scene {s['scene_number']:02d}","",s["narration"].strip(),""]
     (folder/"script.md").write_text("\n".join(script))
@@ -77,6 +77,6 @@ Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dum
     (folder/"image-prompts.md").write_text("\n".join(prompt_lines))
     (images/".gitkeep").write_text("")
     history.setdefault("topics",[]).append(title)
-    print(f"Created {folder} with 47 narration scenes and 47 matching prompts")
+    print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload any 3 image files to images/incoming/")
 HISTORY.parent.mkdir(parents=True,exist_ok=True)
 HISTORY.write_text(json.dumps(history,indent=2,ensure_ascii=False)+"\n")
