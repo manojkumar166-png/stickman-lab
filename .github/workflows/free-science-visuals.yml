@@ -59,14 +59,15 @@ jobs:
             ${{ steps.episode.outputs.path }}/output/
           if-no-files-found: error
           retention-days: 14
-      - name: Send finished video to Telegram
+      - name: Send finished video to Telegram (non-blocking)
+        continue-on-error: true
         uses: PonomarevDA/telegram-upload@v1
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.episode.outputs.path }}/output/*.mp4
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
-      - name: Remove uploaded ZIP after successful delivery
+      - name: Remove uploaded ZIP after render and artifact save
         shell: bash
         run: |
           shopt -s nullglob
