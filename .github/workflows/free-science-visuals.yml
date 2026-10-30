@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "science-channel/daily-episodes/**/images/incoming/**"
+      - "!science-channel/daily-episodes/**/images/incoming/.gitkeep"
       - "science-channel/daily-episodes/**/READY.txt"
   workflow_dispatch:
     inputs:
