@@ -294,16 +294,6 @@ Science Channel code, settings, topics, history and episode files are kept under
 
 Unrelated repository workflows, scripts, topics, shared configuration and dependencies are outside this pipeline's scope and should not be edited for normal episode production.
 
+### Audio policy
 
-## Copyright-conscious adaptive background music
-
-The renderer supports automatic topic/mood-based BGM selection and mixing, but it never downloads or scrapes music. Download approved tracks manually from the official [YouTube Audio Library](https://www.youtube.com/audiolibrary), preferably tracks marked **Attribution not required**, then add the audio files under `assets/music/` and register them in `assets/music/library.json`.
-
-Each entry must include the exact title, artist, `source: "YouTube Audio Library"`, license name and URL, `verified: true`, and `attribution_required: false`. Tracks that fail these checks are ignored. The workflow selects tracks by episode topic and narration mood, crossfades when the selection changes, ducks music under narration, and fades out at the end. If no approved local track is available, it renders without BGM. Selected track details are saved in `output/bgm-track-record.txt`.
-
-This reduces avoidable music-rights risk but cannot guarantee zero copyright claims or strikes. Review the track's current license and YouTube Studio checks before public release.
-
-
-### Strict sound-effects policy
-
-Procedural/generated sound effects are disabled. The renderer will not synthesize whooshes, impacts or other sound effects because this project policy allows only sound effects downloaded directly from YouTube Audio Library. Until a separate manually approved Audio Library sound-effects manifest is implemented and populated, episodes use narration plus approved BGM only. Visual impact effects remain visual-only.
+The renderer adds narration only. Background music and sound effects have been removed; no manual audio approval or music assets are needed.
