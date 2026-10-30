@@ -55,7 +55,7 @@ for attempt in range(5):
 It must be clearly different from every previously used topic; do not rephrase or narrow an old topic.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics[-1000:], ensure_ascii=False) +
-"\\nSeed ideas (optional inspiration): " + json.dumps(seed_topics, ensure_ascii=False), 0.7)
+"\nSeed ideas (optional inspiration): " + json.dumps(seed_topics, ensure_ascii=False), 0.7)
     candidate = topic_data.get("title", "").strip()
     if candidate and topic_key(candidate) not in seen:
         topic = {"title": candidate, "angle": topic_data.get("angle", "")}
@@ -69,7 +69,7 @@ day_root = episode_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
 existing_numbers = []
 for path in day_root.glob("episode-*"):
-    match = re.fullmatch(r"episode-(\\d+)", path.name)
+    match = re.fullmatch(r"episode-(\d+)", path.name)
     if match:
         existing_numbers.append(int(match.group(1)))
 episode_number = max(existing_numbers, default=0) + 1
@@ -95,7 +95,7 @@ Do not rewrite, reorder, merge, or add scenes. Each prompt must depict its corre
 and visual beat. Include the same recurring presenter identity in every prompt when he appears.
 16:9 cinematic 3D family-animation aesthetic; no text, captions, logos or watermarks.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
-Presenter identity guide: """ + PRESENTER + "\\nFinal script scenes: " + json.dumps(scenes, ensure_ascii=False), 0.55)
+Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dumps(scenes, ensure_ascii=False), 0.55)
 prompts = prompt_data.get("prompts", [])
 if len(prompts) != 48 or [p.get("scene_number") for p in prompts] != list(range(1,49)):
     raise ValueError("Expected exactly 48 ordered image prompts")
@@ -110,24 +110,24 @@ final_title = episode.get("title", title).strip()
     "description": episode.get("description", ""),
     "scene_count": 48, "target_minutes": "8-10",
     "status": "awaiting_images"
-}, indent=2, ensure_ascii=False) + "\\n")
+}, indent=2, ensure_ascii=False) + "\n")
 
 script_lines = [f"# {final_title}", "", episode.get("description", ""), ""]
 for scene in scenes:
     script_lines += [f"## Scene {scene['scene_number']:02d}", "", scene["narration"].strip(), ""]
-(folder / "script.md").write_text("\\n".join(script_lines))
+(folder / "script.md").write_text("\n".join(script_lines))
 
-(folder / "scenes.json").write_text(json.dumps(scenes, indent=2, ensure_ascii=False) + "\\n")
+(folder / "scenes.json").write_text(json.dumps(scenes, indent=2, ensure_ascii=False) + "\n")
 prompt_lines = [f"# Image prompts — {final_title}", "",
                 "Generate each image manually in Meta AI. Keep scene numbering unchanged.", ""]
 for prompt in prompts:
     prompt_lines += [f"## Scene {prompt['scene_number']:02d}", "", prompt["prompt"].strip(), ""]
-(folder / "image-prompts.md").write_text("\\n".join(prompt_lines))
+(folder / "image-prompts.md").write_text("\n".join(prompt_lines))
 (images / ".gitkeep").write_text("")
 
 # Persist the topic immediately after successfully creating its package.
 history.setdefault("topics", []).append(final_title)
 HISTORY.parent.mkdir(parents=True, exist_ok=True)
-HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\\n")
+HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 print(f"Created ONE new topic: {final_title}")
 print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload 48 images (one ZIP or 48 files) to images/incoming/")
