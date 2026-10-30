@@ -103,7 +103,12 @@ For example, a scene about flying in dreams should show a human figure soaring t
 clouds and skies, not a man standing and explaining dreams.
 Keep all 48 images visually varied and specific to their own scene; do not force a character into
 scenes that do not need one.
-Use a 16:9 cinematic 3D family-animation aesthetic; no text, captions, logos or watermarks.
+Use a 16:9 cinematic 3D family-animation aesthetic, composed for a 1920x1080 landscape frame.
+Generate/export each image as a high-quality JPG/JPEG where the image tool allows format selection;
+aim for roughly 500 KB–2 MB per image without sacrificing important scientific detail. Avoid
+unnecessarily huge textures or empty high-detail backgrounds. Keep the full visual readable at 1920x1080.
+No text, captions, logos or watermarks. The requested format and size are targets, not guaranteed by
+the image model; the image-preparation utility will resize and compress the finished files before upload.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
 Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), 0.55)
 prompts = prompt_data.get("prompts", [])
