@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 """Topic-aware cinematic scene rendering and lightweight procedural sound design."""
-import math
-import random
-import wave
-from array import array
 from pathlib import Path
 
 TOPIC_RULES = [
@@ -93,47 +89,3 @@ def render_scene_clip(image, output, seconds, width, height, fps, profile, scene
         "-pix_fmt", "yuv420p", str(output)
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-def _sound_event(kind, rate, duration):
-    count = max(1, int(rate * duration))
-    values = array("h")
-    rng = random.Random(kind + str(count))
-    phase = 0.0
-    for n in range(count):
-        t = n / rate
-        fade = min(1.0, t / 0.025, max(0.0, (duration - t) / 0.10))
-        noise = rng.uniform(-1.0, 1.0)
-        if kind == "impact":
-            freq = 95 + 35 * math.exp(-t * 8)
-            sample = math.sin(phase) * math.exp(-t * 7) + noise * 0.22 * math.exp(-t * 12)
-        else:
-            freq = 620 - 420 * (t / duration)
-            sample = math.sin(phase) * 0.55 + noise * 0.30
-        phase += 2 * math.pi * freq / rate
-        values.append(int(max(-1.0, min(1.0, sample * fade * 0.20)) * 32767))
-    return values
-
-def create_sound_effect_track(path, duration, scene_durations, scene_plans, sample_rate=22050):
-    total = max(1, int(math.ceil(duration * sample_rate)))
-    mix = array("h", [0]) * total
-    elapsed = 0.0
-    events = []
-    for index, (seconds, plan) in enumerate(zip(scene_durations, scene_plans)):
-        if index and index % 4 == 0:
-            events.append((elapsed, "whoosh", 0.42))
-        if plan.get("impact"):
-            events.append((elapsed + min(0.18, seconds * 0.08), "impact", 0.62))
-        elapsed += seconds
-    for start, kind, length in events:
-        samples = _sound_event(kind, sample_rate, length)
-        offset = max(0, int(start * sample_rate))
-        for j, value in enumerate(samples):
-            pos = offset + j
-            if pos >= total:
-                break
-            mixed = mix[pos] + int(value * 0.55)
-            mix[pos] = max(-32768, min(32767, mixed))
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        wav.writeframes(mix.tobytes())
