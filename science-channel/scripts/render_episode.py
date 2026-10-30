@@ -10,8 +10,6 @@ SETTINGS = json.loads((ROOT/"settings.json").read_text())
 episode = Path(sys.argv[1]).resolve()
 if ROOT.resolve() not in episode.parents:
     raise SystemExit("Episode path must be inside science-channel")
-if not (episode/"READY.txt").is_file():
-    raise SystemExit("READY.txt is missing")
 meta = json.loads((episode/"episode.json").read_text())
 scene_count = int(meta.get("scene_count", SETTINGS.get("scene_count", 48)))
 scenes = json.loads((episode/"scenes.json").read_text())
