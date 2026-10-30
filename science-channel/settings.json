@@ -15,5 +15,20 @@
   "episode_root": "science-channel/daily-episodes",
   "shorts_enabled": false,
   "required_uploaded_images": 48,
-  "uploaded_image_folder": "images/incoming"
+  "uploaded_image_folder": "images/incoming",
+  "cinematic_effects": {
+    "enabled": true,
+    "mode": "adaptive",
+    "intensity": "balanced",
+    "topic_detection": true,
+    "scene_analysis": true,
+    "adaptive_color_grading": true,
+    "adaptive_camera": true,
+    "adaptive_particles": true,
+    "selective_impacts": true,
+    "sound_effects": true,
+    "max_major_impacts": 6,
+    "preserve_karaoke_subtitles": true,
+    "fallback_to_original": true
+  }
 }
