@@ -1,6 +1,6 @@
 {
-  "target_minutes": 8,
-  "scene_count": 47,
+  "target_minutes": 1,
+  "scene_count": 5,
   "width": 1280,
   "height": 720,
   "fps": 24,
@@ -9,5 +9,5 @@
   "speech_rate": "+0%",
   "artifact_retention_days": 7,
   "topic_history_file": "topic_history.json",
-  "use_ai_art": true
+  "use_ai_art": false
 }
