@@ -151,7 +151,7 @@ if cinematic_enabled:
             for index, (image_path, seconds, scene_plan) in enumerate(zip(visual_paths, durations, plan["scenes"]), 1):
                 clip = clip_dir/f"scene-{index:03d}.mp4"
                 render_scene_clip(image_path, clip, seconds, SETTINGS["width"], SETTINGS["height"], SETTINGS["fps"], plan["profile"], scene_plan)
-                listing.write(f"file '{clip.resolve()}'\\n")
+                listing.write(f"file '{clip.resolve()}'\n")
         run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(clip_list),"-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(silent)])
         cinematic_used = True
         print(f"Adaptive cinematic profile: {plan['topic']}")
