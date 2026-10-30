@@ -7,17 +7,18 @@ The daily planner creates three episodes under `science-channel/daily-episodes/Y
 
 Required secret: `GEMINI_API_KEY`. Optional variable: `SCIENCE_GEMINI_MODEL`.
 
-## Your image step — only three images
-For each episode, copy the first three prompts from `image-prompts.md` into Meta AI. Upload exactly three image files (PNG, JPG, JPEG or WebP) into:
+## Images: ZIP or individual files
+For each episode, generate all 48 images from `image-prompts.md`. You can upload either:
 
-`images/incoming/`
+- **One ZIP** containing exactly 48 PNG, JPG, JPEG or WebP images; or
+- **48 individual image files**.
 
-You may keep any filenames. The renderer sorts filenames alphabetically and assigns them to scenes 001, 002 and 003. For predictable ordering, use names such as `1.png`, `2.png`, `3.png`.
+Place the ZIP or all individual images inside that episode's `images/incoming/` folder. The renderer accepts filenames such as `scene-001.png` through `scene-048.png`. If filenames contain scene numbers, it follows those numbers. If they do not, it sorts filenames alphabetically. Do not mix ZIPs and individual images in one upload.
 
 ## Render
-After uploading the three images, add `READY.txt` to that exact episode folder and commit. The renderer uses the three uploads for scenes 1–3 and creates non-blank science-themed visual cards for scenes 4–48. Narration and subtitles are read from `script.md` only; `image-prompts.md` is never used for audio or subtitles. Outputs are uploaded as a 14-day GitHub Actions artifact.
+Commit the images and `READY.txt` together in the exact episode folder. The render workflow validates 48 images and 48 script sections, normalizes images to 16:9, creates narration with Edge TTS, adds subtitles, and uploads the finished video as a 14-day GitHub Actions artifact.
 
-You can also run the renderer manually by providing the exact `episode_path`.
+You can also run it manually with the exact `episode_path`.
 
 ## Isolation
 All pipeline scripts, settings, topics, history and episode data live under `science-channel/`; the two workflow files have unique names. Existing workflow YAMLs, scripts, configs, topics, secrets, schedules and dependencies are left untouched.
