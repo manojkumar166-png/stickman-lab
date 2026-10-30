@@ -95,3 +95,37 @@ git pull origin main --rebase
 git add README.md
 git commit -m "Update README with all three workflows and latest fixes"
 git push
+
+## 🎵 Copyright-conscious adaptive BGM (Free Visual Science)
+
+The science-channel renderer can automatically select, transition and mix background music by episode topic and narration mood. It does **not** scrape or download music from YouTube.
+
+### Add approved music tracks
+1. Download a track yourself from the official [YouTube Audio Library](https://www.youtube.com/audiolibrary) while signed in.
+2. Prefer tracks marked **Attribution not required**.
+3. Verify the track's current Audio Library terms and keep a record of its title, artist and license.
+4. Add the audio file under `science-channel/assets/music/`.
+5. Add its metadata to `science-channel/assets/music/library.json`, using this shape:
+
+```json
+{
+  "tracks": [
+    {
+      "file": "space/approved-track.mp3",
+      "title": "Exact Audio Library track title",
+      "artist": "Exact artist name",
+      "source": "YouTube Audio Library",
+      "license_name": "YouTube Audio Library license",
+      "license_url": "https://www.youtube.com/audiolibrary",
+      "verified": true,
+      "attribution_required": false,
+      "topics": ["space", "general"],
+      "moods": ["wonder", "inspiring"]
+    }
+  ]
+}
+```
+
+Only tracks explicitly marked verified, sourced from YouTube Audio Library, and marked as not requiring attribution are eligible. The renderer records selected track details in `output/bgm-track-record.txt`. If no approved local track is available, rendering continues without BGM. GitHub Actions never downloads music from YouTube.
+
+**Important:** This reduces avoidable music-rights risk but cannot guarantee that a video will never receive a claim or takedown. Recheck the track's license and YouTube Studio copyright checks before public release. Audio Library licensing applies to YouTube use; do not assume it grants rights for other platforms.
