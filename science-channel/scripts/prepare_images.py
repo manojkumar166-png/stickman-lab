@@ -21,7 +21,7 @@ def scene_number(path):
 
 
 def natural_key(path):
-    return [int(part) if part.isdigit() else part.casefold()
+    return [(0, int(part)) if part.isdigit() else (1, part.casefold())
             for part in re.split(r"(\d+)", path.name)]
 
 
@@ -57,9 +57,9 @@ def main():
             target = temp_dir / f"scene-{index:03d}.jpg"
             try:
                 with Image.open(source) as original:
+                    if getattr(original, "is_animated", False):
+                        original.seek(0)
                     frame = ImageOps.exif_transpose(original)
-                    if getattr(frame, "is_animated", False):
-                        frame.seek(0)
                     frame = ImageOps.fit(frame.convert("RGB"), (1920, 1080),
                                          method=Image.Resampling.LANCZOS)
                     frame.save(target, "JPEG", quality=82, optimize=True, progressive=True)
@@ -78,9 +78,9 @@ def main():
             quality -= 5
             for source, target in zip(files, compressed):
                 with Image.open(source) as original:
+                    if getattr(original, "is_animated", False):
+                        original.seek(0)
                     frame = ImageOps.exif_transpose(original)
-                    if getattr(frame, "is_animated", False):
-                        frame.seek(0)
                     frame = ImageOps.fit(frame.convert("RGB"), (1920, 1080),
                                          method=Image.Resampling.LANCZOS)
                     frame.save(target, "JPEG", quality=quality, optimize=True, progressive=True)
