@@ -88,9 +88,9 @@ jobs:
                 deleted=true
                 break
               fi
-              if gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$file" \\
-                -f message="Delete processed image ZIP after render" \\
-                -f sha="$sha" \\
+              if gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$file" \
+                -f message="Delete processed image ZIP after render" \
+                -f sha="$sha" \
                 -f branch=main; then
                 deleted=true
                 break
