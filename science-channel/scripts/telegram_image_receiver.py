@@ -47,7 +47,7 @@ def newest_episode():
     episodes = []
     if ROOT.exists():
         for date_dir in ROOT.iterdir():
-            if not date_dir.is_dir() or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", date_dir.name):
+            if not date_dir.is_dir() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_dir.name):
                 continue
             for episode_dir in date_dir.glob("episode-*"):
                 if episode_dir.is_dir() and (episode_dir / "episode.json").is_file():
@@ -75,7 +75,7 @@ def main():
     selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
     if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
         state["episode_path"] = str(latest)
-        send(f"Automatically selected the newest episode: {latest.parent.name}/{latest.name}. Send its images with captions scene-01 to scene-48.")
+        send(f"Automatically selected the newest episode: {latest.parent.name}/{latest.name}. Send all 48 images in order; I will number them automatically from scene-01 to scene-48.")
     updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
     changed = bool(latest and state.get("episode_path") == str(latest))
     for update in updates:
@@ -86,7 +86,7 @@ def main():
             continue
         text = (msg.get("text") or "").strip()
         if text.startswith("/start") or text.startswith("/help"):
-            send("I automatically select the newest episode. Send up to 48 images with captions scene-01 through scene-48, or I’ll assign the next missing scene. You can optionally use /episode YYYY-MM-DD/episode-001 to choose a different episode. I create READY.txt only when all 48 are present.")
+            send("I automatically select the newest episode. Send up to 48 images in order. I automatically number them scene-01, scene-02, and so on. You can optionally use /episode YYYY-MM-DD/episode-001 to choose a different episode. I create READY.txt only when all 48 are present.")
             continue
         if text.startswith("/episode"):
             value = text.split(maxsplit=1)[1] if len(text.split(maxsplit=1)) == 2 else ""
@@ -96,7 +96,7 @@ def main():
             else:
                 state["episode_path"] = str(folder)
                 changed = True
-                send(f"Selected {folder.parent.name}/{folder.name}. Send images with captions scene-01 to scene-48, or send them without captions for automatic numbering.")
+                send(f"Selected {folder.parent.name}/{folder.name}. Send images in order; I will number them automatically.")
             continue
         file_id, ext = image_payload(msg)
         if not file_id:
@@ -105,13 +105,9 @@ def main():
         if not state.get("episode_path") or not (episode / "episode.json").is_file():
             send("No episode is available yet. Wait until the daily planner creates one, then send your image again.")
             continue
-        caption = (msg.get("caption") or "").strip()
-        match = SCENE_RE.search(caption)
-        if match:
-            number = int(match.group(1))
-        else:
-            present = {int(m.group(1)) for p in (episode / "images/incoming").glob("scene-*.*") if (m := re.match(r"scene-(\d{2})\.", p.name))}
-            number = next((n for n in range(1, 49) if n not in present), 0)
+        # Always assign the next empty scene in arrival order; users never need to rename or caption images.
+        present = {int(m.group(1)) for p in (episode / "images/incoming").glob("scene-*.*") if (m := re.match(r"scene-(\\d{2})\\.", p.name))}
+        number = next((n for n in range(1, 49) if n not in present), 0)
         if not 1 <= number <= 48:
             send("All 48 scene slots are already filled. No more images were added.")
             continue
