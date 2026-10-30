@@ -6,6 +6,7 @@ import asyncio
 import edge_tts
 from karaoke_subtitles import generate_karaoke_ass
 from cinematic_effects import analyze_scenes, render_scene_clip, create_sound_effect_track
+from bgm_engine import create_background_music
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT/"settings.json").read_text())
@@ -165,19 +166,61 @@ if cinematic_enabled:
 else:
     render_original_visuals()
 
-def mux_original_audio():
-    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+bgm_path = out/"background-music.wav"
+bgm_settings = SETTINGS.get("bgm", {})
+try:
+    create_background_music(bgm_path, str(meta.get("title", "")), narration, durations, bgm_settings)
+except Exception as exc:
+    print(f"WARNING: BGM generation failed; continuing without music: {exc}")
+    bgm_path.unlink(missing_ok=True)
 
-if cinematic_used and soundtrack.exists():
-    try:
-        run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-i",str(soundtrack),"-filter_complex","[1:a][2:a]amix=inputs=2:weights='1 0.22':normalize=0[aout]","-map","0:v:0","-map","[aout]","-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-    except Exception as exc:
-        print(f"WARNING: Cinematic audio mix failed; retrying original render: {exc}")
+def mux_final_audio():
+    cmd = ["ffmpeg", "-y", "-i", str(silent), "-i", str(audio)]
+    has_sfx = cinematic_used and soundtrack.exists()
+    has_bgm = bgm_path.exists()
+    sfx_index = None
+    bgm_index = None
+    if has_sfx:
+        sfx_index = 2
+        cmd += ["-i", str(soundtrack)]
+    if has_bgm:
+        bgm_index = 3 if has_sfx else 2
+        cmd += ["-i", str(bgm_path)]
+
+    filters = []
+    if has_bgm:
+        filters.append(f"[{bgm_index}:a]volume=0.18[bgmquiet]")
+        filters.append(f"[bgmquiet][1:a]sidechaincompress=threshold=0.025:ratio=8:attack=25:release=600[ducked]")
+    if has_sfx:
+        filters.append(f"[{sfx_index}:a]volume=0.22[sfxquiet]")
+        filters.append("[1:a][sfxquiet]amix=inputs=2:weights='1 1':normalize=0[voice_sfx]")
+        if has_bgm:
+            filters.append("[voice_sfx][ducked]amix=inputs=2:weights='1 1':normalize=0[aout]")
+        else:
+            filters.append("[voice_sfx]anull[aout]")
+    elif has_bgm:
+        filters.append("[1:a][ducked]amix=inputs=2:weights='1 1':normalize=0[aout]")
+
+    cmd += ["-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu"]
+    if filters:
+        cmd += ["-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]"]
+    else:
+        cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+    cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+            "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(video)]
+    run(cmd)
+
+try:
+    mux_final_audio()
+except Exception as exc:
+    print(f"WARNING: Final audio mix failed; retrying with original narration only: {exc}")
+    bgm_path.unlink(missing_ok=True)
+    soundtrack.unlink(missing_ok=True)
+    if cinematic_used:
         cinematic_used = False
-        soundtrack.unlink(missing_ok=True)
         render_original_visuals()
-        mux_original_audio()
-else:
-    mux_original_audio()
+    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+
 mode = "adaptive cinematic" if cinematic_used else "original fallback"
-print(f"Rendered {video} in {mode} mode with karaoke captions ({word_count} timed words)")
+music_mode = "with adaptive BGM" if bgm_path.exists() else "without BGM (safe fallback)"
+print(f"Rendered {video} in {mode} mode {music_mode} with karaoke captions ({word_count} timed words)")
