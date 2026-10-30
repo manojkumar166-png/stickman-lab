@@ -88,16 +88,28 @@ jobs:
           slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80].strip("-")
           if not slug:
               raise SystemExit("Could not create a valid artifact name from the episode title")
+          filename = re.sub(r'[<>:"/\\|?*]', "", title).strip().rstrip(".")
+          if not filename:
+              raise SystemExit("Could not create a valid MP4 filename from the episode title")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"filename={filename}.mp4\n")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"name=science-channel-{slug}\n")
           PY
-      - name: Upload rendered outputs
+      - name: Rename final video to the exact episode topic
+        env:
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+          VIDEO_FILENAME: ${{ steps.artifact.outputs.filename }}
+        run: |
+          test -f "$EPISODE_PATH/output/final-video.mp4"
+          mv "$EPISODE_PATH/output/final-video.mp4" "$EPISODE_PATH/output/$VIDEO_FILENAME"
+      - name: Upload final MP4 only
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: |
-            ${{ steps.episode.outputs.path }}/output/
+          path: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
           if-no-files-found: error
+          compression-level: 0
           retention-days: 2
       - name: Send finished video to Telegram (non-blocking)
         continue-on-error: true
