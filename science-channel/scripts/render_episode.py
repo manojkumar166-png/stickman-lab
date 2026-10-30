@@ -21,11 +21,16 @@ incoming = image_dir/"incoming"
 incoming.mkdir(parents=True, exist_ok=True)
 out = episode/"output"
 out.mkdir(exist_ok=True)
-allowed = {".png", ".jpg", ".jpeg", ".webp"}
+allowed = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
 def scene_number(path):
-    match = re.search(r"(?:scene[-_ ]*)?(\d{1,3})$", path.stem, re.I)
-    return int(match.group(1)) if match else None
+    # Accept names such as scene1, scene-01, img1, image_01, or 01.
+    # Prefer an explicit scene/img/image number; otherwise use the last number in the stem.
+    match = re.search(r"(?:scene|img|image)[-_ ]*(\\d{1,3})(?!.*\\d)", path.stem, re.I)
+    if match:
+        return int(match.group(1))
+    numbers = re.findall(r"\\d+", path.stem)
+    return int(numbers[-1]) if numbers else None
 
 def normalize(src, number, target_dir):
     target = target_dir/f"scene-{number:03d}.png"
