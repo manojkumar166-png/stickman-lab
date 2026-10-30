@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
 from karaoke_subtitles import generate_karaoke_ass
+from cinematic_effects import analyze_scenes, render_scene_clip, create_sound_effect_track
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT/"settings.json").read_text())
@@ -128,10 +129,45 @@ with concat.open("w") as f:
         f.write(f"file '{path.resolve()}'\nduration {seconds:.4f}\n")
     f.write(f"file '{visual_paths[-1].resolve()}'\n")
 silent = out/"visuals.mp4"
-run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
-
 captions = out/"karaoke-captions.ass"
 word_count = generate_karaoke_ass(audio, captions, SETTINGS["width"], SETTINGS["height"])
 video = out/"final-video.mp4"
-run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-print(f"Rendered {video} with karaoke captions ({word_count} timed words)")
+effects_settings = SETTINGS.get("cinematic_effects", {})
+cinematic_enabled = bool(effects_settings.get("enabled", False))
+cinematic_used = False
+soundtrack = out/"cinematic-sfx.wav"
+
+def render_original_visuals():
+    run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
+
+if cinematic_enabled:
+    try:
+        title = str(meta.get("title", ""))
+        plan = analyze_scenes(title, narration, int(effects_settings.get("max_major_impacts", 6)))
+        clip_dir = out/"cinematic-scenes"
+        clip_dir.mkdir(exist_ok=True)
+        clip_list = out/"cinematic-scenes.txt"
+        with clip_list.open("w", encoding="utf-8") as listing:
+            for index, (image_path, seconds, scene_plan) in enumerate(zip(visual_paths, durations, plan["scenes"]), 1):
+                clip = clip_dir/f"scene-{index:03d}.mp4"
+                render_scene_clip(image_path, clip, seconds, SETTINGS["width"], SETTINGS["height"], SETTINGS["fps"], plan["profile"], scene_plan)
+                listing.write(f"file '{clip.resolve()}'\\n")
+        run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(clip_list),"-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(silent)])
+        cinematic_used = True
+        print(f"Adaptive cinematic profile: {plan['topic']}")
+        if effects_settings.get("sound_effects", True):
+            create_sound_effect_track(soundtrack, duration, durations, plan["scenes"])
+    except Exception as exc:
+        print(f"WARNING: Cinematic rendering failed; using original renderer: {exc}")
+        cinematic_used = False
+        soundtrack.unlink(missing_ok=True)
+        render_original_visuals()
+else:
+    render_original_visuals()
+
+if cinematic_used and soundtrack.exists():
+    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-i",str(soundtrack),"-filter_complex","[1:a][2:a]amix=inputs=2:weights='1 0.22':normalize=0[aout]","-map","0:v:0","-map","[aout]","-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+else:
+    run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
+mode = "adaptive cinematic" if cinematic_used else "original fallback"
+print(f"Rendered {video} in {mode} mode with karaoke captions ({word_count} timed words)")
