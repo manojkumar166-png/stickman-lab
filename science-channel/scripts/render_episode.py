@@ -26,10 +26,10 @@ allowed = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 def scene_number(path):
     # Accept names such as scene1, scene-01, img1, image_01, or 01.
     # Prefer an explicit scene/img/image number; otherwise use the last number in the stem.
-    match = re.search(r"(?:scene|img|image)[-_ ]*(\\d{1,3})(?!.*\\d)", path.stem, re.I)
+    match = re.search(r"(?:scene|img|image)[-_ ]*(\d{1,3})(?!.*\d)", path.stem, re.I)
     if match:
         return int(match.group(1))
-    numbers = re.findall(r"\\d+", path.stem)
+    numbers = re.findall(r"\d+", path.stem)
     return int(numbers[-1]) if numbers else None
 
 def normalize(src, number, target_dir):
@@ -87,7 +87,7 @@ else:
     else:
         def natural_key(path):
             return [int(part) if part.isdigit() else part.casefold()
-                    for part in re.split(r"(\\d+)", path.name)]
+                    for part in re.split(r"(\d+)", path.name)]
         ordered = sorted(sources, key=natural_key)
     normalized = out/"normalized-images"
     normalized.mkdir(exist_ok=True)
@@ -95,14 +95,14 @@ else:
 
 # Narration text comes only from script.md. No subtitle track is generated or burned into the video.
 script = (episode/"script.md").read_text()
-blocks = re.findall(r"^## Scene\\s+(\\d+)\\s*\\n+([\\s\\S]*?)(?=^## Scene\\s+\\d+\\s*$|\\Z)", script, re.M)
+blocks = re.findall(r"^## Scene\s+(\d+)\s*\n+([\s\S]*?)(?=^## Scene\s+\d+\s*$|\Z)", script, re.M)
 if len(blocks) != scene_count:
     raise SystemExit(f"script.md must contain exactly {scene_count} Scene sections")
 narration = []
 for i, (num, body) in enumerate(blocks, 1):
     if int(num) != i:
         raise SystemExit("script.md scene order mismatch")
-    text = re.sub(r"\\s+", " ", body).strip()
+    text = re.sub(r"\s+", " ", body).strip()
     if not text:
         raise SystemExit(f"Empty narration in script scene {i}")
     narration.append(text)
@@ -124,8 +124,8 @@ durations = [duration*w/total for w in weights]
 concat = out/"images.txt"
 with concat.open("w") as f:
     for path, seconds in zip(visual_paths, durations):
-        f.write(f"file '{path.resolve()}'\\nduration {seconds:.4f}\\n")
-    f.write(f"file '{visual_paths[-1].resolve()}'\\n")
+        f.write(f"file '{path.resolve()}'\nduration {seconds:.4f}\n")
+    f.write(f"file '{visual_paths[-1].resolve()}'\n")
 silent = out/"visuals.mp4"
 run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
 
