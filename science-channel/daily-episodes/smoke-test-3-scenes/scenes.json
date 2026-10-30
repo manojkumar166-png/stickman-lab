@@ -1,0 +1,17 @@
+[
+  {
+    "scene_number": 1,
+    "narration": "Welcome to our tiny science video test.",
+    "visual_beat": "Synthetic test frame 1"
+  },
+  {
+    "scene_number": 2,
+    "narration": "A sample image appears while the narration continues.",
+    "visual_beat": "Synthetic test frame 2"
+  },
+  {
+    "scene_number": 3,
+    "narration": "That completes our three-scene rendering check.",
+    "visual_beat": "Synthetic test frame 3"
+  }
+]
