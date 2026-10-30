@@ -64,11 +64,9 @@ Daily schedule or manual start
 - **What it does not do:** The planner does not generate the 48 image files and does not render the MP4. You generate the images and upload them before rendering.
 
 
-### Adaptive cinematic effects and fallback
+### Adaptive cinematic visuals and audio safety
 
-The renderer supports topic-aware effects controlled in science-channel/settings.json under cinematic_effects. The default test configuration enables adaptive mode with balanced intensity. It classifies the episode using the title and narration (space, biology, chemistry, technology, earth/nature, or a neutral general profile), then applies a matching color/contrast treatment and gentle alternating camera movement. Narration cues can trigger a brief impact flash; major impacts are capped to avoid visual fatigue. A quiet procedural whoosh is added every few scenes, with a soft impact tone for selected moments. No paid API or additional Python package is required for the effects engine.
-
-To return to the original visual style, set cinematic_effects.enabled to false and run the renderer again. If the adaptive visual/effect generation itself fails, the renderer automatically falls back to the original still-image render path while preserving narration and karaoke captions. The original image inputs and narration are not overwritten. The first test can be run from the adaptive-cinematic-effects branch using workflow_dispatch; the workflow checks out the selected branch for manual tests.
+The renderer uses topic-aware color grading, gentle camera movement and selective visual impact flashes. It does not add background music or sound effects. The final audio contains only the generated narration. The BGM engine, music manifest and procedural sound-effect generator have been removed from this workflow.
 
 ### The manual creative stage — your review and images
 
