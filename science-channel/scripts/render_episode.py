@@ -23,6 +23,9 @@ incoming = image_dir/"incoming"
 incoming.mkdir(parents=True, exist_ok=True)
 out = episode/"output"
 out.mkdir(exist_ok=True)
+# Temporary render assets stay separate from the final deliverable.
+work = out/"work"
+work.mkdir(exist_ok=True)
 allowed = {".png", ".jpg", ".jpeg", ".webp"}
 
 def scene_number(path):
@@ -38,7 +41,7 @@ def normalize(src, number, target_dir):
 if meta.get("smoke_test") is True:
     visual_paths = []
     for n in range(1, scene_count+1):
-        target = out/f"smoke-scene-{n:03d}.png"
+        target = work/f"smoke-scene-{n:03d}.png"
         color = ["0x173B63","0x167C80","0xE0A82E"][(n-1)%3]
         subprocess.run(["ffmpeg","-y","-f","lavfi","-i",f"color=c={color}:s=1280x720:d=1","-frames:v","1",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         visual_paths.append(target)
@@ -51,7 +54,7 @@ else:
     if archives:
         if len(archives) != 1:
             raise SystemExit("Upload exactly one ZIP archive per episode.")
-        extract_dir = out/"unzipped-images"
+        extract_dir = work/"unzipped-images"
         extract_dir.mkdir(exist_ok=True)
         with zipfile.ZipFile(archives[0]) as zf:
             members = []
@@ -75,6 +78,16 @@ else:
             raise SystemExit(f"Upload exactly {scene_count} individual images or one ZIP containing {scene_count}; found {len(individual)} images.")
         sources = individual
 
+    # Preflight uploaded images before spending time generating narration.
+    if len({p.name.casefold() for p in sources}) != len(sources):
+        raise SystemExit("Image filenames collide after ZIP extraction; give every scene a unique filename.")
+    for source in sources:
+        check = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(source), "-frames:v", "1", "-f", "null", "-"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
+        )
+        if check.returncode != 0:
+            raise SystemExit(f"Image validation failed for {source.name}: {check.stderr[-500:]}")
     # If filenames contain scene numbers, honor those; otherwise use alphabetical order.
     numbered = [scene_number(p) for p in sources]
     if all(n is not None for n in numbered):
@@ -83,7 +96,7 @@ else:
         ordered = [p for _, p in sorted(zip(numbered, sources), key=lambda item:item[0])]
     else:
         ordered = sorted(sources, key=lambda p:p.name.casefold())
-    normalized = out/"normalized-images"
+    normalized = work/"normalized-images"
     normalized.mkdir(exist_ok=True)
     visual_paths = [normalize(src, n, normalized) for n, src in enumerate(ordered, 1)]
 
@@ -101,7 +114,7 @@ for i, (num, body) in enumerate(blocks, 1):
         raise SystemExit(f"Empty narration in script scene {i}")
     narration.append(text)
 
-audio = out/"narration.mp3"
+audio = work/"narration.mp3"
 async def make_audio():
     communicate = edge_tts.Communicate(" ".join(narration), SETTINGS["voice"], rate=SETTINGS["speech_rate"])
     await communicate.save(str(audio))
@@ -115,15 +128,15 @@ duration = float(probe.strip())
 weights = [max(1, len(t.split())) for t in narration]
 total = sum(weights)
 durations = [duration*w/total for w in weights]
-concat = out/"images.txt"
+concat = work/"images.txt"
 with concat.open("w") as f:
     for path, seconds in zip(visual_paths, durations):
         f.write(f"file '{path.resolve()}'\nduration {seconds:.4f}\n")
     f.write(f"file '{visual_paths[-1].resolve()}'\n")
-silent = out/"visuals.mp4"
+silent = work/"visuals.mp4"
 run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
 
-srt = out/"subtitles.srt"
+srt = work/"subtitles.srt"
 cursor = 0.0
 def stamp(t):
     ms=round(t*1000); h=ms//3600000; ms%=3600000; m=ms//60000; ms%=60000; sec=ms//1000; ms%=1000
