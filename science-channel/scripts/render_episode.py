@@ -73,14 +73,17 @@ else:
             raise SystemExit(f"Upload exactly {scene_count} individual images or one ZIP containing {scene_count}; found {len(individual)} images.")
         sources = individual
 
-    # If filenames contain scene numbers, honor those; otherwise use alphabetical order.
+    # Honor explicit 1..scene_count numbering when complete and unique.
+    # Otherwise use natural filename order (image2 before image10), which supports
+    # common ZIP names such as 1.png, 2.png ... 48.png or generated image names.
     numbered = [scene_number(p) for p in sources]
-    if all(n is not None for n in numbered):
-        if sorted(numbered) != list(range(1, scene_count+1)):
-            raise SystemExit("Numbered image filenames must cover scene-001 through scene-048 exactly, without duplicates.")
+    if all(n is not None for n in numbered) and sorted(numbered) == list(range(1, scene_count+1)):
         ordered = [p for _, p in sorted(zip(numbered, sources), key=lambda item:item[0])]
     else:
-        ordered = sorted(sources, key=lambda p:p.name.casefold())
+        def natural_key(path):
+            return [int(part) if part.isdigit() else part.casefold()
+                    for part in re.split(r"(\\d+)", path.name)]
+        ordered = sorted(sources, key=natural_key)
     normalized = out/"normalized-images"
     normalized.mkdir(exist_ok=True)
     visual_paths = [normalize(src, n, normalized) for n, src in enumerate(ordered, 1)]
