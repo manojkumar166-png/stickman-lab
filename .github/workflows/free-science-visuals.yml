@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       episode_path:
-        description: "Optional exact episode folder (for example science-channel/daily-episodes/2026-10-30/episode-001)"
+        description: "Optional exact episode folder (daily episode or science-channel/series/<slug>/season-01/part-001)"
         required: false
         type: string
         default: ""
@@ -56,7 +56,7 @@ jobs:
                   candidate="${f%%/images/incoming/*}"
                 fi
                 if [ -z "$P" ] || [[ "$candidate" > "$P" ]]; then P="$candidate"; fi
-              done < <(find science-channel/daily-episodes -type f \( -name READY.txt -o \( -path '*/images/incoming/*' ! -name '.gitkeep' \) \) | sort)
+              done < <(find science-channel/daily-episodes science-channel/series -type f \( -name READY.txt -o \( -path '*/images/incoming/*' ! -name '.gitkeep' \) \) | sort)
             fi
           else
             git diff-tree --no-commit-id --name-only -r "${{ github.event.before }}" "${{ github.sha }}" > /tmp/changed.txt
@@ -67,7 +67,7 @@ jobs:
             fi
             P="${EPISODES[0]}"
           fi
-          case "$P" in science-channel/daily-episodes/*) ;; *) echo "Invalid episode path: $P"; exit 1;; esac
+          case "$P" in science-channel/daily-episodes/*|science-channel/series/*) ;; *) echo "Invalid episode path: $P"; exit 1;; esac
           case "$P" in *".."*) echo "Invalid episode path: traversal is not allowed."; exit 1;; esac
           test -f "$P/episode.json" || { echo "episode.json not found in $P"; exit 1; }
           echo "path=$P" >> "$GITHUB_OUTPUT"
