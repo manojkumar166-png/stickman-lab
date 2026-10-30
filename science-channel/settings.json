@@ -1,0 +1,18 @@
+{
+  "episodes_per_day": 3,
+  "scene_count": 47,
+  "target_minutes_min": 8,
+  "target_minutes_max": 10,
+  "language": "English",
+  "aspect_ratio": "16:9",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "gemini_model": "gemini-2.5-flash",
+  "voice": "en-US-AndrewMultilingualNeural",
+  "speech_rate": "+0%",
+  "topic_file": "science-channel/topics.txt",
+  "history_file": "science-channel/history/generated-topics.json",
+  "episode_root": "science-channel/daily-episodes",
+  "shorts_enabled": false
+}
