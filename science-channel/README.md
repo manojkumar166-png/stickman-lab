@@ -29,8 +29,8 @@ Daily schedule or manual start
    Keep all 48 scenes in the same order
             |
             v
-4. YOU GENERATE AND UPLOAD 48 IMAGES
-   One ZIP with 48 images OR 48 separate image files
+4. YOU GENERATE, COMPRESS AND UPLOAD 48 IMAGES
+   Prepare one optimized ZIP (target under 23 MiB) OR 48 separate files
    Upload into that episode's images/incoming/ folder
             |
             v
@@ -92,7 +92,8 @@ If you revise narration after generating images, revise the matching prompt and 
 2. Open the new episode folder under `science-channel/daily-episodes/YYYY-MM-DD/episode-00N/`.
 3. Review or edit `script.md`, `scenes.json`, `episode.json`, and `image-prompts.md`.
 4. Generate exactly 48 images from the image prompts.
-5. Upload one ZIP containing the 48 images, or upload 48 individual images, into that episode's `images/incoming/` folder.
+5. Run `science-channel/scripts/prepare_images.py` to resize/compress the images into one ZIP targeting under 23 MiB, or use Git command line for larger files.
+6. Upload that ZIP (or 48 individual images) into that episode's `images/incoming/` folder.
 6. Add an empty `READY.txt` file in the episode folder and commit the images and marker. Alternatively, run the render workflow manually and enter the episode folder path.
 7. Open the render workflow run, download the artifact, and save the MP4.
 
@@ -171,7 +172,7 @@ The prompts request **1920×1080, 16:9 JPG/JPEG** images and suggest roughly **5
    python science-channel/scripts/prepare_images.py "/path/to/48-original-images" "science-channel-images.zip"
    ```
 
-   On Windows, use a folder path such as `"C:\\Users\\YourName\\Pictures\\science-images"`.
+   On Windows, use a folder path such as `"C:\Users\YourName\Pictures\science-images"`.
 4. The script checks for exactly 48 supported images, orders them by scene number when possible, converts them to 1920×1080 JPGs, and creates one ZIP with filenames `scene-001.jpg` through `scene-048.jpg`.
 5. Check the printed ZIP size. The default target is 23 MiB. If it reports that the ZIP is still larger, use Git command line or run it again with a lower target, for example `--max-mb 20`.
 6. Upload the resulting ZIP to that episode's `images/incoming/` folder.
