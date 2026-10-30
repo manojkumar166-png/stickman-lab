@@ -1,0 +1,13 @@
+# Science topic seeds for the NEW Science Channel pipeline only.
+# The Gemini planner may propose fresh topics beyond these seeds.
+# One topic per line; existing repository topics.txt is never read or modified.
+Why do we dream?
+How do black holes bend time?
+Why does the ocean look blue?
+How do bees navigate?
+What happens inside a lightning bolt?
+Why do we get goosebumps?
+How do plants communicate?
+How does the human immune system remember?
+Why is space silent?
+How do glaciers shape landscapes?
