@@ -43,6 +43,17 @@ def valid_episode(value):
         return None
     return path
 
+def newest_episode():
+    episodes = []
+    if ROOT.exists():
+        for date_dir in ROOT.iterdir():
+            if not date_dir.is_dir() or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", date_dir.name):
+                continue
+            for episode_dir in date_dir.glob("episode-*"):
+                if episode_dir.is_dir() and (episode_dir / "episode.json").is_file():
+                    episodes.append(episode_dir)
+    return max(episodes, key=lambda p: (p.parent.name, p.name)) if episodes else None
+
 def image_payload(message):
     if message.get("photo"):
         photo = message["photo"][-1]
@@ -59,8 +70,14 @@ def image_payload(message):
 
 def main():
     state = load_state()
+    # Automatically follow the newest generated episode so daily uploads need no /episode command.
+    latest = newest_episode()
+    selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
+    if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
+        state["episode_path"] = str(latest)
+        send(f"Automatically selected the newest episode: {latest.parent.name}/{latest.name}. Send its images with captions scene-01 to scene-48.")
     updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
-    changed = False
+    changed = bool(latest and state.get("episode_path") == str(latest))
     for update in updates:
         state["offset"] = update["update_id"] + 1
         msg = update.get("message", {})
@@ -86,7 +103,7 @@ def main():
             continue
         episode = Path(state.get("episode_path", ""))
         if not state.get("episode_path") or not (episode / "episode.json").is_file():
-            send("Select an episode first using /episode YYYY-MM-DD/episode-001.")
+            send("No episode is available yet. Wait until the daily planner creates one, then send your image again.")
             continue
         caption = (msg.get("caption") or "").strip()
         match = SCENE_RE.search(caption)
