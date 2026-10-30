@@ -46,7 +46,7 @@ with concat.open("w") as f:
         f.write(f"file '{p.resolve()}'\nduration {d:.4f}\n")
     f.write(f"file '{images[-1].resolve()}'\n")
 silent=out/"visuals.mp4"
-run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']},zoompan=z='min(zoom+0.0008,1.08)':d=1:s={SETTINGS['width']}x{SETTINGS['height']}:fps={SETTINGS['fps']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
+run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-vf",f"scale={SETTINGS['width']}:{SETTINGS['height']}:force_original_aspect_ratio=increase,crop={SETTINGS['width']}:{SETTINGS['height']}","-r",str(SETTINGS["fps"]),"-pix_fmt","yuv420p","-an",str(silent)])
 # Create simple scene-aligned SRT using audio duration and narration word proportions.
 srt=out/"subtitles.srt"; cursor=0.0
 def stamp(t):
