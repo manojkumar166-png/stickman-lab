@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-render-${{ github.sha }}
+  group: science-channel-render-main
   cancel-in-progress: false
 jobs:
   render:
@@ -77,7 +77,20 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Remove processed image ZIP for rendered episode"
-            git push origin HEAD:main
+            # Another workflow may update main while this render is running.
+            # Rebase the ZIP-deletion commit onto the latest remote before pushing.
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "Could not push ZIP cleanup after 3 attempts. The rendered artifact is already saved."
+                exit 1
+              fi
+              sleep 2
+            done
           else
             echo "No ZIP archive to remove."
           fi
