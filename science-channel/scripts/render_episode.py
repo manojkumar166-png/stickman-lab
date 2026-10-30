@@ -10,19 +10,29 @@ SETTINGS = json.loads((ROOT/"settings.json").read_text())
 episode = Path(sys.argv[1]).resolve()
 if ROOT.resolve() not in episode.parents: raise SystemExit("Episode path must be inside science-channel")
 if not (episode/"READY.txt").is_file(): raise SystemExit("READY.txt is missing")
+meta=json.loads((episode/"episode.json").read_text())
+scene_count=int(meta.get("scene_count",47))
 scenes = json.loads((episode/"scenes.json").read_text())
-if len(scenes)!=47 or [s.get("scene_number") for s in scenes]!=list(range(1,48)):
-    raise SystemExit("Expected exactly 47 ordered scene records")
+if len(scenes)!=scene_count or [s.get("scene_number") for s in scenes]!=list(range(1,scene_count+1)):
+    raise SystemExit(f"Expected exactly {scene_count} ordered scene records")
 image_dir=episode/"images"
+image_dir.mkdir(exist_ok=True)
+if meta.get("smoke_test") is True:
+    # Synthetic test frames are generated only for this explicitly marked fixture.
+    for n in range(1,scene_count+1):
+        target=image_dir/f"scene-{n:03d}.png"
+        if not target.exists():
+            color=["0x173B63","0x167C80","0xE0A82E"][(n-1)%3]
+            subprocess.run(["ffmpeg","-y","-f","lavfi","-i",f"color=c={color}:s=1280x720:d=1","-frames:v","1",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 images=[]
-for n in range(1,48):
+for n in range(1,scene_count+1):
     p=image_dir/f"scene-{n:03d}.png"
     if not p.is_file(): raise SystemExit(f"Missing required image: {p.name}")
     images.append(p)
 # Narration source is script.md only. Never open image-prompts.md.
 script=(episode/"script.md").read_text()
 blocks=re.findall(r"^## Scene\s+(\d+)\s*\n+([\s\S]*?)(?=^## Scene\s+\d+\s*$|\Z)",script,re.M)
-if len(blocks)!=47: raise SystemExit("script.md must contain exactly 47 Scene sections")
+if len(blocks)!=scene_count: raise SystemExit(f"script.md must contain exactly {scene_count} Scene sections")
 narration=[]
 for i,(num,body) in enumerate(blocks,1):
     if int(num)!=i: raise SystemExit("script.md scene order mismatch")
