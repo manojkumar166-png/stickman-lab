@@ -74,7 +74,7 @@ and visual beat. Include the same recurring presenter identity in every prompt w
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
 Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dumps(scenes,ensure_ascii=False),0.55)
     prompts = prompt_data.get("prompts",[])
-    if len(prompts)!=48 or [p.get("scene_number") for p in prompts]!=list(range(1,48)):
+    if len(prompts)!=48 or [p.get("scene_number") for p in prompts]!=list(range(1,49)):
         raise ValueError(f"Episode {idx}: expected exactly 48 ordered image prompts")
     day_root = ROOT / "daily-episodes" / TODAY
     final_title = str(episode.get("title", title)).strip()
@@ -100,6 +100,6 @@ Presenter identity guide: """ + PRESENTER + "\nFinal script scenes: " + json.dum
     (images/".gitkeep").write_text("")
     history.setdefault("topics",[]).append(final_title)
     seen_topics.append(final_title)
-    print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload any 3 image files to images/incoming/")
+    print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload all 48 numbered images to images/incoming/")
 HISTORY.parent.mkdir(parents=True,exist_ok=True)
 HISTORY.write_text(json.dumps(history,indent=2,ensure_ascii=False)+"\n")
