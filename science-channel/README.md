@@ -56,8 +56,8 @@ Daily schedule or manual start
 
 ### Workflow A — Daily Gemini Planner
 
-- **When it runs:** Automatically every day at 01:15 UTC (06:45 India Standard Time), or when you manually run **Science Channel — Daily Gemini Planner** from the Actions tab.
-- **What Gemini does:** Selects one topic that is not in the generated-topic history, writes the episode metadata and a complete narration script, and creates exactly 48 numbered scene records.
+- **When it runs:** Automatically once every day at 01:15 UTC (06:45 India Standard Time). You can also manually run **Science Channel — Daily Gemini Planner** as often as you need; there is no one-episode-per-day cap.
+- **What each run does:** Every automatic or manual run creates exactly one new episode. Gemini selects a topic that is not in the generated-topic history, writes the episode metadata and complete narration script, and creates exactly 48 numbered scene records. Multiple manual runs on the same date create `episode-001`, `episode-002`, `episode-003`, and so on; earlier episodes are not overwritten.
 - **Image prompts:** A second Gemini request creates exactly one visual prompt for each finalized scene. New prompts are told not to add a presenter or talking-head explainer by default; the image should depict the science concept, action, environment or visual metaphor in that scene.
 - **What gets saved:** The planner creates the episode folder and its five starter items: `episode.json`, `script.md`, `scenes.json`, `image-prompts.md`, and `images/incoming/.gitkeep`. It also updates the topic history so the topic is not selected again.
 - **How it finishes:** The workflow optionally sends `image-prompts.md` to Telegram, then commits the generated Science Channel package to the repository. Telegram is non-blocking: a missing Telegram secret or a send failure does not prevent the episode package commit.
@@ -98,7 +98,7 @@ If you revise narration after generating images, revise the matching prompt and 
 
 ## 1. Create a new episode
 
-The planner runs automatically every day at **01:15 UTC (06:45 India Standard Time)**. It creates **one new episode per run**. You can also start it manually:
+The planner runs automatically once every day at **01:15 UTC (06:45 India Standard Time)**. This is the automatic schedule, not a daily production limit. **Every manual run also creates one new episode**, and you may manually run it multiple times on the same day. The planner assigns the next available episode number for that date, so it does not overwrite earlier episodes. You can start it manually:
 
 1. Open the repository's **Actions** tab.
 2. Select **Science Channel — Daily Gemini Planner**.
