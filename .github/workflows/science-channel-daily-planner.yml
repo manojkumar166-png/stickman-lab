@@ -139,8 +139,8 @@ jobs:
           printf '%s\n' "${synced[*]:-none}" > /tmp/episode-synced.txt
           printf '%s\n' "${failed[*]:-none}" > /tmp/episode-failed.txt
           if [ "${#failed[@]}" -gt 0 ]; then exit 1; fi
-      - name: Send branch synchronization report to Telegram
-        if: always()
+      - name: Send branch failure alert to Telegram
+        if: always() && steps.branch_sync.outcome == 'failure'
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -148,13 +148,17 @@ jobs:
           EPISODE_PATH: ${{ steps.generated.outputs.path }}
           SYNC_OUTCOME: ${{ steps.branch_sync.outcome }}
         run: |
+          set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured; skipping sync report."
+            echo "Telegram secrets are not configured; skipping failure alert."
             exit 0
           fi
           SYNCED="$(cat /tmp/episode-synced.txt 2>/dev/null || echo unavailable)"
           FAILED="$(cat /tmp/episode-failed.txt 2>/dev/null || echo unavailable)"
-          TEXT="Episode sync: ${SYNC_OUTCOME}\nEpisode: ${EPISODE_PATH}\nUpdated/current: ${SYNCED}\nFailed: ${FAILED}"
+          TEXT="⚠️ Episode sync failed
+Episode: ${EPISODE_PATH}
+Updated/current: ${SYNCED}
+Failed: ${FAILED}"
           curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${TEXT}"
