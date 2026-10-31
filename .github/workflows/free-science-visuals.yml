@@ -1,11 +1,14 @@
 name: Free Science Visuals — Render Ready Episode
 on:
   push:
-    branches: [main]
+    branches: [adaptive-cinematic-effects]
     paths:
       - "science-channel/daily-episodes/**/images/incoming/**"
       - "!science-channel/daily-episodes/**/images/incoming/.gitkeep"
+      - "science-channel/series/**/images/incoming/**"
+      - "!science-channel/series/**/images/incoming/.gitkeep"
       - "science-channel/daily-episodes/**/READY.txt"
+      - "science-channel/series/**/READY.txt"
   workflow_dispatch:
     inputs:
       episode_path:
@@ -16,7 +19,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-render-main
+  group: science-channel-render-adaptive
   cancel-in-progress: false
 jobs:
   render:
@@ -131,10 +134,10 @@ jobs:
             exit 0
           fi
           for file in "${zips[@]}"; do
-            echo "Deleting $file from main..."
+            echo "Deleting $file from $GITHUB_REF_NAME..."
             deleted=false
             for attempt in 1 2 3; do
-              sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$file?ref=main" --jq .sha 2>/dev/null || true)
+              sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$file?ref=$GITHUB_REF_NAME" --jq .sha 2>/dev/null || true)
               if [ -z "$sha" ]; then
                 echo "$file is already absent from main."
                 deleted=true
@@ -143,7 +146,7 @@ jobs:
               if gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$file" \
                 -f message="Delete processed image ZIP after render" \
                 -f sha="$sha" \
-                -f branch=main; then
+                -f branch="$GITHUB_REF_NAME"; then
                 deleted=true
                 break
               fi
