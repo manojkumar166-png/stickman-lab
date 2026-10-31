@@ -6,8 +6,8 @@ on:
         description: "Exact episode folder path selected in Telegram"
         required: true
         type: string
-      telegram_file_id:
-        description: "Telegram document file_id for the uploaded ZIP"
+      zip_path:
+        description: "Repository path of the staged Telegram ZIP"
         required: true
         type: string
 permissions:
@@ -28,22 +28,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install import dependency
-        run: python -m pip install --upgrade requests
-      - name: Download, validate and extract Telegram ZIP
+      - name: Validate and extract staged Telegram ZIP
         id: import
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_FILE_ID: ${{ inputs.telegram_file_id }}
+          ZIP_PATH: ${{ inputs.zip_path }}
           EPISODE_PATH: ${{ inputs.episode_path }}
         run: python science-channel/scripts/import_telegram_zip.py
-      - name: Commit extracted scene images
+      - name: Commit extracted scene images and remove staged ZIP
         env:
           EPISODE_PATH: ${{ steps.import.outputs.episode_path }}
+          ZIP_PATH: ${{ steps.import.outputs.zip_path }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$EPISODE_PATH/images/incoming" "$EPISODE_PATH/READY.txt"
+          git rm "$ZIP_PATH"
           git commit -m "Import Telegram images for $(basename "$EPISODE_PATH")"
           git push origin HEAD:main
