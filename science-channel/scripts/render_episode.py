@@ -203,13 +203,43 @@ async def make_audio():
         for part in audio_parts:
             escaped = part.resolve().as_posix().replace("'", "'\\''")
             handle.write(f"file '{escaped}'\n")
-    subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i",
-         str(concat_list), "-c", "copy", str(audio)],
-        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
-    )
+    # Re-encode the joined chunks instead of stream-copying them. Edge TTS can
+    # return individually valid MP3 chunks with slightly different stream headers
+    # or timestamps; stream-copy concatenation is brittle in that situation.
+    combine_cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-f", "concat", "-safe", "0", "-i", str(concat_list),
+        "-vn", "-c:a", "libmp3lame", "-q:a", "2", "-ar", "24000",
+        "-ac", "1", "-write_xing", "0", str(audio)
+    ]
+    try:
+        subprocess.run(
+            combine_cmd, check=True, stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE, text=True, timeout=300
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip()
+        print(f"FFmpeg narration assembly failed:\\n{detail}")
+        raise RuntimeError(
+            f"Could not combine {len(audio_parts)} valid Edge TTS chunks. "
+            f"FFmpeg reported: {detail or 'no diagnostic output'}"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("FFmpeg narration assembly exceeded 300 seconds.") from exc
+
     if not audio.is_file() or audio.stat().st_size < 1024:
         raise RuntimeError("Combining narration chunks produced an empty audio file")
+    final_probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(audio)],
+        capture_output=True, text=True, timeout=30
+    )
+    if final_probe.returncode != 0 or not final_probe.stdout.strip():
+        raise RuntimeError("Combined narration MP3 failed audio-stream validation")
+    print(
+        f"Combined {len(audio_parts)} TTS chunks into "
+        f"{float(final_probe.stdout.strip()):.1f}s of narration."
+    )
 
 asyncio.run(make_audio())
 
