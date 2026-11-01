@@ -81,13 +81,33 @@ def scene_numbers(directory):
                 found.add(int(match.group(1)))
     return found
 
+def scene_number_from_name(filename):
+    """Return an explicit 1..48 scene number when the basename clearly identifies one."""
+    stem = Path(filename).stem.casefold()
+    match = re.fullmatch(r"(?:scene|image|img)[\s_-]*0*(\d{1,2})|0*(\d{1,2})", stem)
+    if not match:
+        return None
+    number = int(match.group(1) or match.group(2))
+    return number if 1 <= number <= 48 else None
+
+
+def order_image_entries(entries):
+    """Honor explicit scene numbers; otherwise sort naturally by filename, not ZIP order."""
+    numbered = [(scene_number_from_name(Path(item.filename).name), item) for item in entries]
+    numbers = [number for number, _ in numbered]
+    if all(number is not None for number in numbers) and set(numbers) == set(range(1, 49)):
+        return [(number, item) for number, item in sorted(numbered, key=lambda pair: pair[0])]
+    ordered = sorted(entries, key=lambda item: (natural_key(Path(item.filename).name), natural_key(item.filename)))
+    return list(enumerate(ordered, start=1))
+
+
 def main():
     state = load_state()
     latest = newest_episode()
     selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
     if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
         state["episode_path"] = str(latest)
-        send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images.")
+        send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
 
     updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
     changed = False
@@ -136,21 +156,21 @@ def main():
                 with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
                     entries = [item for item in archive.infolist()
                                if not item.is_dir() and item.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
-                    entries.sort(key=lambda item: item.filename.lower())
                     if len(entries) != 48:
                         send(f"ZIP skipped: found {len(entries)} supported images; it must contain exactly 48.")
                         continue
-                    images = [(archive.read(item), item.filename) for item in entries]
+                    ordered = order_image_entries(entries)
+                    images = [(slot, archive.read(item), item.filename) for slot, item in ordered]
             except (zipfile.BadZipFile, RuntimeError, OSError):
                 send("I couldn't read that ZIP. Please send a valid ZIP containing exactly 48 images.")
                 continue
             if present:
                 send("ZIP skipped because this episode already has images. Send a ZIP only to an empty incoming folder.")
                 continue
-            if any(len(data) > 20 * 1024 * 1024 for data, _ in images):
+            if any(len(data) > 20 * 1024 * 1024 for _, data, _ in images):
                 send("ZIP skipped: at least one image is over 20 MB. Please reduce image sizes.")
                 continue
-            for index, (data, filename) in enumerate(images, start=1):
+            for index, data, filename in images:
                 suffix = Path(filename).suffix.lower().lstrip(".")
                 suffix = "jpg" if suffix == "jpeg" else suffix
                 (dest_dir / f"scene-{index:02d}.{suffix}").write_bytes(data)
@@ -170,7 +190,7 @@ def main():
         missing = [n for n in range(1, 49) if n not in present]
         if not missing:
             (episode / "READY.txt").write_text("All 48 scene images received through Telegram.\n", encoding="utf-8")
-            send(f"All 48 images are present for {episode.parent.name}/{episode.name}. READY.txt created; uploads will be committed to main.")
+            send(f"All 48 images are present for {episode.parent.name}/{episode.name}. ZIP order was normalized automatically using scene numbers when available, otherwise natural filename order. READY.txt created; uploads will be committed to main.")
         else:
             send(f"Saved image. {len(present)}/48 received. Next missing: scene-{missing[0]:02d}.")
 
