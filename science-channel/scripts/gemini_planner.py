@@ -333,7 +333,7 @@ history.setdefault("topic_details", []).append({
     "pillar": selected_pillar
 })
 HISTORY.parent.mkdir(parents=True, exist_ok=True)
-HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\\n")
+HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 
 final_title = episode.get("title", title).strip()
 folder = day_root / f"episode-{episode_number:03d}-{topic_slug(final_title)}"
