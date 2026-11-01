@@ -81,24 +81,16 @@ def scene_numbers(directory):
                 found.add(int(match.group(1)))
     return found
 
-def scene_number_from_name(filename):
-    """Return an explicit 1..48 scene number when the basename clearly identifies one."""
-    stem = Path(filename).stem.casefold()
-    match = re.fullmatch(r"(?:scene|image|img)[\s_-]*0*(\d{1,2})|0*(\d{1,2})", stem)
-    if not match:
-        return None
-    number = int(match.group(1) or match.group(2))
-    return number if 1 <= number <= 48 else None
-
-
 def order_image_entries(entries):
-    """Honor explicit scene numbers; otherwise sort naturally by filename, not ZIP order."""
-    numbered = [(scene_number_from_name(Path(item.filename).name), item) for item in entries]
-    numbers = [number for number, _ in numbered]
-    if all(number is not None for number in numbers) and set(numbers) == set(range(1, 49)):
-        return [(number, item) for number, item in sorted(numbered, key=lambda pair: pair[0])]
-    ordered = sorted(entries, key=lambda item: (natural_key(Path(item.filename).name), natural_key(item.filename)))
-    return list(enumerate(ordered, start=1))
+    """Sort by numeric chunks in each filename; ZIP archive order is never used."""
+    return list(enumerate(
+        sorted(entries, key=lambda item: (
+            natural_key(Path(item.filename).name),
+            Path(item.filename).name.casefold(),
+            item.filename.casefold(),
+        )),
+        start=1,
+    ))
 
 
 def main():
