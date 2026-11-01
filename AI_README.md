@@ -595,6 +595,103 @@ The bottom strip is a static scene caption, separate from any word-synchronized 
 
 ---
 
+# 🛠️ How this repository implemented Cloudflare — exact code path and modification map
+
+This is the implementation currently present in `main`; it is not a generic Cloudflare tutorial.
+
+## 1. Actual request path
+
+```text
+.github/workflows/ai-video-test.yml
+  └─ Generate AI Video step exposes CF_ACCOUNT_ID + CF_API_TOKEN
+       └─ python main_ai.py
+            └─ scripts/make_art.py: generate_all_ai_images()
+                 ├─ build_prompt(scene["visual"])
+                 ├─ cf_image_cheap(prompt)
+                 │    └─ POST Cloudflare Workers AI REST endpoint
+                 └─ collect image bytes per scene
+                      └─ make_scene_art() resizes and overlays title/caption
+```
+
+There is no separate Worker URL or custom Worker source in this request path. The Cloudflare feature used here is **Workers AI**, called directly through its account REST endpoint.
+
+## 2. What each part of the code does
+
+| Code location | Current implementation | Change it when you want to… |
+|---|---|---|
+| `.github/workflows/ai-video-test.yml` → `Generate AI Video` env | Maps GitHub secrets into `CF_ACCOUNT_ID` and `CF_API_TOKEN` | Rename secrets or change where credentials are supplied |
+| `scripts/make_art.py` → `CF_ACCOUNT_ID`, `CF_API_TOKEN` | Reads environment variables with `os.getenv()` | Change credential variable names (also update workflow and local environment) |
+| `scripts/make_art.py` → `CF_URL_CHEAP` | Builds `https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}` | Change the account API route or model identifier |
+| `build_prompt()` | Normalizes whitespace, removes double quotes, truncates scene visual text to 250 characters, appends `STYLE` | Change prompt length, cleanup or shared visual style |
+| `cf_image_cheap()` | Checks credentials, sends multipart POST with Bearer token, prompt, width 1024, height 576; timeout 120 seconds | Change authentication, request fields, dimensions, timeout or response handling |
+| `generate_all_ai_images()` | Processes scenes sequentially, waits 6 seconds between calls, records failures and reuses a random successful image for failed scenes | Change concurrency, pacing, retry policy and failed-scene behavior |
+| `make_scene_art()` | Opens returned bytes with Pillow, resizes to output size, draws title/caption bars and saves the final scene image | Change image composition and overlays |
+| `scripts/make_art_python.py` | Local illustration fallback | Change the fallback drawing style/colors |
+
+## 3. Current API request, in plain language
+
+For each scene, the script sends an HTTPS **POST** request to:
+
+```text
+https://api.cloudflare.com/client/v4/accounts/<CF_ACCOUNT_ID>/ai/run/@cf/black-forest-labs/flux-2-klein-4b
+```
+
+It authenticates with:
+
+```http
+Authorization: Bearer <CF_API_TOKEN>
+```
+
+The body is multipart form data containing `prompt`, `width=1024` and `height=576`. The code uses `requests.post(..., files=form_data, timeout=120)`. It raises on HTTP errors. If the response content type starts with `image/`, it uses the response body directly; otherwise it parses JSON and base64-decodes the `image` field from `result` (or the top-level object).
+
+The active model is configured in the endpoint string, not in `config.json`. Changing `config.json` does not change the Cloudflare model.
+
+## 4. Common modifications — exact edits
+
+### Change the image model
+
+1. Check the current [Workers AI model catalogue](https://developers.cloudflare.com/workers-ai/models/) and confirm the model is enabled for your account.
+2. In `scripts/make_art.py`, replace the model identifier in `CF_URL_CHEAP`.
+3. Check that model's input schema and response format. If different, change `form_data` and the response decoder in `cf_image_cheap()` too.
+4. Run one test generation before running the full 47-scene experiment.
+
+### Change image dimensions
+
+Edit `width` and `height` in `form_data` inside `cf_image_cheap()`. Keep the model's supported dimensions and aspect ratio in mind. The returned image is subsequently resized to the root `config.json` output dimensions in `make_scene_art()`; these are two separate dimension settings.
+
+### Change style or prompt content
+
+- Edit `STYLE` near the top of `scripts/make_art.py` to change the shared style for every scene.
+- Edit `build_prompt()` to change text cleanup, truncation (currently 250 characters), prompt ordering or additional instructions.
+- Edit `scene.get("visual", "science illustration")` inside `generate_all_ai_images()` if you want a different fallback field/default. If you change the story JSON schema, also update the story generator and consumers.
+
+### Change request pacing, timeout or add retries
+
+- Delay: edit `time.sleep(6)` in `generate_all_ai_images()`. The delay currently occurs between scene requests, not after the final request.
+- Timeout: edit `timeout=120` in `cf_image_cheap()`.
+- Retries: there is currently **no explicit retry loop**. Add bounded retries with backoff around the request, and avoid retrying permanent errors such as invalid credentials or unsupported model names.
+- Concurrency: calls are currently sequential. Introducing parallel requests changes rate-limit pressure and should be tested against the account's current limits.
+
+### Change what happens when an image request fails
+
+Today, failed requests are stored as `None`. If at least one scene succeeded, each failed slot receives a randomly chosen successful image. If none succeeded, the returned list contains no AI images and `make_scene_art()` uses the local stickman fallback. To use a different policy (retry, stop the run, use a fixed placeholder, or fallback per scene), change the failure-handling block in `generate_all_ai_images()`.
+
+### Change title/caption overlays
+
+Edit `make_scene_art()` in `scripts/make_art.py`: title truncation (58 characters), blue title rectangle, black caption rectangle, caption wrapping (75-character line threshold, at most two lines), font sizes and coordinates. These overlays are added after Cloudflare returns the image; they are not part of the model prompt.
+
+## 5. Credential rotation and testing
+
+- Create/rotate the Cloudflare API token in Cloudflare; give it only the Workers AI permissions required by the current API guidance.
+- Update repository **Settings → Secrets and variables → Actions → Secrets → `CF_API_TOKEN`**. Update `CF_ACCOUNT_ID` only if using a different Cloudflare account.
+- For local runs, export both environment variables in the shell. Do not add them to source code or `config.json`.
+- Run **Actions → AI Video Experiment → Run workflow** and inspect the `Generate AI Video` logs. Check for `Klein OK`, `Klein failed`, and `Filled with a random AI image`.
+- Inspect generated scene images and the final video; a successful HTTP request alone does not guarantee the composition is what you want.
+
+If you decide to put a custom Cloudflare Worker in front of Workers AI later, that is a new architecture: deploy and test the Worker endpoint first, then change `CF_URL_CHEAP`/request handling and the workflow secrets to call it. The current repository does not have that gateway.
+
+---
+
 # 📲 Telegram — complete bot setup, upload, delivery and modification guide
 
 Telegram is used in **both pipelines**, but the responsibilities differ:
