@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Render one READY episode from either a ZIP archive or individual scene images."""
-import json, re, sys, subprocess, zipfile
+import json, re, sys, subprocess, zipfile, time
 from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
@@ -122,9 +122,86 @@ for i, (num, body) in enumerate(blocks, 1):
     narration.append(text)
 
 audio = work/"narration.mp3"
+
+def split_narration(text, max_chars=2400):
+    """Keep TTS requests short enough to avoid oversized/fragile single requests."""
+    sentences = re.split(r"(?<=[.!?])\\s+", text.strip())
+    chunks, current = [], ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        # Split unusually long sentences at word boundaries.
+        pieces = []
+        while len(sentence) > max_chars:
+            cut = sentence.rfind(" ", 0, max_chars)
+            if cut < 1:
+                cut = max_chars
+            pieces.append(sentence[:cut].strip())
+            sentence = sentence[cut:].strip()
+        if sentence:
+            pieces.append(sentence)
+        for piece in pieces:
+            candidate = f"{current} {piece}".strip()
+            if current and len(candidate) > max_chars:
+                chunks.append(current)
+                current = piece
+            else:
+                current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
 async def make_audio():
-    communicate = edge_tts.Communicate(" ".join(narration), SETTINGS["voice"], rate=SETTINGS["speech_rate"])
-    await communicate.save(str(audio))
+    chunks = split_narration(" ".join(narration))
+    chunk_dir = work/"audio-chunks"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    audio_parts = []
+    print(f"Generating narration in {len(chunks)} short TTS chunks.")
+    for index, chunk in enumerate(chunks, 1):
+        part = chunk_dir/f"narration-{index:03d}.mp3"
+        last_error = None
+        for attempt in range(1, 5):
+            part.unlink(missing_ok=True)
+            try:
+                communicate = edge_tts.Communicate(
+                    chunk, SETTINGS["voice"], rate=SETTINGS["speech_rate"]
+                )
+                await communicate.save(str(part))
+                if not part.is_file() or part.stat().st_size < 1024:
+                    raise RuntimeError("TTS returned an empty or incomplete audio file")
+                last_error = None
+                print(f"TTS chunk {index}/{len(chunks)} completed.")
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt < 4:
+                    delay = 2 ** attempt
+                    print(
+                        f"TTS chunk {index}/{len(chunks)} failed "
+                        f"(attempt {attempt}/4): {exc}. Retrying in {delay}s."
+                    )
+                    await asyncio.sleep(delay)
+        if last_error is not None:
+            raise RuntimeError(
+                f"TTS failed for narration chunk {index}/{len(chunks)} "
+                f"after 4 attempts. Check Edge TTS availability, voice "
+                f"'{SETTINGS['voice']}', and network/rate limits. Last error: {last_error}"
+            ) from last_error
+        audio_parts.append(part)
+
+    concat_list = work/"audio-chunks.txt"
+    with concat_list.open("w", encoding="utf-8") as handle:
+        for part in audio_parts:
+            handle.write(f"file '{part.resolve().as_posix()}'\\n")
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i",
+         str(concat_list), "-c", "copy", str(audio)],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
+    )
+    if not audio.is_file() or audio.stat().st_size < 1024:
+        raise RuntimeError("Combining narration chunks produced an empty audio file")
+
 asyncio.run(make_audio())
 
 def run(cmd):
