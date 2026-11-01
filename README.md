@@ -190,3 +190,41 @@ Provider availability, free quotas, rate limits, model IDs and terms change. Che
 - Telegram delivery requires a reachable bot and valid token/chat ID. A failed send does not necessarily mean rendering failed; check the artifact section of the Actions run.
 - GitHub Actions artifacts expire automatically according to the retention period stated for each workflow: 2 days for Science Channel renders and 7 days for the AI Video Experiment.
 - Workflow schedules use UTC. India Standard Time is UTC+05:30.
+
+
+## How to customize the project (what to edit)
+
+Make changes on **main** unless you are deliberately working on a separate experiment. In GitHub, open the file, click the pencil icon, edit it, then commit the change to main. For larger edits, use a local clone and a pull request. Never put API keys or bot tokens in these files.
+
+| Change you want | File to edit | Notes |
+|---|---|---|
+| Science Channel voice, language, resolution, FPS, Gemini model, target length | `science-channel/settings.json` | The renderer reads voice, speech rate, width, height and FPS. The planner reads the Gemini model and episode settings. |
+| Science topic seed ideas | `science-channel/topics.txt` | Add one idea per line. Gemini can also invent topics within its selected category. |
+| Science episode writing style, topic categories, hook and prompt rules | `science-channel/scripts/gemini_planner.py` | Edit the topic-pillar examples and prompt text. Keep duplicate-history checks intact. |
+| A specific episode's title, narration, scene order or image prompts | That episode's `episode.json`, `script.md`, `scenes.json`, `image-prompts.md` | Keep all 48 scene numbers aligned. Update narration, scene data and image prompt together. |
+| Science Channel karaoke caption appearance | `science-channel/scripts/karaoke_subtitles.py` | Controls font, size, position, outline, phrase length and highlight color. |
+| Science Channel Telegram receiver behavior | `science-channel/scripts/telegram_image_receiver.py` | Telegram file types, image-size limits, episode selection and bot commands. |
+| ZIP import validation and size limits | `science-channel/scripts/import_telegram_zip.py` | Staging folder, file extensions, ZIP/image size limits and safe archive checks. |
+| When a workflow runs, permissions, timeout or artifact retention | Matching file in `.github/workflows/` | Cron is UTC. Keep branch and path filters correct. |
+| Legacy AI experiment length, voice, dimensions, FPS, model preference | `config.json` | This config is not used by the Science Channel episode renderer. |
+| Legacy AI experiment topic ideas | Root `topics.txt` | Separate from `science-channel/topics.txt`. |
+| Legacy AI experiment illustration style | `scripts/make_art.py` | Edit the `STYLE` string. The active Cloudflare model URL is also in this file. |
+| Legacy AI experiment narration and scene-generation instructions | `scripts/generate_story.py` | Edit the prompt and model fallback list. |
+| Legacy AI experiment stickman artwork | `scripts/make_art_python.py` | Palette, character colors and procedural scene drawing. |
+
+**Important:** Science Channel is a fixed 48-scene pipeline. Do not change `scene_count` or `required_uploaded_images` from 48 in settings alone. The planner, Telegram receiver, ZIP importer, render validation, READY logic and image prompts also assume 48. Changing the count requires a coordinated code/workflow update and testing.
+
+### Safe change examples
+
+**Change Science Channel narration voice:** edit `science-channel/settings.json`, change `voice` to a supported Microsoft Edge TTS voice name, and optionally adjust `speech_rate` (for example `+5%` or `-5%`). The renderer uses these settings when it generates the narration. A voice change affects future renders, not already-rendered MP4 files.
+
+**Change the Science Channel Gemini model:** change `gemini_model` in `science-channel/settings.json`, or set the optional Actions repository variable `SCIENCE_GEMINI_MODEL` under Settings → Secrets and variables → Actions → Variables. The variable takes precedence for the planner workflow. Check Google's current model availability before changing it.
+
+**Change the legacy AI experiment voice or video dimensions:** edit `config.json`. The current legacy experiment configuration is 47 scenes, 8 target minutes, 1280×720, 24 FPS, and a 7-day artifact retention value. This does not alter Science Channel's 48-scene, 1920×1080, 30 FPS settings.
+
+**Change the daily schedule:** edit the relevant workflow's `on.schedule.cron` value. GitHub cron uses UTC, not local time. For example, `15 1 * * *` means 01:15 UTC every day (06:45 IST). Keep the Telegram receiver's five-minute polling schedule unless you intentionally accept slower image intake.
+
+### More detailed customization instructions
+
+The [Science Channel operating guide](science-channel/README.md#customize-the-science-channel) explains every Science Channel setting, prompt, upload rule and render option. The [AI Video Experiment guide](AI_README.md) explains the separate root-level generator and how to customize its art, voice, topics and model.
+
