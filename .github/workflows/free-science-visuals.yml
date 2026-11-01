@@ -107,7 +107,8 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 2
-      - name: Send finished video to Telegram (non-blocking)
+      - name: Send finished video to Telegram
+        id: telegram
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@v1
         with:
@@ -115,39 +116,34 @@ jobs:
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.episode.outputs.path }}/output/*.mp4
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
-      - name: Delete processed ZIPs from GitHub (API, retrying)
+      - name: Remove uploaded ZIP, scene images and READY marker from main
+        if: steps.telegram.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
         shell: bash
         run: |
-          shopt -s nullglob nocaseglob
-          zips=(${{ steps.episode.outputs.path }}/images/incoming/*.zip)
-          if [ ${#zips[@]} -eq 0 ]; then
-            echo "No ZIP archive to remove."
+          set -euo pipefail
+          incoming="$EPISODE_PATH/images/incoming"
+          # Keep .gitkeep so the incoming folder remains in the repository.
+          find "$incoming" -maxdepth 1 -type f ! -name '.gitkeep' -delete
+          rm -f "$EPISODE_PATH/READY.txt"
+          git add -A "$incoming" "$EPISODE_PATH/READY.txt"
+          if git diff --cached --quiet; then
+            echo "No uploaded image files or READY marker to clean up."
             exit 0
           fi
-          for file in "${zips[@]}"; do
-            echo "Deleting $file from main..."
-            deleted=false
-            for attempt in 1 2 3; do
-              sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/$file?ref=main" --jq .sha 2>/dev/null || true)
-              if [ -z "$sha" ]; then
-                echo "$file is already absent from main."
-                deleted=true
-                break
-              fi
-              if gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$file" \
-                -f message="Delete processed image ZIP after render" \
-                -f sha="$sha" \
-                -f branch=main; then
-                deleted=true
-                break
-              fi
-              echo "Delete attempt $attempt failed; retrying..."
-              sleep 3
-            done
-            if [ "$deleted" != true ]; then
-              echo "ERROR: Could not delete $file after 3 attempts."
-              exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Clean up episode uploads after Telegram delivery"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              echo "Uploaded ZIP/images and READY marker removed from main."
+              exit 0
             fi
+            echo "Push attempt $attempt failed; retrying."
+            sleep 3
           done
+          echo "ERROR: Could not push upload cleanup to main."
+          exit 1
