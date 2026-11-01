@@ -83,7 +83,7 @@ def gemini(prompt, temperature=0.7):
                 "contents": [{"parts": [{"text": request_prompt}]}],
                 "generationConfig": {
                     "responseMimeType": "application/json",
-                    "maxOutputTokens": 16384
+                    "maxOutputTokens": 32768 if model.startswith("gemma-4-") else 65536
                 }
             }
             try:
