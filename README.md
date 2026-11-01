@@ -24,6 +24,8 @@ There are **five active workflow files** in .github/workflows. The old README re
 ## Workflow map and detailed behavior
 
 ### 1. Science Channel — Daily Gemini Planner
+**Topic-generation approach:** each run randomly chooses one broad science category and asks Gemini to create a new, accessible curiosity-driven question within it. The planner reads `science-channel/topics.txt` as a **style reference, not a fixed topic list**. It aims for clear questions like “Why do we get goosebumps?” or “How do bees communicate?”—but generates new subjects rather than copying these examples. Gemini is instructed to consider at least 10 candidates internally, select the strongest idea for an 8–10 minute episode, and avoid manufactured drama or complicated clickbait. Exact and semantic duplicate checks compare proposed ideas against topic history and existing episode metadata. See [the complete Science Channel operating guide](science-channel/README.md#how-topic-selection-works).
+
 
 File: [.github/workflows/science-channel-daily-planner.yml](.github/workflows/science-channel-daily-planner.yml)
 
