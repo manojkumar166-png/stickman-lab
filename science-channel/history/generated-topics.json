@@ -18,7 +18,8 @@
     "Why do leaves change color in autumn?",
     "Why do stars twinkle?",
     "Why does onions make us cry?",
-    "Why does time seem to speed up as we get older?"
+    "Why does time seem to speed up as we get older?",
+    "Why do deserts sing?"
   ],
   "topic_details": [
     {
@@ -100,6 +101,11 @@
       "title": "Why does time seem to speed up as we get older?",
       "angle": "Explores the cognitive and neurological reasons why our perception of the passage of time accelerates as we age, from proportional memory scaling to neural processing rates.",
       "pillar": "Brain, memory and senses"
+    },
+    {
+      "title": "Why do deserts sing?",
+      "angle": "Exploring the acoustic physics behind booming sand dunes and how shifting grains create mysterious, deep-toned musical frequencies in the desert wind.",
+      "pillar": "Earth's geology and natural processes"
     }
   ]
 }
