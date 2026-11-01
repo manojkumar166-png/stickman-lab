@@ -321,100 +321,66 @@ Historical episodes: """ + json.dumps(history_for_review, ensure_ascii=False),
     if review["duplicate"]:
         print("Rejected semantically repeated topic: " + str(review.get("reason", "same underlying subject")))
     return review["duplicate"]
-# Every episode must belong to one of these seven broad, viewer-friendly pillars.
-# Choose the pillar randomly in Python so Gemini cannot drift into unrelated niche subjects.
+# Read the topic seed file as a STYLE GUIDE, not a fixed list of titles to reuse.
+# Each run randomly selects a broad category; Gemini invents a fresh question in that category.
+topic_seed_lines = []
+if TOPICS.exists():
+    for line in TOPICS.read_text(encoding="utf-8").splitlines():
+        value = line.strip()
+        if value and not value.startswith("#"):
+            topic_seed_lines.append(value)
+
 topic_pillars = [
-    ("Space and astronomy", "What would happen if Earth stopped rotating?"),
-    ("Human body and mind", "Why does your brain create dreams?"),
-    ("Physics and extreme what-if scenarios", "What would happen if gravity suddenly became weaker?"),
-    ("Earth science and natural wonders", "What lies beneath the Earth's deepest oceans?"),
-    ("Technology and future inventions", "How could quantum computers change the world?"),
-    ("Animals and animal superpowers", "How do animals survive extreme environments?"),
-    ("Mysteries of science and the universe", "Could humans ever travel through time?"),
-    ("Chemistry and astonishing materials", "Could a material exist that is harder than diamond?"),
-    ("Oceans and underwater discoveries", "What strange worlds could exist beneath the deepest ocean?"),
-    ("Dinosaurs, fossils and prehistoric life", "What did the world look like when dinosaurs ruled?"),
-    ("Earth, climate and extreme weather", "What would happen if the Gulf Stream stopped?"),
-    ("Engineering and mega-structures", "How could humans build a city under the ocean?"),
-    ("Food science and everyday mysteries", "Why does popcorn explode and turn inside out?"),
-    ("Inventions and scientific breakthroughs", "What accidental discovery changed the modern world?"),
-    ("Extreme scientific what-if scenarios", "What if Earth suddenly stopped spinning?"),
-    ("Impossible-sounding science", "Can humans survive in space without a spacesuit?"),
-    ("Hidden mysteries and unseen worlds", "What is really at the bottom of the ocean?"),
-    ("Unexpected abilities and nature's superpowers", "How can the human brain recognize a face in a split second?"),
-    ("Future possibilities and human survival", "Could humans one day live on Mars permanently?"),
+    ("Space and astronomy", "Why do stars twinkle?"),
+    ("Human body and mind", "Why do we get goosebumps?"),
+    ("Earth, oceans and weather", "Why is the ocean salty?"),
+    ("Animals and animal behaviour", "How do bees communicate?"),
+    ("Plants and the natural world", "How do plants know which way is up?"),
+    ("Everyday physics", "How do magnets work?"),
+    ("Light, sound and vision", "Why is the sky blue?"),
+    ("Earth's geology and natural processes", "How do volcanoes erupt?"),
+    ("Technology and engineering", "How do airplanes stay in the air?"),
+    ("Chemistry and materials around us", "Why does metal rust?"),
+    ("Dinosaurs, fossils and ancient Earth", "How do fossils reveal what ancient animals looked like?"),
+    ("Brain, memory and senses", "How does the brain store memories?"),
+    ("Weather, clouds and the water cycle", "How do clouds make rain?"),
+    ("Moon, planets and the solar system", "Why does the Moon change shape?"),
+    ("Animal senses and abilities", "How can bats find their way in the dark?"),
+    ("Food and everyday chemistry", "Why does bread rise when it bakes?"),
+    ("Science of time and space", "Why does time seem different in space?"),
+    ("Human body everyday mysteries", "Why do we sneeze?"),
 ]
 selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
-
 # One planner run selects exactly ONE new topic inside the randomly selected pillar.
 # Retry if Gemini suggests a previously used title or returns a near-duplicate.
 topic = None
 for attempt in range(5):
-    topic_data = gemini_validated("""You are planning a mainstream, curiosity-driven Science Channel episode.
-The category for THIS episode has already been randomly selected and is mandatory.
-Selected category: """ + selected_pillar + """
-Example of the desired broad, accessible question style: """ + pillar_example + """
-Generate exactly ONE exceptionally compelling, fresh episode topic strictly within the selected category.
-PRIMARY GOAL: earn the click AND keep the viewer watching. Imagine the audience is scrolling YouTube:
-the title must make a broad, curious viewer instantly feel "Wait, is that really possible?" or
-"I have to know what happens." Prioritize mass audience appeal, instant comprehension, and a powerful
-curiosity gap over showing off obscure scientific knowledge.
+    topic_data = gemini_validated("""You are the topic editor for a mainstream, curiosity-driven science YouTube channel.
+Your job is to invent ONE fresh episode idea that has the same accessible, naturally intriguing style as the examples—not to copy the examples.
 
-SELECTION PROCESS (mandatory):
-1. Silently brainstorm at least 10 genuinely different candidate topics inside the selected category.
-2. Choose a clear, naturally phrased science question that an ordinary curious person might genuinely ask.
-3. Prefer familiar questions about how the world works, why everyday things happen, how nature and the human body work, and fascinating mysteries in space, Earth, animals, physics, and technology.
-4. Make the question interesting through the scientific mystery and the answer—not by making the situation more extreme, dangerous, catastrophic, or complicated.
-5. Keep the title short, direct, conversational, and easy to understand at a glance. Usually use a natural "Why...", "How...", or "What makes..." question. A simple question can be highly compelling; do not add unnecessary stakes or dramatic wording.
-6. Select a subject with enough surprising layers, explanations, discoveries, examples, and visual possibilities for a complete 8–10 minute episode. Do not reject a strong everyday question merely because its wording is simple.
-7. Return only the single best topic. Do not expose brainstorming, scores, or rejected candidates.
+RANDOMLY SELECTED CATEGORY FOR THIS RUN (mandatory): """ + selected_pillar + """
+A short example of the kind of clear question that fits this category: """ + pillar_example + """
 
-THIS IS THE CHANNEL'S DESIRED TOPIC STYLE:
-- Why do we dream?
-- Why is the ocean salty?
-- How do airplanes stay in the air?
-- Why does the Moon change shape?
-- How do bees communicate?
-- Why is the sky blue?
-- How do black holes work?
-- Why do we get goosebumps?
-- How do plants know which way is up?
-- Why do we have fingerprints?
-- How do clouds make rain?
-- Why does time seem to move faster as we grow older?
-- How do animals survive winter?
-- Why do we sneeze?
-- How do magnets work?
-- What would happen if Earth stopped spinning?
-- Why do stars twinkle?
-- How does the human brain store memories?
-- Why is space silent?
-- How do volcanoes erupt?
+The repository file science-channel/topics.txt contains topic seeds and examples. Read the supplied seed list below as a guide to the channel's style: simple, specific, familiar, curiosity-driven science questions. These seeds are NOT a queue and NOT titles to reuse. Do not simply select a line, paraphrase it, or make a minor variation of one. Invent a new subject/question with a similar feel.
+TOPIC SEEDS / STYLE REFERENCES: """ + json.dumps(topic_seed_lines, ensure_ascii=False) + """
 
-Treat these as STYLE REFERENCES for simplicity, clarity, broad curiosity, and familiar science—not as a list to copy or repeat. Generate fresh subjects that have the same accessible feel.
+Before choosing, silently brainstorm at least 10 genuinely different candidate questions that fit the selected category. Pick the strongest one based on broad audience interest, instant understanding, a natural curiosity gap, scientific depth, and visual storytelling potential. Return only the single best new idea.
 
-QUALITY BAR:
-- The title should make viewers think "I've wondered about that" or "I never knew there was a scientific explanation for that."
-- The topic should be understandable immediately without specialist knowledge.
-- The science should offer several genuinely interesting discoveries, not just one short fact.
-- It should support engaging visual storytelling through real processes, demonstrations, comparisons, environments, or scientific visualizations.
-- Favor wonder, useful understanding, relatable mysteries, and surprising explanations over shock value.
-- Reject exaggerated clickbait, contrived disaster scenarios, bizarre body-horror premises, implausible hypotheticals, and over-engineered questions.
-- Do not turn an ordinary science question into a sensational "what if" just to make it sound clickable.
-- Avoid overly broad textbook headings such as "How does physics work?" but do NOT mistake a simple, specific question like "Why is the sky blue?" for a boring topic.
+STYLE TARGET:
+- Think of questions ordinary curious people naturally ask: Why do we dream? Why is the ocean salty? How do airplanes stay in the air? Why does the Moon change shape? How do bees communicate? Why is the sky blue? How do black holes work? Why do we get goosebumps? How do plants know which way is up? Why do we have fingerprints? How do clouds make rain? Why do we sneeze? How do magnets work? Why do stars twinkle? Why is space silent? How do volcanoes erupt?
+- These are examples of the desired simplicity and broad curiosity, not a list to copy. Make up fresh questions.
+- Titles should be short, clear, conversational, and understandable at a glance. Often a natural "Why...", "How...", or "What makes..." question works best.
+- Interesting science is enough. Do not manufacture drama, danger, catastrophe, or extreme stakes to make a title clickable.
+- A simple question can be an excellent episode. Do not mistake straightforward wording for a boring idea.
+- Avoid contrived disasters, bizarre body-horror, implausible hypotheticals, over-engineered scenarios, exaggerated clickbait, obscure specialist topics, and vague textbook headings.
+- The science must support a complete 8–10 minute explanation with several layers, examples, surprising facts, and visual possibilities.
+- Stay strictly within the selected category. Do not drift into another category because its topic sounds more dramatic.
+- Be scientifically grounded; for mysteries, focus on real open questions and evidence, not paranormal speculation.
+- The proposed subject must be genuinely distinct from every previous episode. Never reuse the same underlying phenomenon, event, mechanism, central question, or viewer takeaway with different wording. Check the complete used-topic list below; if there is meaningful overlap, silently choose another candidate.
+- Do not expose brainstorming, rankings, or rejected candidates.
 
-The topic must sustain a complete 8–10 minute story: open with an irresistible question or visual moment,
-raise the stakes, reveal increasingly surprising facts, and finish with a satisfying scientifically accurate
-answer or twist.
-Do NOT switch to another category. Do NOT choose obscure species, highly specialized biological mechanisms,
-technical research-paper questions, or tiny niche facts. For Animals, focus on familiar or visually striking
-animals and extraordinary abilities/survival strategies that reveal a bigger scientific idea. For Technology,
-focus on consequential technologies and surprising real-world possibilities or limitations. For Mysteries
-of science, choose profound questions that can be explored with evidence, not paranormal speculation.
-Create a title that sounds like a compelling YouTube episode, usually as a question or a vivid "what if".
-The subject itself must be completely new, not merely a differently worded title. Never reuse the same underlying question, event, scientific phenomenon, or central explanation from any previously generated episode. Treat synonyms, paraphrases, alternate wording, and narrow variations of an old topic as repeats. Compare against the COMPLETE lifetime used-topic list below; if the idea overlaps, choose a genuinely different subject.
-Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
-Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
+Return JSON only: {"title":"...","angle":"one sentence describing the distinctive explanation or curiosity hook"}.
+Previously generated topics (never repeat or closely duplicate): """ + json.dumps(used_topics, ensure_ascii=False) +
 "\nThe only permitted category for this episode is: " + selected_pillar, validate_topic, "Topic generation", 0.45)
     candidate = topic_data.get("title", "").strip()
     candidate_angle = topic_data.get("angle", "").strip()
