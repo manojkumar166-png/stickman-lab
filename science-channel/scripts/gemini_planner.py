@@ -58,28 +58,36 @@ def parse_gemini_json(raw_text):
 
 
 def gemini(prompt, temperature=0.7):
+    """Call Gemini with retries for transient network/API errors and malformed JSON."""
     request_prompt = prompt
     last_error = None
     for attempt in range(5):
-        payload = {"contents":[{"parts":[{"text":request_prompt}]}],
-                   "generationConfig":{"temperature":temperature,"responseMimeType":"application/json","maxOutputTokens":16384}}
-        r = requests.post(API, params={"key":API_KEY}, json=payload, timeout=180)
-        if not r.ok:
-            if r.status_code not in (429,500,502,503):
-                r.raise_for_status()
-            if attempt == 4:
-                r.raise_for_status()
-            time.sleep(3 * (attempt + 1))
-            continue
+        payload = {
+            "contents": [{"parts": [{"text": request_prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 16384
+            }
+        }
+        try:
+            response = requests.post(API, params={"key": API_KEY}, json=payload, timeout=180)
+            if not response.ok:
+                if response.status_code not in (408, 429, 500, 502, 503, 504):
+                    response.raise_for_status()
+                last_error = RuntimeError(
+                    f"Gemini API HTTP {response.status_code}: {response.text[:1000]}"
+                )
+                raise last_error
 
-        data = r.json()
-        candidates = data.get("candidates") or []
-        if not candidates:
-            last_error = RuntimeError(
-                "Gemini returned no candidates. Prompt feedback: " +
-                json.dumps(data.get("promptFeedback", {}), ensure_ascii=False)[:1000]
-            )
-        else:
+            data = response.json()
+            candidates = data.get("candidates") or []
+            if not candidates:
+                raise ValueError(
+                    "Gemini returned no candidates: " +
+                    json.dumps(data.get("promptFeedback", {}), ensure_ascii=False)[:1000]
+                )
+
             candidate = candidates[0]
             parts = candidate.get("content", {}).get("parts", [])
             response_text = "".join(
@@ -88,34 +96,33 @@ def gemini(prompt, temperature=0.7):
             try:
                 return parse_gemini_json(response_text)
             except (json.JSONDecodeError, TypeError) as exc:
-                last_error = exc
                 finish_reason = candidate.get("finishReason", "unknown")
-                print(
-                    f"Gemini returned invalid JSON (attempt {attempt + 1}/5; "
-                    f"finishReason={finish_reason}; {exc}). Retrying...",
-                    flush=True
+                last_error = RuntimeError(
+                    f"Invalid Gemini JSON (finishReason={finish_reason}): {exc}"
                 )
-                if attempt < 4:
-                    request_prompt = (
-                        prompt +
-                        "\n\nIMPORTANT RETRY: Your previous response was invalid JSON. "
-                        "Regenerate the complete response from scratch. Return exactly one "
-                        "valid JSON object, with every string correctly escaped, every "
-                        "property separated by commas, and no Markdown or commentary. "
-                        "Do not truncate the response."
-                    )
-                    time.sleep(2 * (attempt + 1))
-                    continue
+                raise last_error
+
+        except requests.RequestException as exc:
+            last_error = exc
+        except (ValueError, KeyError, TypeError, RuntimeError) as exc:
+            last_error = exc
+
+        print(
+            f"Gemini request/response failed (attempt {attempt + 1}/5): {last_error}",
+            flush=True
+        )
         if attempt < 4:
             request_prompt = (
                 prompt +
-                "\n\nIMPORTANT RETRY: Return one complete valid JSON object only. "
-                "Do not include Markdown or commentary."
+                "\n\nAUTOMATIC RETRY: The previous Gemini request failed: " +
+                str(last_error)[:800] +
+                ". Return one complete valid JSON object only. Correct the issue, "
+                "escape all strings correctly, and do not include Markdown or commentary."
             )
-            time.sleep(2 * (attempt + 1))
+            time.sleep(min(3 * (attempt + 1), 15))
 
     raise RuntimeError(
-        f"Gemini failed to return valid JSON after 5 attempts. Last error: {last_error}"
+        f"Gemini request failed after 5 attempts. Last error: {last_error}"
     )
 
 def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
