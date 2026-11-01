@@ -111,7 +111,7 @@ Create a title that sounds like a compelling YouTube episode, usually as a quest
 The title must be meaningfully different from every previously used topic, not a rewording or narrow variant.
 Before returning, silently compare it against the used-topic list and reject anything too similar.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
-Previously used topics (never repeat these): """ + json.dumps(used_topics[-1000:], ensure_ascii=False) +
+Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
 "\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
     candidate = topic_data.get("title", "").strip()
     if candidate and not is_duplicate_topic(candidate):
@@ -121,6 +121,12 @@ if topic is None:
     raise RuntimeError("Gemini did not provide a new unused topic after 5 attempts; no episode was created.")
 
 title = topic["title"]
+
+# Reserve the topic immediately after Gemini generates and accepts it. This means
+# even an interrupted/failed package build cannot cause the same topic to be reused.
+history.setdefault("topics", []).append(title)
+HISTORY.parent.mkdir(parents=True, exist_ok=True)
+HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\\n")
 # Use the next available episode number for today; never overwrite an earlier run.
 day_root = episode_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
