@@ -72,7 +72,6 @@ topic_pillars = [
     ("Earth, climate and extreme weather", "What would happen if the Gulf Stream stopped?"),
     ("Engineering and mega-structures", "How could humans build a city under the ocean?"),
     ("Food science and everyday mysteries", "Why does popcorn explode and turn inside out?"),
-    ("Mathematics and impossible-seeming puzzles", "Can infinity come in different sizes?"),
     ("Inventions and scientific breakthroughs", "What accidental discovery changed the modern world?"),
 ]
 selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
