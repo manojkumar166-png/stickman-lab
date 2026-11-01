@@ -229,7 +229,7 @@ You need a Cloudflare account with Workers AI access.
 
 1. Sign in to the Cloudflare dashboard.
 2. Find your Cloudflare account ID in the account overview/dashboard URL or account details.
-3. Create an API token in the Cloudflare dashboard. Give it the minimum Workers AI permissions required by Cloudflare's current documentation for running AI models on the selected account. Do not use an unrestricted global API key if a scoped token is available.
+3. On the Workers AI page, select **Use REST API → Create a Workers AI API Token** and use Cloudflare's recommended token template. If you create a custom token instead, Cloudflare's current REST API guidance requires the account-level **Workers AI - Read** permission for model execution; the Workers AI onboarding page also describes a custom-token setup with **Workers AI - Read** and **Workers AI - Edit**. Prefer the official Workers AI token template, or follow the current permission guidance displayed by Cloudflare when creating the token. Do not grant unrelated account permissions or use an unrestricted Global API Key.
 4. In this GitHub repository, open **Settings → Secrets and variables → Actions → Secrets**.
 5. Add these exact repository secret names:
 
@@ -432,7 +432,7 @@ If you use a Telegram group instead of a private chat, add the bot to that group
 The project filters incoming messages by exact chat ID and sends outgoing files to that same configured destination.
 
 1. Send a message to your bot (for a group, send a message after adding the bot).
-2. Use Telegram's Bot API `getUpdates` method with your bot token to inspect the update's `message.chat.id`. Keep the token private. Do not paste a tokenized API URL into a public browser, issue or chat.
+2. Send a fresh message such as `/start` to the bot. Then, in a private terminal where you have set `TELEGRAM_BOT_TOKEN`, run `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates"`. Find the newest update's `message.chat.id`. If the receiver workflow polls at the same time, it may consume the update first; temporarily disable/pause the receiver schedule or send another message and inspect updates promptly. Keep the token private. Do not paste a tokenized API URL or the full response into a public issue, repository or chat.
 3. Copy the numeric chat ID exactly. Group chat IDs are often negative; do not remove a minus sign.
 4. In GitHub, open **Settings → Secrets and variables → Actions → Secrets**.
 5. Create/update:
@@ -444,7 +444,7 @@ The same names are referenced by the planner, receiver and video workflows. If t
 
 ### How the code uses the credentials
 
-The image receiver reads both environment variables in `science-channel/scripts/telegram_image_receiver.py`. The planner sends its prompt document with Telegram's `sendDocument` endpoint. The video workflows use the `PonomarevDA/telegram-upload@v1` GitHub Action with the same token and chat ID.
+The image receiver reads both environment variables in `science-channel/scripts/telegram_image_receiver.py`. It uses Telegram Bot API methods `getUpdates`, `getFile`, `sendMessage` and the file download URL. The planner sends its prompt document with `sendDocument`. The video workflows use the `PonomarevDA/telegram-upload@v1` GitHub Action with the same token and chat ID. See the official [Telegram Bot API reference](https://core.telegram.org/bots/api) for method parameters, file handling, update polling and platform limits.
 
 If you use different bots for different workflows, edit the relevant workflow secret references (for example `secrets.TELEGRAM_BOT_TOKEN`) to use separate secret names, then create those secrets in repository settings. Do not hardcode a token in a workflow file.
 
