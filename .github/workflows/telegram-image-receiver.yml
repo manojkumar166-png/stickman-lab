@@ -11,7 +11,7 @@ concurrency:
 jobs:
   receive:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       SCIENCE_BRANCH: main
     steps:
@@ -23,12 +23,15 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install receiver dependency
-        run: python -m pip install requests
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 requests
       - name: Receive Telegram images for main branch episodes only
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python science-channel/scripts/telegram_image_receiver.py
+        run: python -u science-channel/scripts/telegram_image_receiver.py
       - name: Commit received images and receiver state to main
         shell: bash
         run: |
