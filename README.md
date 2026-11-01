@@ -95,3 +95,41 @@ git pull origin main --rebase
 git add README.md
 git commit -m "Update README with all three workflows and latest fixes"
 git push
+
+---
+
+## 🎥 Science Channel: Upload, Render & Telegram Delivery
+
+The Science Channel rendering workflow runs from **`main`**. Upload scene images or a ZIP archive into the relevant episode's incoming folder:
+
+```text
+science-channel/daily-episodes/YYYY-MM-DD/episode-NNN-your-topic/
+└── images/
+    └── incoming/
+        ├── .gitkeep
+        └── dream.zip
+```
+
+Replace the date and episode folder with the actual episode you want to render. Keep the ZIP directly inside `images/incoming/`; do not put it beside the rendered MP4 or in the episode's top-level folder.
+
+### Reusing the same ZIP filename for testing
+
+You can repeatedly use a filename such as `dream.zip`. After the workflow renders the episode and **successfully sends the video to Telegram**, it automatically:
+
+- Deletes the uploaded ZIP and scene image files from `images/incoming/`.
+- Removes the episode's `READY.txt` marker, if present.
+- Keeps `.gitkeep`, the episode script and metadata, and the rendered video.
+- Commits the upload cleanup to **`main`**.
+
+Once that cleanup commit has reached `main`, upload `dream.zip` again to the same episode folder to run another test. Wait for the previous cleanup to finish before re-uploading the same filename.
+
+**If Telegram delivery fails**, cleanup is skipped and the uploaded files are retained so you can retry. The workflow uses the rendered MP4 as an Actions artifact as well.
+
+### Workflow
+
+- Workflow file: `.github/workflows/free-science-visuals.yml`
+- Trigger: a push that adds or changes files under an episode's `images/incoming/` folder or its `READY.txt` marker.
+- Manual runs: use **Actions → Free Science Visuals — Render Ready Episode → Run workflow**. You can optionally provide the exact episode folder path.
+- Branch: this workflow checks out and commits changes to **`main`**.
+
+Do not upload test ZIPs to `adaptive-cinematic-effects`; the Science Channel upload and rendering process is intended to run on `main`.
