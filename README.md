@@ -236,17 +236,19 @@ The [Science Channel operating guide](science-channel/README.md#customize-the-sc
 
 The two integrations are used differently by the two video pipelines. Read the correct guide before changing credentials, providers, upload limits or workflow behavior.
 
-## ☁️ Cloudflare Workers AI
+## ☁️ Cloudflare Workers and Workers AI
 
-Cloudflare Workers AI is currently used by the **root AI Video Experiment only**. It generates the scene illustrations through the FLUX-2-KLEIN-4B model. The Science Channel episode pipeline does not currently call Cloudflare for its image generation.
+Cloudflare **Workers AI** is currently used by the **root AI Video Experiment only**. It generates scene illustrations through the FLUX-2-KLEIN-4B model. The Science Channel episode pipeline does not currently call Cloudflare for image generation.
 
-- Required secrets: `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
+**Important architecture note:** the repository currently calls the Workers AI REST API directly from `scripts/make_art.py`. It does **not** currently deploy or run a separate Cloudflare Worker application. A deployed Worker is optional; it can be added as an API gateway/proxy if you want your own endpoint, authentication, validation, rate limiting or centralized configuration.
+
+- Current direct API secrets: `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
 - Active implementation: `scripts/make_art.py`.
 - Current model endpoint: `@cf/black-forest-labs/flux-2-klein-4b`.
 - Current image request: 1024 × 576, multipart form data, bearer-token authentication, 120-second request timeout and 6-second delay between scene requests.
 - Failure behavior: failed individual scenes reuse a successful generated image; if all Cloudflare image requests fail, the root generator uses locally drawn stickman artwork.
 
-For step-by-step Cloudflare account/token setup, API endpoint and request schema, model replacement, dimensions, art prompt, pacing, retries, fallback behavior and error troubleshooting, read [AI Video Experiment — Cloudflare setup and customization](AI_README.md#-cloudflare-workers-ai--complete-setup-configuration-and-troubleshooting).
+The detailed manual now covers both **Workers AI REST API setup/modification** and **actual Cloudflare Worker creation, Wrangler deployment, variables/secrets, editing, staging/production environments, and how to connect this repository to a Worker gateway**. Start here: [Cloudflare Worker + Workers AI setup and modification guide](AI_README.md#-cloudflare-workers--create-deploy-configure-and-modify-a-worker), then see the [Workers AI integration and model guide](AI_README.md#-cloudflare-workers-ai--complete-setup-configuration-and-troubleshooting).
 
 ## 📲 Telegram
 
