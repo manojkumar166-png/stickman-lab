@@ -54,10 +54,22 @@ Daily schedule or manual start
    After successful Telegram delivery, removes uploaded ZIP/images and READY.txt from the Git repository
 ```
 
+### How topic selection works
+
+Every planner run randomly selects one broad science category, then asks Gemini to invent one fresh topic inside that category. The categories rotate across areas such as space and astronomy, the human body and mind, oceans and weather, animals, plants, everyday physics, light and sound, geology, technology and engineering, chemistry, fossils, and food science.
+
+The planner reads `science-channel/topics.txt` as a **style guide**, not as a fixed queue of titles. Its example questions demonstrate the intended tone: simple, specific, familiar, and naturally intriguing—for example, “Why do we get goosebumps?”, “How do bees communicate?”, or “Why is the sky blue?” These examples illustrate the style; Gemini should create a different question rather than copy or lightly reword them.
+
+For each run, Gemini is instructed to brainstorm at least 10 candidate ideas internally and choose the strongest one for the selected category. The goal is a question that makes a broad audience curious, has a satisfying evidence-based scientific answer, and offers enough layers and visuals for an 8–10 minute episode. Straightforward everyday science is welcome; exaggerated clickbait, manufactured disasters, bizarre body-horror, and unnecessarily complicated hypotheticals are discouraged.
+
+The planner also checks the complete generated-topic history and existing episode metadata. It rejects exact/title-similar repeats and uses a semantic review to reject topics that cover the same underlying scientific subject, even when phrased differently. If it cannot find a sufficiently distinct topic within its retry limit, it stops rather than knowingly creating a duplicate.
+
+To tune topic style, edit the examples in `science-channel/topics.txt` and the category/style instructions in `science-channel/scripts/gemini_planner.py`. Treat seed entries as examples, not as a to-do list. Accepted topics are recorded in `science-channel/history/generated-topics.json`.
+
 ### Workflow A — Daily Gemini Planner
 
 - **When it runs:** Automatically once every day at 01:15 UTC (06:45 India Standard Time). You can also manually run **Science Channel — Daily Gemini Planner** as often as you need; there is no one-episode-per-day cap.
-- **What each run does:** Every automatic or manual run creates exactly one new episode. Gemini selects a topic that is not in the generated-topic history, writes the episode metadata and complete narration script, and creates exactly 48 numbered scene records. Multiple manual runs on the same date create `episode-001`, `episode-002`, `episode-003`, and so on; earlier episodes are not overwritten.
+- **What each run does:** Every automatic or manual run creates exactly one new episode. The planner randomly chooses a broad science category, uses `topics.txt` as a style guide, and asks Gemini to generate a fresh question in that category. It checks prior topics for duplicates, then writes the episode metadata and complete narration script and creates exactly 48 numbered scene records. Multiple manual runs on the same date create `episode-001`, `episode-002`, `episode-003`, and so on; earlier episodes are not overwritten.
 - **Image prompts:** A second Gemini request creates exactly one visual prompt for each finalized scene. New prompts are told not to add a presenter or talking-head explainer by default; the image should depict the science concept, action, environment or visual metaphor in that scene.
 - **What gets saved:** The planner creates the episode folder and its five starter items: `episode.json`, `script.md`, `scenes.json`, `image-prompts.md`, and `images/incoming/.gitkeep`. It also updates the topic history so the topic is not selected again.
 - **How it finishes:** The workflow optionally sends `image-prompts.md` to Telegram, then commits the generated Science Channel package to the repository. Telegram is non-blocking: a missing Telegram secret or a send failure does not prevent the episode package commit.
