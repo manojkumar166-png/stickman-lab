@@ -125,7 +125,7 @@ audio = work/"narration.mp3"
 
 def split_narration(text, max_chars=2400):
     """Keep TTS requests short enough to avoid oversized/fragile single requests."""
-    sentences = re.split(r"(?<=[.!?])\\s+", text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     chunks, current = [], ""
     for sentence in sentences:
         sentence = sentence.strip()
