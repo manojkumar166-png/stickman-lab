@@ -496,6 +496,62 @@ Telegram is the transport layer between the episode package and the render workf
 
 The receiver and the ZIP importer are two different upload routes. Choose one route for an episode; do not upload the same 48 images through both routes.
 
+## 1A. How the existing bot is implemented (code-level map)
+
+This repository does not run a separate always-on Telegram server. The Science Channel bot is a Python **long-polling/polling receiver executed by GitHub Actions**.
+
+```text
+Telegram Bot API
+  └─ getUpdates (new message updates)
+       └─ .github/workflows/telegram-image-receiver.yml
+            └─ science-channel/scripts/telegram_image_receiver.py
+                 ├─ read TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+                 ├─ load telegram-bot-state.json (offset + episode_path)
+                 ├─ getUpdates(offset=last_update_id + 1)
+                 ├─ check message.chat.id against configured chat ID
+                 ├─ handle /start, /help, /episode
+                 ├─ getFile and download photo/document
+                 ├─ store scene-01 ... scene-48
+                 ├─ create READY.txt when all 48 slots exist
+                 └─ save updated state
+                      └─ GitHub Actions commits files and state to main
+                           └─ push starts free-science-visuals.yml
+```
+
+### Python receiver internals
+
+| Function/constant | What it does now | Where to modify |
+|---|---|---|
+| `TOKEN`, `CHAT_ID`, `API` | Read token/chat ID from environment and construct Bot API base URL | Change credential names only together with workflow secret mapping |
+| `api(method, **kwargs)` | Calls Telegram Bot API with `requests.post`, checks HTTP and Telegram `ok` response | Change HTTP timeout, request handling or API error logging |
+| `send(text)` | Sends a Telegram `sendMessage` reply to configured chat | Change bot reply delivery or default reply formatting |
+| `load_state()`, `save_state()` | Read/write JSON offset and selected episode | Change persistence carefully; offset prevents old updates being replayed |
+| `valid_episode()` | Validates date/episode path and requires `episode.json` | Change accepted episode naming/path only with planner and renderer |
+| `newest_episode()` | Finds latest episode folder containing `episode.json` | Change automatic episode selection |
+| `image_payload()` | Detects Telegram photos, supported image documents and ZIP documents | Change accepted file formats/MIME rules |
+| `scene_numbers()` | Finds already received scene numbers 01–48 | Change naming/count only with the rest of the 48-scene pipeline |
+| `main()` | Polls updates, filters chat, handles commands, downloads files, writes images and READY marker | Add commands or change upload/selection behavior |
+
+### Workflow internals
+
+`.github/workflows/telegram-image-receiver.yml` schedules the script every five minutes (UTC) and also supports manual runs. It checks out `main`, installs Python 3.11 and `requests`, maps the two Telegram secrets into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
+
+### How the outgoing messages are sent
+
+- **Planner prompt document:** `.github/workflows/science-channel-daily-planner.yml` uses a direct Telegram Bot API `sendDocument` request with multipart fields for chat ID, `image-prompts.md` and caption.
+- **Finished MP4:** `.github/workflows/free-science-visuals.yml` uses `PonomarevDA/telegram-upload@v1` with the bot token, chat ID, MP4 path and message caption.
+- **Staged ZIP import:** `.github/workflows/telegram-zip-import.yml` is a separate manual GitHub workflow; it does not receive a ZIP through Telegram. It extracts a ZIP already committed under `science-channel/telegram-uploads/` and uses `GH_PAT` to push the result to `main`.
+
+### Safely customize it
+
+- To change bot token or chat, replace `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` in GitHub Secrets. Do not hardcode them.
+- To change bot replies or add a command, edit `main()` and `send()` in `science-channel/scripts/telegram_image_receiver.py`. Handle the command before file processing and use `continue` after replying.
+- To change the polling interval, edit the cron in `.github/workflows/telegram-image-receiver.yml`. Keep `workflow_dispatch` if manual polling is useful.
+- To change upload formats/limits, update `image_payload()`, ZIP suffix checks and the size guards together. Also update this README and the AI README's Telegram manual.
+- To change outgoing captions, edit the `sendDocument` caption in the planner workflow or the upload action's `message` in the renderer workflow.
+- To change the number of images, update every component that assumes 48 scenes: planner, receiver, ZIP importer, episode settings, renderer, validation, prompts and documentation. A partial change will break the upload-to-render handoff.
+- Keep receiver checkout, commit and push targets on `main`. Do not redirect Science Channel Telegram automation to `adaptive-cinematic-effects`.
+
 ## 2. Bot setup and GitHub configuration
 
 Create a bot using Telegram's official **@BotFather**:
