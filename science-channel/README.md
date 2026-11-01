@@ -474,3 +474,203 @@ After changing a secret, rerun the relevant workflow. Do not put tokens in YAML,
 5. For workflow changes, use **Actions → workflow → Run workflow** on `main` when safe.
 6. Check the complete Actions log, downloaded artifact, Telegram delivery and cleanup commit. A successful code commit is not proof of an end-to-end successful workflow run.
 
+
+
+---
+
+# 📲 Telegram operations — detailed Science Channel manual
+
+This section is specifically for the 48-scene Science Channel pipeline. For the separate Cloudflare AI Video Experiment's Telegram delivery, see [AI Video Experiment — Telegram and Cloudflare details](../AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide).
+
+## 1. What Telegram does in this pipeline
+
+Telegram is the transport layer between the episode package and the render workflow. It does not generate the scene images.
+
+| Telegram operation | Trigger/workflow | File or result |
+|---|---|---|
+| Send the 48 image prompts | Planner workflow, after episode commit | Sends `image-prompts.md` as a document |
+| Receive 48 individual images or one ZIP | Telegram Image Receiver, polls every 5 minutes | Saves numbered files in the selected episode's `images/incoming/` |
+| Import a ZIP staged in GitHub | Telegram ZIP Import, manual workflow | Extracts 48 images into `images/incoming/` |
+| Send finished episode | Render workflow, after MP4 artifact upload | Sends the final MP4 to the configured chat |
+| Cleanup source images | Render workflow, only after successful Telegram send | Deletes incoming images/ZIP and READY marker from main |
+
+The receiver and the ZIP importer are two different upload routes. Choose one route for an episode; do not upload the same 48 images through both routes.
+
+## 2. Bot setup and GitHub configuration
+
+Create a bot using Telegram's official **@BotFather**:
+
+1. Open BotFather in Telegram and send `/newbot`.
+2. Choose the bot display name and a unique username ending in `bot`.
+3. Save the API token privately.
+4. Open your new bot and press Start.
+5. Send a message to the bot so Telegram has an update containing your chat ID.
+6. Obtain the numeric `message.chat.id` from the Bot API `getUpdates` response. Treat the bot token as a password; do not paste tokenized URLs into public places.
+7. In GitHub, open repository **Settings → Secrets and variables → Actions → Secrets** and add:
+
+| Secret | Value | Purpose |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather token | Authenticates Bot API calls and video-upload action |
+| `TELEGRAM_CHAT_ID` | Numeric private chat or group ID | Destination for outgoing messages and allowlisted source chat for incoming uploads |
+| `GH_PAT` | Personal access token with repository contents write access | Allows the ZIP importer to push extracted files to main |
+
+The receiver checks the incoming chat ID for exact equality with `TELEGRAM_CHAT_ID`. Group IDs may be negative; keep the minus sign. A private chat with the bot is simplest. If you use a group, add the bot and ensure group privacy settings allow it to receive the image/document messages you intend to send.
+
+Never add tokens to the repository, README, source code, workflow inputs or episode files. If a token leaks, revoke it and replace the matching GitHub secret.
+
+## 3. Telegram Image Receiver — every-five-minute poller
+
+Workflow: [telegram-image-receiver.yml](../.github/workflows/telegram-image-receiver.yml)
+
+- Schedule: `*/5 * * * *` (every five minutes, UTC).
+- Manual run: GitHub Actions → Telegram Image Receiver → Run workflow.
+- Runtime: Ubuntu latest, Python 3.11, `requests`, 8-minute job timeout.
+- Permissions: repository contents write.
+- Branch: always checks out and pushes to `main`.
+- State file: `science-channel/telegram-bot-state.json`.
+- Receiver script: `science-channel/scripts/telegram_image_receiver.py`.
+
+This is not a permanently running service. GitHub Actions starts the script on schedule; the script asks Telegram for updates using `getUpdates`, processes the returned messages and exits. Therefore an image may wait until the next scheduled run. GitHub may delay scheduled jobs during heavy load; manually run the workflow if you need to poll sooner.
+
+The state file stores the Telegram update offset and selected episode path. The offset prevents the bot from repeatedly processing already handled updates. Do not delete or reset this file without understanding that old updates may be delivered again.
+
+### Commands
+
+| Command | Result |
+|---|---|
+| `/start` | Displays the bot's upload instructions. |
+| `/help` | Displays the same upload instructions. |
+| `/episode YYYY-MM-DD/episode-NNN` | Selects an existing episode already committed to main. |
+
+Example:
+
+```text
+/episode 2026-11-01/episode-001
+```
+
+The date and episode folder must match the actual repository path, and `episode.json` must exist on main. The bot does not create an episode from this command.
+
+If no valid episode is selected, the receiver chooses the newest episode package on main. Its auto-selection logic can replace an older selected episode when a newer package appears. Check the bot's selection confirmation before uploading images to an older episode.
+
+### Upload individual images
+
+Accepted formats are JPG/JPEG, PNG and WebP. Telegram photo messages are saved as JPG. Documents are accepted when their extension/MIME type identifies one of the supported formats.
+
+- Individual image limit: 20 MiB.
+- General downloaded Telegram file guard: 50 MiB.
+- Images are assigned to the next missing slot based on arrival order.
+- The image filename and caption do not choose the scene number.
+- The bot replies with the number received and the next missing scene.
+- When slots 01–48 all exist, it writes `READY.txt`.
+
+Send scene 01 first, then scene 02, and so on. If you send an image intended for scene 30 first, the receiver will store it as scene 01.
+
+### Upload one ZIP directly to the bot
+
+- ZIP must contain exactly 48 supported image entries (PNG/JPG/JPEG/WebP).
+- Downloaded ZIP must be no larger than 50 MiB.
+- Each contained image must be no larger than 20 MiB.
+- The episode's incoming folder must have no existing scene images.
+- The receiver sorts archive image names alphabetically, ignoring case, and writes them as `scene-01` through `scene-48`.
+- Non-image ZIP entries are ignored.
+
+Use filenames with zero-padded numbers (`scene-01.png`, `scene-02.png`, …) so alphabetical order matches scene order. The receiver does not extract the original directory tree; it reads image entries and writes renamed scene files.
+
+Do not send a ZIP after you have already sent individual scene images. The ZIP will be skipped when the episode already contains images.
+
+## 4. Telegram ZIP Import — stage in GitHub, then import
+
+Workflow: [telegram-zip-import.yml](../.github/workflows/telegram-zip-import.yml)
+
+Use this if you want to upload the ZIP to the repository first instead of sending it through the bot.
+
+1. Commit the ZIP directly into `science-channel/telegram-uploads/` on main.
+2. Open Actions → Telegram ZIP Import → Run workflow.
+3. Set `episode_path` to the complete episode folder.
+4. Set `zip_path` to the ZIP's repository path.
+5. Start the workflow.
+
+Example inputs:
+
+```text
+episode_path:
+science-channel/daily-episodes/2026-11-01/episode-001
+
+zip_path:
+science-channel/telegram-uploads/dream.zip
+```
+
+The ZIP filename is unrestricted except that it must end in `.zip`; it must be directly in the staging folder, not in a nested directory.
+
+Importer limits and checks:
+- ZIP: non-empty, maximum 25 MiB.
+- Exactly 48 image entries with PNG/JPG/JPEG/WebP extensions.
+- Each image: maximum 20 MiB.
+- Rejects absolute archive paths, `..` traversal and symbolic links.
+- Rejects duplicate image basenames.
+- Refuses to overwrite any existing incoming images.
+- Uses natural filename sorting, then writes `scene-01` to `scene-48`.
+- Creates `READY.txt`.
+
+The workflow uses `GH_PAT` as the checkout token and pushes the imported images/READY marker to main. It removes the staged ZIP from the repository after extraction. The resulting push triggers the renderer.
+
+## 5. Planner prompt delivery and finished-video delivery
+
+### Image prompts
+
+After the planner commits the episode package and verifies it exists on main, it sends `image-prompts.md` through Telegram's `sendDocument` API. The caption contains the episode title and the upload folder path.
+
+Prompt delivery is non-blocking. If Telegram credentials are absent, the step skips; if Telegram rejects the document, the episode package remains committed.
+
+### Finished video
+
+After rendering, the workflow uploads the MP4 artifact first (2-day retention), then uses `PonomarevDA/telegram-upload@v1` to send the MP4 to the configured chat.
+
+- Telegram send is non-blocking.
+- Successful send enables cleanup of all incoming files except `.gitkeep` and deletion of `READY.txt`.
+- Cleanup is committed to main, allowing the same ZIP filename to be reused after the cleanup commit finishes.
+- Failed send skips cleanup. The uploaded images/ZIP and READY marker remain available for another attempt.
+- The MP4 artifact may already exist even if Telegram delivery fails.
+
+## 6. Modify Telegram behavior — exact code locations
+
+| What you want to change | Edit this | Details |
+|---|---|---|
+| Bot credentials or destination | Repository Actions secrets | Update `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID`; never hardcode them. |
+| Poll interval | `.github/workflows/telegram-image-receiver.yml` | Change `schedule.cron`; keep `workflow_dispatch` if manual polling is desired. |
+| Job timeout/Python version | Same receiver workflow | Change `timeout-minutes` or `python-version`. |
+| Bot commands/replies | `science-channel/scripts/telegram_image_receiver.py` | Edit command checks and `send()` messages. |
+| Incoming chat filter | Same receiver script | Edit comparison with `CHAT_ID`; retain a strict allowlist for security. |
+| Supported formats | `image_payload()` and ZIP extension tuple | Update both individual and ZIP handling consistently. |
+| File-size limits | Receiver script | Change the 20 MiB individual/ZIP-image checks and 50 MiB download guard. |
+| Scene numbering | `scene_numbers()` and image-save logic | Keep numbering range consistent with 48 scenes. |
+| Auto-selected episode | `newest_episode()` and selection logic in `main()` | Change sorting or selection policy. Review manual selection persistence. |
+| ZIP staging folder/limits | `science-channel/scripts/import_telegram_zip.py` | Change `STAGING_ROOT`, `ALLOWED`, `MAX_ZIP_BYTES`, `MAX_IMAGE_BYTES` and validation. |
+| Planner's Telegram document/caption | `.github/workflows/science-channel-daily-planner.yml` | Change the `curl` `sendDocument` fields/caption. |
+| Rendered-video Telegram caption | `.github/workflows/free-science-visuals.yml` | Change the upload action's `message` input. |
+| Telegram delivery failure behavior | Relevant workflow YAML | Change `continue-on-error` or reorder artifact, delivery and cleanup steps. |
+
+Changing 48 to another count is a coordinated project change: update settings, planner prompts/validation, receiver, ZIP importer, READY logic, renderer, workflow and documentation together. Do not change just one constant.
+
+## 7. Troubleshooting
+
+| Problem | Check |
+|---|---|
+| No bot response | Check whether the receiver workflow has run; it only polls every five minutes. Inspect the Action log and secrets. |
+| Bot ignores messages | Confirm the message comes from the exact configured chat ID. |
+| Group uploads ignored | Use a private chat or adjust group privacy settings and bot membership. |
+| Episode not found | Verify the exact date/episode path and that `episode.json` is already on main. |
+| Images saved in unexpected order | Receiver assigns scene slots by arrival order; resend in correct order after safely clearing/resetting the incomplete upload. |
+| ZIP not accepted | Check exactly 48 supported images, size limits, and that the incoming folder is empty. |
+| 48 images present but no render | Confirm the receiver/importer push to main succeeded and the renderer workflow was triggered by incoming files/READY marker. |
+| Telegram video not delivered | Check bot token, chat ID, bot access, action logs and Telegram upload limits. Download the Actions artifact if available. |
+| Same ZIP filename cannot be reused | Wait for successful delivery and the cleanup commit to complete on main. |
+
+## 8. Security and branch rules
+
+- Keep bot tokens and PATs in GitHub Secrets only.
+- Treat bot tokens as passwords; rotate them if exposed.
+- The receiver accepts uploads only from the configured chat ID.
+- Do not reset Telegram polling state without understanding its update offset.
+- Science Channel planner, receiver, ZIP importer, renderer and cleanup target `main` only.
+- Do not redirect this workflow set to `adaptive-cinematic-effects`.
