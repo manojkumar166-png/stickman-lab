@@ -81,6 +81,12 @@ def scene_numbers(directory):
                 found.add(int(match.group(1)))
     return found
 
+def natural_key(value):
+    """Natural-sort filename chunks so scene-2 sorts before scene-10."""
+    return [int(part) if part.isdigit() else part.casefold()
+            for part in re.split(r"(\\d+)", value)]
+
+
 def order_image_entries(entries):
     """Sort by numeric chunks in each filename; ZIP archive order is never used."""
     return list(enumerate(
