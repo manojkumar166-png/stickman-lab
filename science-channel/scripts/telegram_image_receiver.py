@@ -84,7 +84,7 @@ def scene_numbers(directory):
 def natural_key(value):
     """Natural-sort filename chunks so scene-2 sorts before scene-10."""
     return [int(part) if part.isdigit() else part.casefold()
-            for part in re.split(r"(\\d+)", value)]
+            for part in re.split(r"(\d+)", value)]
 
 
 def order_image_entries(entries):
