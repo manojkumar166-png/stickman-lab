@@ -58,78 +58,118 @@ def parse_gemini_json(raw_text):
 
 
 def gemini(prompt, temperature=0.7):
-    """Call Gemini with retries for transient network/API errors and malformed JSON."""
-    request_prompt = prompt
-    last_error = None
-    for attempt in range(5):
-        payload = {
-            "contents": [{"parts": [{"text": request_prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "maxOutputTokens": 16384
+    """Call Gemini with automatic model failover and retries for transient/invalid responses.
+
+    The configured primary model is always tried first on a fresh run. Once a model
+    succeeds, it becomes the preferred model for the remaining calls in this process.
+    """
+    global MODEL, API
+    configured = [MODEL] + SETTINGS.get("gemini_fallback_models", [])
+    # Preserve order while removing duplicates and empty entries.
+    model_candidates = list(dict.fromkeys(
+        str(model).strip() for model in configured if str(model).strip()
+    ))
+    failures = []
+
+    for model_index, model in enumerate(model_candidates):
+        model_api = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        request_prompt = prompt
+        last_error = None
+
+        # Two attempts per model for transient errors or malformed model output,
+        # then move to the next configured model instead of stalling the workflow.
+        for attempt in range(2):
+            payload = {
+                "contents": [{"parts": [{"text": request_prompt}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "maxOutputTokens": 16384
+                }
             }
-        }
-        try:
-            response = requests.post(API, params={"key": API_KEY}, json=payload, timeout=180)
-            if not response.ok:
-                error_detail = response.text[:2000]
-                last_error = RuntimeError(
-                    f"Gemini API HTTP {response.status_code}: {error_detail}"
-                )
-                if response.status_code not in (408, 429, 500, 502, 503, 504):
-                    raise requests.HTTPError(
-                        f"{last_error}. This is a non-retryable API/configuration error.",
-                        response=response
-                    )
-                raise last_error
-
-            data = response.json()
-            candidates = data.get("candidates") or []
-            if not candidates:
-                raise ValueError(
-                    "Gemini returned no candidates: " +
-                    json.dumps(data.get("promptFeedback", {}), ensure_ascii=False)[:1000]
-                )
-
-            candidate = candidates[0]
-            parts = candidate.get("content", {}).get("parts", [])
-            response_text = "".join(
-                part.get("text", "") for part in parts if isinstance(part, dict)
-            )
             try:
-                return parse_gemini_json(response_text)
-            except (json.JSONDecodeError, TypeError) as exc:
-                finish_reason = candidate.get("finishReason", "unknown")
-                last_error = RuntimeError(
-                    f"Invalid Gemini JSON (finishReason={finish_reason}): {exc}"
+                response = requests.post(
+                    model_api, params={"key": API_KEY}, json=payload, timeout=180
                 )
-                raise last_error
+                if not response.ok:
+                    detail = response.text[:2000]
+                    message = f"Gemini model {model} returned HTTP {response.status_code}: {detail}"
+                    lowered = detail.casefold()
+                    model_unavailable = any(term in lowered for term in (
+                        "model not found", "not found for api version",
+                        "is not supported", "does not exist", "not available",
+                        "permission denied for model", "model is not enabled",
+                        "unsupported model"
+                    ))
+                    if response.status_code in (400, 403, 404) and not model_unavailable:
+                        # A malformed request or invalid API key is not fixed by
+                        # switching models, so surface the real API response.
+                        raise requests.HTTPError(message, response=response)
+                    if response.status_code not in (400, 403, 404, 408, 429, 500, 502, 503, 504):
+                        raise requests.HTTPError(message, response=response)
+                    last_error = RuntimeError(message)
+                    raise last_error
 
-        except requests.HTTPError:
-            # Authentication, permission, and other permanent 4xx errors need a
-            # configuration fix; repeating the same request cannot repair them.
-            raise
-        except requests.RequestException as exc:
-            last_error = exc
-        except (ValueError, KeyError, TypeError, RuntimeError) as exc:
-            last_error = exc
+                data = response.json()
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    raise ValueError(
+                        f"{model} returned no candidates: " +
+                        json.dumps(data.get("promptFeedback", {}), ensure_ascii=False)[:1000]
+                    )
 
-        print(
-            f"Gemini request/response failed (attempt {attempt + 1}/5): {last_error}",
-            flush=True
-        )
-        if attempt < 4:
-            request_prompt = (
-                prompt +
-                "\n\nAUTOMATIC RETRY: The previous Gemini request failed: " +
-                str(last_error)[:800] +
-                ". Return one complete valid JSON object only. Correct the issue, "
-                "escape all strings correctly, and do not include Markdown or commentary."
+                candidate = candidates[0]
+                parts = candidate.get("content", {}).get("parts", [])
+                response_text = "".join(
+                    part.get("text", "") for part in parts if isinstance(part, dict)
+                )
+                try:
+                    result = parse_gemini_json(response_text)
+                except (json.JSONDecodeError, TypeError) as exc:
+                    finish_reason = candidate.get("finishReason", "unknown")
+                    raise RuntimeError(
+                        f"{model} returned invalid JSON (finishReason={finish_reason}): {exc}"
+                    ) from exc
+
+                # Keep the successful model first for every subsequent planner stage.
+                MODEL = model
+                API = model_api
+                if model_index:
+                    print(
+                        f"Gemini failover succeeded: switched to {model} "
+                        f"(primary model {model_candidates[0]} was unavailable).",
+                        flush=True
+                    )
+                else:
+                    print(f"Gemini model active: {model}", flush=True)
+                return result
+
+            except requests.HTTPError:
+                raise
+            except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError) as exc:
+                last_error = exc
+                print(
+                    f"Gemini model {model} failed (attempt {attempt + 1}/2): {exc}",
+                    flush=True
+                )
+                if attempt == 0:
+                    request_prompt = (
+                        prompt +
+                        "\\n\\nAUTOMATIC RETRY: The previous request on model " + model +
+                        " failed: " + str(exc)[:800] +
+                        ". Return one complete valid JSON object only. Correct the issue, " +
+                        "escape all strings correctly, and do not include Markdown or commentary."
+                    )
+                    time.sleep(3)
+
+        failures.append(f"{model}: {last_error}")
+        if model_index < len(model_candidates) - 1:
+            print(
+                f"Switching Gemini model automatically: {model} -> {model_candidates[model_index + 1]}",
+                flush=True
             )
-            time.sleep(min(3 * (attempt + 1), 15))
 
     raise RuntimeError(
-        f"Gemini request failed after 5 attempts. Last error: {last_error}"
+        "All configured Gemini models failed. " + " | ".join(failures)
     )
 
 def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
