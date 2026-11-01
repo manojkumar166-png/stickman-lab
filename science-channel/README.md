@@ -639,7 +639,7 @@ Send scene 01 first, then scene 02, and so on. If you send an image intended for
 - Downloaded ZIP must be no larger than 50 MiB.
 - Each contained image must be no larger than 20 MiB.
 - The episode's incoming folder must have no existing scene images.
-- The receiver sorts archive image names alphabetically, ignoring case, and writes them as `scene-01` through `scene-48`.
+- ZIP member order is ignored. If all 48 filenames clearly identify unique scene numbers 1–48 (for example `scene-48.png`, `scene-03.png`, or `48.png`), the receiver places each image into its matching scene slot. Otherwise, it naturally sorts filenames (`scene-2` before `scene-10`) and assigns slots 01–48. This automatically corrects out-of-order ZIP entries; ambiguous/unlabeled filenames still need a meaningful filename order.
 - Non-image ZIP entries are ignored.
 
 Use filenames with zero-padded numbers (`scene-01.png`, `scene-02.png`, …) so alphabetical order matches scene order. The receiver does not extract the original directory tree; it reads image entries and writes renamed scene files.
@@ -677,7 +677,7 @@ Importer limits and checks:
 - Rejects absolute archive paths, `..` traversal and symbolic links.
 - Rejects duplicate image basenames.
 - Refuses to overwrite any existing incoming images.
-- Uses natural filename sorting, then writes `scene-01` to `scene-48`.
+- Ignores ZIP entry order. If filenames clearly identify all unique scene numbers 1–48, preserves those exact scene slots; otherwise naturally sorts filenames and assigns slots 01–48. Thus an archive listing scene 48 before scene 3 is normalized automatically when the filenames identify those scene numbers.
 - Creates `READY.txt`.
 
 The workflow uses `GH_PAT` as the checkout token and pushes the imported images/READY marker to main. It removes the staged ZIP from the repository after extraction. The resulting push triggers the renderer.
