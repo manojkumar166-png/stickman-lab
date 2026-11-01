@@ -57,3 +57,28 @@ jobs:
           done
           echo "Could not publish imported images after 5 attempts."
           exit 1
+      - name: Alert Telegram when workflow fails
+        if: failure()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          JOB_NAME: ${{ github.job }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "Telegram alert skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured."
+            exit 0
+          fi
+          MESSAGE="🚨 GitHub Actions workflow failed%0AWorkflow: ${WORKFLOW_NAME}%0AJob: ${JOB_NAME}%0ABranch: ${BRANCH_NAME}%0ARun: #${RUN_NUMBER}%0A${RUN_URL}"
+          curl --fail --silent --show-error \\
+            --connect-timeout 15 --max-time 30 \\
+            --retry 3 --retry-all-errors --retry-delay 2 \\
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \\
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \\
+            --data-urlencode "text=${MESSAGE}"
