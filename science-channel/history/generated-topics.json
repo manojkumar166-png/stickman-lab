@@ -12,7 +12,8 @@
     "Could we survive a year trapped inside a completely sealed indoor biosphere?",
     "How do wood frogs completely freeze solid and wake up months later?",
     "What lives inside the mile-deep rock that hasn't seen the sun in two billion years?",
-    "What would happen if your body temperature dropped to room temperature and you woke back up?"
+    "What would happen if your body temperature dropped to room temperature and you woke back up?",
+    "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?"
   ],
   "topic_details": [
     {
@@ -64,6 +65,11 @@
       "title": "What would happen if your body temperature dropped to room temperature and you woke back up?",
       "angle": "Explores the astonishing limits of human suspended animation by examining the real-world medical science of deep hypothermia, showing how metabolic shutdown can turn the human body into a state resembling clinical death while leaving the door open for a miraculous recovery.",
       "pillar": "Impossible-sounding science"
+    },
+    {
+      "title": "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?",
+      "angle": "Explores the extreme engineering feats, hidden redundancy systems, and terrifying physics required to keep mega-bridges from tearing themselves apart under impossible loads.",
+      "pillar": "Engineering and mega-structures"
     }
   ]
 }
