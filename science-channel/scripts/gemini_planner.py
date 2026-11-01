@@ -108,8 +108,7 @@ animals and extraordinary abilities/survival strategies that reveal a bigger sci
 focus on consequential technologies and surprising real-world possibilities or limitations. For Mysteries
 of science, choose profound questions that can be explored with evidence, not paranormal speculation.
 Create a title that sounds like a compelling YouTube episode, usually as a question or a vivid "what if".
-The title must be meaningfully different from every previously used topic, not a rewording or narrow variant.
-Before returning, silently compare it against the used-topic list and reject anything too similar.
+The subject itself must be completely new, not merely a differently worded title. Never reuse the same underlying question, event, scientific phenomenon, or central explanation from any previously generated episode. Treat synonyms, paraphrases, alternate wording, and narrow variations of an old topic as repeats. Compare against the COMPLETE lifetime used-topic list below; if the idea overlaps, choose a genuinely different subject.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
 "\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
@@ -126,7 +125,7 @@ title = topic["title"]
 # even an interrupted/failed package build cannot cause the same topic to be reused.
 history.setdefault("topics", []).append(title)
 HISTORY.parent.mkdir(parents=True, exist_ok=True)
-HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\\n")
+HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 # Use the next available episode number for today; never overwrite an earlier run.
 day_root = episode_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
@@ -217,9 +216,5 @@ for prompt in prompts:
 )
 (images / ".gitkeep").write_text("")
 
-# Persist the topic immediately after successfully creating its package.
-history.setdefault("topics", []).append(final_title)
-HISTORY.parent.mkdir(parents=True, exist_ok=True)
-HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 print(f"Created ONE new topic: {final_title}")
 print(f"Created {folder} with 48 narration scenes and 48 matching prompts; upload 48 images (one ZIP or 48 files) to images/incoming/")
