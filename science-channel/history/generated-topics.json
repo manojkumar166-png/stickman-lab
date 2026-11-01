@@ -16,7 +16,8 @@
     "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?",
     "What if the Sun suddenly blinked out of existence for just one hour?",
     "Why do leaves change color in autumn?",
-    "Why do stars twinkle?"
+    "Why do stars twinkle?",
+    "Why does onions make us cry?"
   ],
   "topic_details": [
     {
@@ -88,6 +89,11 @@
       "title": "Why do stars twinkle?",
       "angle": "Explore how starlight travels across light-years of empty space only to be bent and scrambled in the final milliseconds by Earth's moving atmosphere.",
       "pillar": "Light, sound and vision"
+    },
+    {
+      "title": "Why does onions make us cry?",
+      "angle": "An exploration of the volatile sulfur compounds released when cell walls break and how they react with moisture in our eyes.",
+      "pillar": "Food and everyday chemistry"
     }
   ]
 }
