@@ -65,7 +65,6 @@ def gemini(prompt, temperature=0.7):
         payload = {
             "contents": [{"parts": [{"text": request_prompt}]}],
             "generationConfig": {
-                "temperature": temperature,
                 "responseMimeType": "application/json",
                 "maxOutputTokens": 16384
             }
@@ -73,11 +72,14 @@ def gemini(prompt, temperature=0.7):
         try:
             response = requests.post(API, params={"key": API_KEY}, json=payload, timeout=180)
             if not response.ok:
-                if response.status_code not in (408, 429, 500, 502, 503, 504):
-                    response.raise_for_status()
+                error_detail = response.text[:2000]
                 last_error = RuntimeError(
-                    f"Gemini API HTTP {response.status_code}: {response.text[:1000]}"
+                    f"Gemini API HTTP {response.status_code}: {error_detail}"
                 )
+                if response.status_code not in (408, 429, 500, 502, 503, 504):
+                    raise RuntimeError(
+                        f"{last_error}. This is a non-retryable API/configuration error."
+                    )
                 raise last_error
 
             data = response.json()
