@@ -360,7 +360,28 @@ the title must make a broad, curious viewer instantly feel "Wait, is that really
 "I have to know what happens." Prioritize mass audience appeal, instant comprehension, and a powerful
 curiosity gap over showing off obscure scientific knowledge.
 
-Before choosing, silently brainstorm several different candidate ideas and select the strongest one.
+SELECTION PROCESS (mandatory):
+1. Silently brainstorm at least 10 genuinely different candidate topics inside the selected category.
+2. Do NOT settle for the first plausible idea. Compare the candidates and discard predictable,
+   low-stakes, overly narrow, familiar textbook, or weakly visual ideas.
+3. Score the strongest candidates from 1–10 for click appeal, broad audience relevance, curiosity,
+   visual potential, and ability to sustain an 8–10 minute story. Select only a candidate that would
+   score at least 9/10 overall. If none qualifies, rethink the candidate pool before answering.
+4. Prefer a bold, concrete question with an immediate mental image, a surprising consequence,
+   real human stakes, or a counterintuitive reveal. A viewer should understand the premise in
+   one reading without needing specialist knowledge.
+5. Reject topics whose main hook is simply "could we survive X for a long time?", a generic
+   sealed-habitat/closed-system scenario, or an abstract possibility without a vivid consequence,
+   unless the scientific reveal is genuinely extraordinary and clearly explained.
+6. Return only the single best topic. Do not expose brainstorming, scores, or rejected candidates.
+
+QUALITY BAR — reject weak concepts:
+- Weak: "Could we survive a year trapped inside a completely sealed indoor biosphere?"
+  Why weak: the premise is abstract, the setting is unfamiliar, and the stakes are not instantly vivid.
+- Stronger direction: a familiar or dramatic situation with a surprising scientific consequence,
+  such as what would happen to the human body, Earth, an animal, or everyday life under an extreme
+  but scientifically grounded condition. These are illustrative directions, not topics to copy.
+
 Score the best candidate against these standards; reject it unless it is excellent:
 - INSTANT HOOK: creates a vivid question, surprising possibility, relatable mystery, or high-stakes scenario.
 - BROAD APPEAL: connects to something people already care about: their body, everyday life, Earth, animals,
