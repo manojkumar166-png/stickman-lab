@@ -59,13 +59,21 @@ def is_duplicate_topic(candidate):
 # Every episode must belong to one of these seven broad, viewer-friendly pillars.
 # Choose the pillar randomly in Python so Gemini cannot drift into unrelated niche subjects.
 topic_pillars = [
-    ("Space", "What would happen if Earth stopped rotating?"),
-    ("Human body", "Why does your brain create dreams?"),
-    ("Physics", "What would happen if gravity suddenly became weaker?"),
-    ("Earth science", "What lies beneath the Earth's deepest oceans?"),
-    ("Technology", "How could quantum computers change the world?"),
-    ("Animals", "How do animals survive extreme environments?"),
-    ("Mysteries of science", "Could humans ever travel through time?"),
+    ("Space and astronomy", "What would happen if Earth stopped rotating?"),
+    ("Human body and mind", "Why does your brain create dreams?"),
+    ("Physics and extreme what-if scenarios", "What would happen if gravity suddenly became weaker?"),
+    ("Earth science and natural wonders", "What lies beneath the Earth's deepest oceans?"),
+    ("Technology and future inventions", "How could quantum computers change the world?"),
+    ("Animals and animal superpowers", "How do animals survive extreme environments?"),
+    ("Mysteries of science and the universe", "Could humans ever travel through time?"),
+    ("Chemistry and astonishing materials", "Could a material exist that is harder than diamond?"),
+    ("Oceans and underwater discoveries", "What strange worlds could exist beneath the deepest ocean?"),
+    ("Dinosaurs, fossils and prehistoric life", "What did the world look like when dinosaurs ruled?"),
+    ("Earth, climate and extreme weather", "What would happen if the Gulf Stream stopped?"),
+    ("Engineering and mega-structures", "How could humans build a city under the ocean?"),
+    ("Food science and everyday mysteries", "Why does popcorn explode and turn inside out?"),
+    ("Mathematics and impossible-seeming puzzles", "Can infinity come in different sizes?"),
+    ("Inventions and scientific breakthroughs", "What accidental discovery changed the modern world?"),
 ]
 selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
 
