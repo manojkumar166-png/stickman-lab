@@ -248,7 +248,7 @@ Cloudflare **Workers AI** is currently used by the **root AI Video Experiment on
 - Current image request: 1024 × 576, multipart form data, bearer-token authentication, 120-second request timeout and 6-second delay between scene requests.
 - Failure behavior: failed individual scenes reuse a successful generated image; if all Cloudflare image requests fail, the root generator uses locally drawn stickman artwork.
 
-The detailed manual now covers both **Workers AI REST API setup/modification** and **actual Cloudflare Worker creation, Wrangler deployment, variables/secrets, editing, staging/production environments, and how to connect this repository to a Worker gateway**. Start here: [Cloudflare Worker + Workers AI setup and modification guide](AI_README.md#-cloudflare-workers--create-deploy-configure-and-modify-a-worker), then see the [Workers AI integration and model guide](AI_README.md#-cloudflare-workers-ai--complete-setup-configuration-and-troubleshooting).
+The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` builds and sends Workers AI requests, how the GitHub workflow supplies credentials, and exactly where to change the model, prompt, dimensions, timeout, pacing and fallback. Start with [How this repository implemented Cloudflare and how to modify it](AI_README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
 
 ## 📲 Telegram
 
@@ -268,7 +268,9 @@ Shared Science Channel/legacy secret names:
 The Telegram Image Receiver polls every five minutes; it is not a continuously running server. It accepts JPG/JPEG, PNG and WebP, supports 48 individual images or one 48-image ZIP, and writes a READY marker when all 48 scene slots exist. The staged ZIP importer has separate validation and size limits. The renderer sends the MP4 and cleans source images only after successful Telegram delivery.
 
 Read the detailed manuals:
-- [Science Channel — Telegram bot setup, commands, image uploads, ZIP import, video delivery and cleanup](science-channel/README.md#-telegram-operations--detailed-science-channel-manual)
-- [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order, modification and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
+- [Science Channel — how the Telegram bot is implemented, Python receiver functions, polling workflow and how to modify it](science-channel/README.md#1a-how-the-existing-bot-is-implemented-code-level-map)
+- [Science Channel — complete Telegram setup, commands, image uploads, ZIP import, video delivery and cleanup](science-channel/README.md#-telegram-operations--detailed-science-channel-manual)
+- [AI Video Experiment — Telegram bot implementation, outgoing senders and exact modification map](AI_README.md#-how-the-telegram-bot-is-actually-implemented-in-this-repository)
+- [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
 
 **Security:** Never commit Cloudflare tokens, Telegram bot tokens, Gemini keys or GitHub PATs. Store them in repository Settings → Secrets and variables → Actions → Secrets. Keep the Science Channel workflows on `main`.
