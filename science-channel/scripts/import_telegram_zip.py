@@ -33,12 +33,22 @@ def main():
     if not match or ".." in Path(EPISODE_PATH).parts:
         fail("Invalid episode_path. Expected a folder under science-channel/daily-episodes/YYYY-MM-DD/.")
 
-    zip_match = re.fullmatch(
-        r"science-channel/telegram-uploads/[a-f0-9]{32}\.zip",
-        ZIP_PATH,
-    )
-    if not zip_match or ".." in Path(ZIP_PATH).parts:
-        fail("Invalid staged ZIP path.")
+    # Accept safe ZIP filenames in the dedicated staging directory. Do not
+    # require a specific UUID length/case: staging implementations may use
+    # different unique filename formats.
+    zip_path = PurePosixPath(ZIP_PATH)
+    if (
+        zip_path.is_absolute()
+        or len(zip_path.parts) != 3
+        or zip_path.parts[:2] != ("science-channel", "telegram-uploads")
+        or ".." in zip_path.parts
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\\.zip", zip_path.name, re.IGNORECASE)
+    ):
+        fail(
+            "Invalid staged ZIP path. ZIP_PATH must be a ZIP file directly inside "
+            "science-channel/telegram-uploads/, for example "
+            "science-channel/telegram-uploads/upload-123.zip."
+        )
 
     episode = Path(EPISODE_PATH)
     archive_path = Path(ZIP_PATH)
