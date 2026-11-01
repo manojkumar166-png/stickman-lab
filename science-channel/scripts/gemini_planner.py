@@ -117,6 +117,84 @@ def gemini(prompt, temperature=0.7):
     raise RuntimeError(
         f"Gemini failed to return valid JSON after 5 attempts. Last error: {last_error}"
     )
+
+def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
+    """Regenerate Gemini output when its JSON is valid but fails stage-specific checks."""
+    last_error = None
+    retry_prompt = prompt
+    for attempt in range(1, attempts + 1):
+        try:
+            result = gemini(retry_prompt, temperature)
+            validator(result)
+            return result
+        except (ValueError, KeyError, TypeError, RuntimeError, json.JSONDecodeError) as exc:
+            last_error = exc
+            print(
+                f"{stage} validation failed (attempt {attempt}/{attempts}): {exc}",
+                flush=True
+            )
+            if attempt < attempts:
+                retry_prompt = (
+                    prompt +
+                    "\\n\\nAUTOMATIC CORRECTION REQUIRED: The previous response failed "
+                    f"{stage} validation: {exc}. Regenerate the entire response and correct "
+                    "the problem. Return one complete valid JSON object only. Follow every "
+                    "required field, type, count, and ordering rule exactly. Do not add "
+                    "Markdown or commentary."
+                )
+                time.sleep(2 * attempt)
+    raise RuntimeError(
+        f"{stage} could not be generated correctly after {attempts} correction attempts: {last_error}"
+    )
+
+
+def validate_topic(data):
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object")
+    if not isinstance(data.get("title"), str) or not data["title"].strip():
+        raise ValueError("Missing or empty title")
+    if not isinstance(data.get("angle"), str) or not data["angle"].strip():
+        raise ValueError("Missing or empty angle")
+
+
+def validate_duplicate_review(data):
+    if not isinstance(data, dict) or not isinstance(data.get("duplicate"), bool):
+        raise ValueError("Expected boolean 'duplicate' field")
+    if not isinstance(data.get("reason", ""), str):
+        raise ValueError("Expected string 'reason' field")
+
+
+def validate_episode(data):
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object")
+    if not isinstance(data.get("title"), str) or not data["title"].strip():
+        raise ValueError("Missing or empty episode title")
+    if not isinstance(data.get("description"), str):
+        raise ValueError("Missing or invalid description")
+    scenes = data.get("scenes")
+    if not isinstance(scenes, list) or len(scenes) != 48:
+        raise ValueError("Expected exactly 48 scenes")
+    for number, scene in enumerate(scenes, 1):
+        if not isinstance(scene, dict) or scene.get("scene_number") != number:
+            raise ValueError(f"Scene {number} is missing or out of order")
+        if not isinstance(scene.get("narration"), str) or not scene["narration"].strip():
+            raise ValueError(f"Scene {number} has empty narration")
+        if not isinstance(scene.get("visual_beat"), str) or not scene["visual_beat"].strip():
+            raise ValueError(f"Scene {number} has empty visual_beat")
+
+
+def validate_image_prompts(data):
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object")
+    prompts = data.get("prompts")
+    if not isinstance(prompts, list) or len(prompts) != 48:
+        raise ValueError("Expected exactly 48 image prompts")
+    for number, item in enumerate(prompts, 1):
+        if not isinstance(item, dict) or item.get("scene_number") != number:
+            raise ValueError(f"Image prompt {number} is missing or out of order")
+        if not isinstance(item.get("prompt"), str) or not item["prompt"].strip():
+            raise ValueError(f"Image prompt {number} is empty")
+
 history = json.loads(HISTORY.read_text()) if HISTORY.exists() else {"topics":[]}
 # Also recover topics from existing episode packages, so an interrupted run cannot
 # cause an already-created topic to be selected again.
@@ -163,7 +241,7 @@ def has_same_underlying_subject(candidate_title, candidate_angle, candidate_pill
         for old in used_topics
         if isinstance(old, str) and topic_key(old) not in detailed_titles
     )
-    review = gemini("""You are a strict duplicate-episode detector for a science YouTube channel.
+    review = gemini_validated("""You are a strict duplicate-episode detector for a science YouTube channel.
 Compare the proposed episode with the COMPLETE historical episode list.
 Return { "duplicate": true, "reason": "..." } if it covers the same core scientific
 subject, event, phenomenon, question, mechanism, or substantially the same viewer takeaway,
@@ -177,9 +255,7 @@ Proposed episode: """ + json.dumps({
         "title": candidate_title, "angle": candidate_angle, "pillar": candidate_pillar
     }, ensure_ascii=False) + """
 Historical episodes: """ + json.dumps(history_for_review, ensure_ascii=False),
-    0.1)
-    if not isinstance(review.get("duplicate"), bool):
-        raise RuntimeError("Semantic duplicate review returned no reliable decision; refusing to create an episode.")
+    0.1, validate_duplicate_review, "Semantic duplicate review")
     if review["duplicate"]:
         print("Rejected semantically repeated topic: " + str(review.get("reason", "same underlying subject")))
     return review["duplicate"]
@@ -212,7 +288,7 @@ selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
 # Retry if Gemini suggests a previously used title or returns a near-duplicate.
 topic = None
 for attempt in range(5):
-    topic_data = gemini("""You are planning a mainstream, curiosity-driven Science Channel episode.
+    topic_data = gemini_validated("""You are planning a mainstream, curiosity-driven Science Channel episode.
 The category for THIS episode has already been randomly selected and is mandatory.
 Selected category: """ + selected_pillar + """
 Example of the desired broad, accessible question style: """ + pillar_example + """
@@ -255,7 +331,7 @@ Create a title that sounds like a compelling YouTube episode, usually as a quest
 The subject itself must be completely new, not merely a differently worded title. Never reuse the same underlying question, event, scientific phenomenon, or central explanation from any previously generated episode. Treat synonyms, paraphrases, alternate wording, and narrow variations of an old topic as repeats. Compare against the COMPLETE lifetime used-topic list below; if the idea overlaps, choose a genuinely different subject.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
-"\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
+"\nThe only permitted category for this episode is: " + selected_pillar, validate_topic, "Topic generation", 0.45)
     candidate = topic_data.get("title", "").strip()
     candidate_angle = topic_data.get("angle", "").strip()
     if candidate and not is_duplicate_topic(candidate):
@@ -286,15 +362,11 @@ scenes must contain EXACTLY 48 objects, each with scene_number (1..48), narratio
 about 20–30 words), and visual_beat (brief description of what the narration is showing).
 Narration across all 48 scenes must form a coherent complete script of about 1,100–1,350 words.
 No image prompt in this stage. Number scenes consecutively from 1 to 48."""
-episode = gemini(script_prompt, 0.65)
-scenes = episode.get("scenes", [])
-if len(scenes) != 48 or [s.get("scene_number") for s in scenes] != list(range(1,49)):
-    raise ValueError("Script did not contain exactly 48 correctly numbered scenes")
-if any(not str(s.get("narration", "")).strip() for s in scenes):
-    raise ValueError("Empty narration scene")
+episode = gemini_validated(script_prompt, validate_episode, "48-scene script", 0.65)
+scenes = episode["scenes"]
 
 # Derive exactly one image prompt from each finalized narration scene.
-prompt_data = gemini("""Create exactly 48 image prompts from this finalized 48-scene narration.
+prompt_data = gemini_validated("""Create exactly 48 image prompts from this finalized 48-scene narration.
 Do not rewrite, reorder, merge, or add scenes. Each prompt must depict its corresponding narration
 and visual beat as a cinematic visual, not as a person explaining the narration.
 IMPORTANT: Do NOT add a presenter, host, narrator, teacher, spokesperson, talking-head character,
@@ -319,10 +391,8 @@ Avoid unnecessarily huge textures or empty high-detail backgrounds. Keep the ful
 No text, captions, logos or watermarks. The optional image-preparation utility can resize and convert
 supported source images to numbered JPGs for smaller browser uploads; conversion is not required.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
-Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), 0.55)
-prompts = prompt_data.get("prompts", [])
-if len(prompts) != 48 or [p.get("scene_number") for p in prompts] != list(range(1,49)):
-    raise ValueError("Expected exactly 48 ordered image prompts")
+Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), validate_image_prompts, "48 image prompts", 0.55)
+prompts = prompt_data["prompts"]
 
 # Reserve the topic only after the full script and all 48 prompts validate.
 # A malformed/truncated Gemini response therefore does not consume a topic.
