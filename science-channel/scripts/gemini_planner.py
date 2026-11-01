@@ -102,6 +102,10 @@ def gemini(prompt, temperature=0.7):
                 )
                 raise last_error
 
+        except requests.HTTPError:
+            # Authentication, permission, and other permanent 4xx errors need a
+            # configuration fix; repeating the same request cannot repair them.
+            raise
         except requests.RequestException as exc:
             last_error = exc
         except (ValueError, KeyError, TypeError, RuntimeError) as exc:
