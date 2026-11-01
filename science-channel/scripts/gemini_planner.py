@@ -77,16 +77,28 @@ for attempt in range(5):
 The category for THIS episode has already been randomly selected and is mandatory.
 Selected category: """ + selected_pillar + """
 Example of the desired broad, accessible question style: """ + pillar_example + """
-Generate exactly ONE fresh episode topic strictly within the selected category.
-Make it a clear, exciting question ordinary viewers would immediately understand and want answered.
-Keep it broad enough for a complete 8–10 minute explainer, scientifically grounded, and visually interesting.
+Generate exactly ONE exceptionally compelling, fresh episode topic strictly within the selected category.
+GOAL: choose a topic with a powerful curiosity gap that makes someone scrolling YouTube stop and think,
+"I need to know what happens" or "I've never thought about that before." Optimize for genuine viewer
+interest and click-worthy curiosity, not textbook chapter headings.
+A strong topic should combine at least TWO of these: a surprising consequence, a familiar thing behaving
+in an unexpected way, a high-stakes "what if", a hidden process people never notice, a counterintuitive
+scientific fact, or a big unanswered-but-scientifically-investigable question.
+Prefer specific, vivid, surprising questions with clear stakes and an imaginable visual payoff.
+Make the title concise, natural, emotionally engaging, and understandable to a general audience.
+Avoid bland/generic titles (for example, "How do stars work?"), school-assignment phrasing, listicle bait,
+sensational misinformation, fake mysteries, and claims that science cannot support.
+The topic must sustain a complete 8–10 minute story with a strong opening hook, escalating discoveries,
+and a satisfying scientifically accurate explanation.
 Do NOT switch to another category. Do NOT choose obscure species, highly specialized biological mechanisms,
-technical research-paper questions, or tiny niche facts. For Animals, choose familiar animal abilities,
-survival, senses, intelligence, or adaptations. For Technology, choose recognizable emerging technologies
-and how they may affect the world. For Mysteries of science, use big scientifically testable questions.
-The title should normally be phrased as a compelling question, like the example.
-It must be clearly different from every previously used topic; do not rephrase or narrow an old topic.
-Return JSON only: {"title":"...","angle":"one-sentence distinctive angle"}.
+technical research-paper questions, or tiny niche facts. For Animals, focus on familiar or visually striking
+animals and extraordinary abilities/survival strategies that reveal a bigger scientific idea. For Technology,
+focus on consequential technologies and surprising real-world possibilities or limitations. For Mysteries
+of science, choose profound questions that can be explored with evidence, not paranormal speculation.
+Create a title that sounds like a compelling YouTube episode, usually as a question or a vivid "what if".
+The title must be meaningfully different from every previously used topic, not a rewording or narrow variant.
+Before returning, silently compare it against the used-topic list and reject anything too similar.
+Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics[-1000:], ensure_ascii=False) +
 "\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
     candidate = topic_data.get("title", "").strip()
