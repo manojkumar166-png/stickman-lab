@@ -45,4 +45,15 @@ jobs:
           git add "$EPISODE_PATH/images/incoming" "$EPISODE_PATH/READY.txt"
           git rm "$ZIP_PATH"
           git commit -m "Import Telegram images for $(basename "$EPISODE_PATH")"
-          git push origin HEAD:main
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:refs/heads/main; then
+              echo "Imported images published to main."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying."
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+          done
+          echo "Could not publish imported images after 5 attempts."
+          exit 1
