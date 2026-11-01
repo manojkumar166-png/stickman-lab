@@ -133,3 +133,24 @@ Once that cleanup commit has reached `main`, upload `dream.zip` again to the sam
 - Branch: this workflow checks out and commits changes to **`main`**.
 
 Do not upload test ZIPs to `adaptive-cinematic-effects`; the Science Channel upload and rendering process is intended to run on `main`.
+
+---
+
+## 🔁 Alternative LLM Providers (Gemini Backup)
+
+**Important: If the Gemini API or the model currently configured for this project is discontinued, unavailable, or its free quota is exhausted, check this catalog for alternative free LLM APIs and currently listed models:**
+
+➡️ **[Awesome Free LLM APIs — provider and model list](https://github.com/mnfst/awesome-free-llm-apis/blob/main/README.md)**
+
+The catalog lists multiple providers and their available models, including options such as Groq, Cloudflare Workers AI, OpenRouter, Mistral, Cohere, and others. Visit the repository directly before choosing a replacement because model availability, free-tier quotas, rate limits, and provider terms can change.
+
+### Before switching away from Gemini
+
+1. Open the catalog and choose a provider/model that supports the text generation your workflow needs.
+2. Check that provider's current API documentation, free-tier limits, supported regions, and data/privacy terms.
+3. Create an API key if the provider requires one, then add it under **GitHub → Settings → Secrets and variables → Actions**.
+4. Update the relevant workflow and Python client configuration for that provider's API endpoint, authentication method, and model ID.
+
+**Note:** A model name from the catalog is not necessarily a drop-in replacement for Gemini. This project currently uses Gemini-specific integration in parts of its generation pipeline, so changing only the model ID may not be enough. The API request format and client code may also need to be adapted and tested.
+
+Keep this catalog link as the starting point for finding a replacement whenever the configured Gemini model stops working.
