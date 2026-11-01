@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Independent Gemini planner for the Science Channel pipeline."""
-import json, os, re, time, datetime, difflib
+import json, os, re, time, datetime, difflib, random
 from pathlib import Path
 import requests
 
@@ -56,17 +56,39 @@ def is_duplicate_topic(candidate):
         difflib.SequenceMatcher(None, key, topic_key(old)).ratio() >= 0.88
         for old in used_topics if old.strip()
     )
-seed_topics = [x.strip() for x in TOPICS.read_text().splitlines() if x.strip() and not x.lstrip().startswith("#")]
+# Every episode must belong to one of these seven broad, viewer-friendly pillars.
+# Choose the pillar randomly in Python so Gemini cannot drift into unrelated niche subjects.
+topic_pillars = [
+    ("Space", "What would happen if Earth stopped rotating?"),
+    ("Human body", "Why does your brain create dreams?"),
+    ("Physics", "What would happen if gravity suddenly became weaker?"),
+    ("Earth science", "What lies beneath the Earth's deepest oceans?"),
+    ("Technology", "How could quantum computers change the world?"),
+    ("Animals", "How do animals survive extreme environments?"),
+    ("Mysteries of science", "Could humans ever travel through time?"),
+]
+selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
 
-# One planner run selects exactly ONE new topic. Retry if Gemini suggests a
-# previously used title or returns a duplicate/near-identical normalized title.
+# One planner run selects exactly ONE new topic inside the randomly selected pillar.
+# Retry if Gemini suggests a previously used title or returns a near-duplicate.
 topic = None
 for attempt in range(5):
-    topic_data = gemini("""Choose exactly ONE fresh, compelling, scientifically accurate YouTube science-explainer topic.
+    topic_data = gemini("""You are planning a mainstream, curiosity-driven Science Channel episode.
+The category for THIS episode has already been randomly selected and is mandatory.
+Selected category: """ + selected_pillar + """
+Example of the desired broad, accessible question style: """ + pillar_example + """
+Generate exactly ONE fresh episode topic strictly within the selected category.
+Make it a clear, exciting question ordinary viewers would immediately understand and want answered.
+Keep it broad enough for a complete 8–10 minute explainer, scientifically grounded, and visually interesting.
+Do NOT switch to another category. Do NOT choose obscure species, highly specialized biological mechanisms,
+technical research-paper questions, or tiny niche facts. For Animals, choose familiar animal abilities,
+survival, senses, intelligence, or adaptations. For Technology, choose recognizable emerging technologies
+and how they may affect the world. For Mysteries of science, use big scientifically testable questions.
+The title should normally be phrased as a compelling question, like the example.
 It must be clearly different from every previously used topic; do not rephrase or narrow an old topic.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics[-1000:], ensure_ascii=False) +
-"\nSeed ideas (optional inspiration): " + json.dumps(seed_topics, ensure_ascii=False), 0.7)
+"\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
     candidate = topic_data.get("title", "").strip()
     if candidate and not is_duplicate_topic(candidate):
         topic = {"title": candidate, "angle": topic_data.get("angle", "")}
