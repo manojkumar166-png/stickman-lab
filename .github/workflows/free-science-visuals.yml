@@ -16,7 +16,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-main-writer
+  group: science-channel-render-main
   cancel-in-progress: false
 jobs:
   render:
