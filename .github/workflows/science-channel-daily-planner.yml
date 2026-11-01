@@ -12,10 +12,12 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      SCIENCE_BRANCH: adaptive-cinematic-effects
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: adaptive-cinematic-effects
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -36,12 +38,45 @@ jobs:
           mapfile -t FILES < <(find science-channel/daily-episodes -type f -name episode.json -newer /tmp/planner-start | sort)
           if [ "${#FILES[@]}" -ne 1 ]; then
             echo "Expected exactly one newly generated episode.json; found ${#FILES[@]}."
-            printf '%s\n' "${FILES[@]}"
+            printf '%s\\n' "${FILES[@]}"
             exit 1
           fi
           EPISODE_DIR="$(dirname "${FILES[0]}")"
           echo "path=$EPISODE_DIR" >> "$GITHUB_OUTPUT"
-      - name: Send episode package and image prompts to Telegram
+      - name: Commit episode to adaptive branch (retry safely)
+        id: source_commit
+        env:
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$EPISODE_PATH"
+          git commit -m "Add Gemini-planned episode"
+          for attempt in 1 2 3; do
+            git fetch origin "$SCIENCE_BRANCH"
+            git rebase "origin/$SCIENCE_BRANCH"
+            if git push origin "HEAD:refs/heads/$SCIENCE_BRANCH"; then
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying after fetching latest branch."
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 3))
+            fi
+          done
+          echo "Could not publish episode after 3 push attempts."
+          exit 1
+      - name: Verify episode exists on GitHub branch
+        env:
+          EPISODE_PATH: ${{ steps.generated.outputs.path }}
+        run: |
+          git fetch origin "$SCIENCE_BRANCH"
+          git cat-file -e "origin/$SCIENCE_BRANCH:$EPISODE_PATH/episode.json"
+          echo "Verified $EPISODE_PATH on $SCIENCE_BRANCH."
+      - name: Send episode prompts to Telegram only after GitHub commit
+        if: success()
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -57,104 +92,7 @@ jobs:
           test -f "$PROMPT_FILE"
           TITLE="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["EPISODE_PATH"],"episode.json"), encoding="utf-8")).get("title", "New science episode"))')"
           curl --fail --silent --show-error \
-            -F "chat_id=${TELEGRAM_CHAT_ID}" \
-            -F "document=@${PROMPT_FILE};filename=image-prompts.md" \
-            -F "caption=🖼️ Episode package ready: ${TITLE} | Upload 48 numbered images to ${EPISODE_PATH}/images/incoming/" \
-            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
-      - name: Commit generated episode to the run branch
-        id: source_commit
-        env:
-          EPISODE_PATH: ${{ steps.generated.outputs.path }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$EPISODE_PATH"
-          git commit -m "Add Gemini-planned episode"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Publish the same episode package to every other branch
-        id: branch_sync
-        env:
-          SOURCE_COMMIT: ${{ steps.source_commit.outputs.sha }}
-          EPISODE_PATH: ${{ steps.generated.outputs.path }}
-        shell: bash
-        run: |
-          set -uo pipefail
-          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          mapfile -t BRANCHES < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/ | grep -v '^$' | sort -u)
-          synced=()
-          failed=()
-          index=0
-
-          for branch in "${BRANCHES[@]}"; do
-            if [ "$branch" = "$GITHUB_REF_NAME" ]; then
-              synced+=("$branch (source)")
-              continue
-            fi
-
-            index=$((index + 1))
-            target_dir="/tmp/science-branch-sync-$index"
-            echo "Publishing generated episode to $branch"
-
-            if ! git worktree add --detach "$target_dir" "refs/remotes/origin/$branch"; then
-              failed+=("$branch: worktree creation failed")
-              continue
-            fi
-
-            if ! git archive "$SOURCE_COMMIT" "$EPISODE_PATH" | tar -x -C "$target_dir"; then
-              failed+=("$branch: package copy failed")
-              git worktree remove --force "$target_dir" || true
-              continue
-            fi
-
-            git -C "$target_dir" config user.name "github-actions[bot]"
-            git -C "$target_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C "$target_dir" add -- "$EPISODE_PATH"
-
-            if git -C "$target_dir" diff --cached --quiet; then
-              synced+=("$branch (already current)")
-              git worktree remove --force "$target_dir" || true
-              continue
-            fi
-
-            if git -C "$target_dir" commit -m "Sync Gemini-planned episode from $GITHUB_REF_NAME" &&
-               git -C "$target_dir" push origin "HEAD:refs/heads/$branch"; then
-              synced+=("$branch")
-            else
-              failed+=("$branch: commit or push failed")
-            fi
-
-            git worktree remove --force "$target_dir" || true
-          done
-
-          {
-            echo "## Episode branch synchronization"
-            echo ""
-            echo "- Episode: $EPISODE_PATH"
-            echo "- Source branch: $GITHUB_REF_NAME"
-            echo "- Updated/current: ${synced[*]:-none}"
-            echo "- Failed: ${failed[*]:-none}"
-          } >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' "${synced[*]:-none}" > /tmp/episode-synced.txt
-          printf '%s\n' "${failed[*]:-none}" > /tmp/episode-failed.txt
-          if [ "${#failed[@]}" -gt 0 ]; then exit 1; fi
-      - name: Send branch synchronization report to Telegram
-        if: always() && steps.branch_sync.outcome == 'failure'
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          EPISODE_PATH: ${{ steps.generated.outputs.path }}
-          SYNC_OUTCOME: ${{ steps.branch_sync.outcome }}
-        run: |
-          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured; skipping sync report."
-            exit 0
-          fi
-          SYNCED="$(cat /tmp/episode-synced.txt 2>/dev/null || echo unavailable)"
-          FAILED="$(cat /tmp/episode-failed.txt 2>/dev/null || echo unavailable)"
-          TEXT="Episode sync: ${SYNC_OUTCOME}\nEpisode: ${EPISODE_PATH}\nUpdated/current: ${SYNCED}\nFailed: ${FAILED}"
-          curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${TEXT}"
+            -F "chat_id=$TELEGRAM_CHAT_ID" \
+            -F "document=@$PROMPT_FILE;filename=image-prompts.md" \
+            -F "caption=🖼️ Episode package committed to $SCIENCE_BRANCH: $TITLE | Upload 48 numbered images to $EPISODE_PATH/images/incoming/" \
+            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument"
