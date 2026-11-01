@@ -154,7 +154,7 @@ def gemini(prompt, temperature=0.7):
                 if attempt == 0:
                     request_prompt = (
                         prompt +
-                        "\\n\\nAUTOMATIC RETRY: The previous request on model " + model +
+                        "\n\nAUTOMATIC RETRY: The previous request on model " + model +
                         " failed: " + str(exc)[:800] +
                         ". Return one complete valid JSON object only. Correct the issue, " +
                         "escape all strings correctly, and do not include Markdown or commentary."
@@ -190,7 +190,7 @@ def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
             if attempt < attempts:
                 retry_prompt = (
                     prompt +
-                    "\\n\\nAUTOMATIC CORRECTION REQUIRED: The previous response failed "
+                    "\n\nAUTOMATIC CORRECTION REQUIRED: The previous response failed "
                     f"{stage} validation: {exc}. Regenerate the entire response and correct "
                     "the problem. Return one complete valid JSON object only. Follow every "
                     "required field, type, count, and ordering rule exactly. Do not add "
