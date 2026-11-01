@@ -8,7 +8,8 @@
     "What happens to the human body if we live in lunar gravity for fifty years?",
     "How could engineers build a floating skyscraper that anchors to an asteroid?",
     "What if a simple kitchen mistake accidentally invented the material protecting modern astronauts?",
-    "What if the Moon completely vanished tonight?"
+    "What if the Moon completely vanished tonight?",
+    "Could we survive a year trapped inside a completely sealed indoor biosphere?"
   ],
   "topic_details": [
     {
@@ -40,6 +41,11 @@
       "title": "What if the Moon completely vanished tonight?",
       "angle": "Explore the chaotic, immediate ripple effects on Earth's oceans, animal behavior, and axial tilt if our lunar companion suddenly disappeared.",
       "pillar": "Space and astronomy"
+    },
+    {
+      "title": "Could we survive a year trapped inside a completely sealed indoor biosphere?",
+      "angle": "Hooking viewers with the claustrophobic stakes of the historic Biosphere 2 failure, this episode reveals the surprising and unsettling ways complex ecosystems rebel against human control when cut off from Earth's atmosphere.",
+      "pillar": "Future possibilities and human survival"
     }
   ]
 }
