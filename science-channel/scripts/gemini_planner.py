@@ -77,8 +77,9 @@ def gemini(prompt, temperature=0.7):
                     f"Gemini API HTTP {response.status_code}: {error_detail}"
                 )
                 if response.status_code not in (408, 429, 500, 502, 503, 504):
-                    raise RuntimeError(
-                        f"{last_error}. This is a non-retryable API/configuration error."
+                    raise requests.HTTPError(
+                        f"{last_error}. This is a non-retryable API/configuration error.",
+                        response=response
                     )
                 raise last_error
 
