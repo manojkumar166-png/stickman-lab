@@ -73,6 +73,11 @@ topic_pillars = [
     ("Engineering and mega-structures", "How could humans build a city under the ocean?"),
     ("Food science and everyday mysteries", "Why does popcorn explode and turn inside out?"),
     ("Inventions and scientific breakthroughs", "What accidental discovery changed the modern world?"),
+    ("Extreme scientific what-if scenarios", "What if Earth suddenly stopped spinning?"),
+    ("Impossible-sounding science", "Can humans survive in space without a spacesuit?"),
+    ("Hidden mysteries and unseen worlds", "What is really at the bottom of the ocean?"),
+    ("Unexpected abilities and nature's superpowers", "How can the human brain recognize a face in a split second?"),
+    ("Future possibilities and human survival", "Could humans one day live on Mars permanently?"),
 ]
 selected_pillar, pillar_example = random.SystemRandom().choice(topic_pillars)
 
