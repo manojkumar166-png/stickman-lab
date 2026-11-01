@@ -362,46 +362,47 @@ curiosity gap over showing off obscure scientific knowledge.
 
 SELECTION PROCESS (mandatory):
 1. Silently brainstorm at least 10 genuinely different candidate topics inside the selected category.
-2. Do NOT settle for the first plausible idea. Compare the candidates and discard predictable,
-   low-stakes, overly narrow, familiar textbook, or weakly visual ideas.
-3. Score the strongest candidates from 1–10 for click appeal, broad audience relevance, curiosity,
-   visual potential, and ability to sustain an 8–10 minute story. Select only a candidate that would
-   score at least 9/10 overall. If none qualifies, rethink the candidate pool before answering.
-4. Prefer a bold, concrete question with an immediate mental image, a surprising consequence,
-   real human stakes, or a counterintuitive reveal. A viewer should understand the premise in
-   one reading without needing specialist knowledge.
-5. Reject topics whose main hook is simply "could we survive X for a long time?", a generic
-   sealed-habitat/closed-system scenario, or an abstract possibility without a vivid consequence,
-   unless the scientific reveal is genuinely extraordinary and clearly explained.
-6. Return only the single best topic. Do not expose brainstorming, scores, or rejected candidates.
+2. Choose a clear, naturally phrased science question that an ordinary curious person might genuinely ask.
+3. Prefer familiar questions about how the world works, why everyday things happen, how nature and the human body work, and fascinating mysteries in space, Earth, animals, physics, and technology.
+4. Make the question interesting through the scientific mystery and the answer—not by making the situation more extreme, dangerous, catastrophic, or complicated.
+5. Keep the title short, direct, conversational, and easy to understand at a glance. Usually use a natural "Why...", "How...", or "What makes..." question. A simple question can be highly compelling; do not add unnecessary stakes or dramatic wording.
+6. Select a subject with enough surprising layers, explanations, discoveries, examples, and visual possibilities for a complete 8–10 minute episode. Do not reject a strong everyday question merely because its wording is simple.
+7. Return only the single best topic. Do not expose brainstorming, scores, or rejected candidates.
 
-QUALITY BAR — reject weak concepts:
-- Weak: "Could we survive a year trapped inside a completely sealed indoor biosphere?"
-  Why weak: the premise is abstract, the setting is unfamiliar, and the stakes are not instantly vivid.
-- Stronger direction: a familiar or dramatic situation with a surprising scientific consequence,
-  such as what would happen to the human body, Earth, an animal, or everyday life under an extreme
-  but scientifically grounded condition. These are illustrative directions, not topics to copy.
+THIS IS THE CHANNEL'S DESIRED TOPIC STYLE:
+- Why do we dream?
+- Why is the ocean salty?
+- How do airplanes stay in the air?
+- Why does the Moon change shape?
+- How do bees communicate?
+- Why is the sky blue?
+- How do black holes work?
+- Why do we get goosebumps?
+- How do plants know which way is up?
+- Why do we have fingerprints?
+- How do clouds make rain?
+- Why does time seem to move faster as we grow older?
+- How do animals survive winter?
+- Why do we sneeze?
+- How do magnets work?
+- What would happen if Earth stopped spinning?
+- Why do stars twinkle?
+- How does the human brain store memories?
+- Why is space silent?
+- How do volcanoes erupt?
 
-Score the best candidate against these standards; reject it unless it is excellent:
-- INSTANT HOOK: creates a vivid question, surprising possibility, relatable mystery, or high-stakes scenario.
-- BROAD APPEAL: connects to something people already care about: their body, everyday life, Earth, animals,
-  space, danger, survival, the future, or a familiar technology.
-- CLEAR PAYOFF: viewers can imagine what they will discover, and the answer is more surprising than the premise.
-- VISUAL STORY: can be shown through striking scenes, experiments, comparisons, scale, or consequences.
-- RETENTION: naturally unfolds into escalating revelations, not a one-fact explanation.
-A strong idea should combine at least TWO of these: a shocking-but-true consequence, a familiar thing behaving
-in an unexpected way, a relatable "what if", a hidden process with an astonishing result, a counterintuitive
-scientific fact, or a big question with a genuinely surprising evidence-based answer.
+Treat these as STYLE REFERENCES for simplicity, clarity, broad curiosity, and familiar science—not as a list to copy or repeat. Generate fresh subjects that have the same accessible feel.
 
-Prefer topics with a human connection, real-world stakes, wonder, or a "this changes how I see the world" payoff.
-Use concrete, vivid language. Make the title concise, natural, emotionally engaging, and understandable to a
-12-year-old without dumbing down the science. The angle must explain the specific hook and the sequence of
-discoveries that will keep viewers watching.
+QUALITY BAR:
+- The title should make viewers think "I've wondered about that" or "I never knew there was a scientific explanation for that."
+- The topic should be understandable immediately without specialist knowledge.
+- The science should offer several genuinely interesting discoveries, not just one short fact.
+- It should support engaging visual storytelling through real processes, demonstrations, comparisons, environments, or scientific visualizations.
+- Favor wonder, useful understanding, relatable mysteries, and surprising explanations over shock value.
+- Reject exaggerated clickbait, contrived disaster scenarios, bizarre body-horror premises, implausible hypotheticals, and over-engineered questions.
+- Do not turn an ordinary science question into a sensational "what if" just to make it sound clickable.
+- Avoid overly broad textbook headings such as "How does physics work?" but do NOT mistake a simple, specific question like "Why is the sky blue?" for a boring topic.
 
-Avoid bland textbook topics ("How do stars work?"), dry school-assignment phrasing, jargon, obscure trivia,
-tiny niche facts, generic "amazing facts", listicle bait, fake urgency, misleading exaggeration, sensational
-misinformation, and claims science cannot support. Do not choose a topic merely because it sounds technically
-impressive. Do not sacrifice truth for clickbait.
 The topic must sustain a complete 8–10 minute story: open with an irresistible question or visual moment,
 raise the stakes, reveal increasingly surprising facts, and finish with a satisfying scientifically accurate
 answer or twist.
