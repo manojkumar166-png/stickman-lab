@@ -5,7 +5,8 @@
     "How do glassfrogs render themselves completely transparent?",
     "How do pistol shrimp create underwater shockwaves hotter than the Sun?",
     "What if the universe has a hidden speed limit faster than light?",
-    "What happens to the human body if we live in lunar gravity for fifty years?"
+    "What happens to the human body if we live in lunar gravity for fifty years?",
+    "How could engineers build a floating skyscraper that anchors to an asteroid?"
   ],
   "topic_details": [
     {
@@ -22,6 +23,11 @@
       "title": "What happens to the human body if we live in lunar gravity for fifty years?",
       "angle": "Explore the profound, unsettling ways our bones, blood, and internal organs would structurally adapt and potentially degrade over generations living in one-sixth Earth gravity.",
       "pillar": "Future possibilities and human survival"
+    },
+    {
+      "title": "How could engineers build a floating skyscraper that anchors to an asteroid?",
+      "angle": "Explores the extreme architectural and tension physics of space-tethered mega-structures, revealing how gravity manipulation and ultra-strong carbon materials could one day suspend buildings from the sky.",
+      "pillar": "Engineering and mega-structures"
     }
   ]
 }
