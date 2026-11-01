@@ -19,9 +19,19 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          sudo apt-get install -y ffmpeg
       - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 -r requirements.txt
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -32,16 +42,18 @@ jobs:
       - name: Get Video Topic
         id: get_topic
         run: |
-          TOPIC=$(python -c "import json,glob; print(json.load(open(glob.glob('output/story-*.json')[0]))['topic'])")
-          echo "topic_name=$TOPIC" >> $GITHUB_OUTPUT
-
-      - name: Send Video to Telegram
-        uses: PonomarevDA/telegram-upload@v1
-        with:
-          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: output/ai-experiment-*.mp4
-          message: "🎨 New AI Science Video: ${{ steps.get_topic.outputs.topic_name }}"
+          python - <<'PY'
+          import glob, json, os
+          files = sorted(glob.glob("output/story-*.json"))
+          if not files:
+              raise SystemExit("No generated story JSON was found.")
+          with open(files[-1], encoding="utf-8") as handle:
+              topic = str(json.load(handle).get("topic", "")).strip()
+          if not topic:
+              raise SystemExit("Generated story has no topic.")
+          delimiter = "TOPIC_EOF"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"topic<<{delimiter}\\n{topic}\\n{delimiter}\\n")
 
       - name: Upload AI Video
         uses: actions/upload-artifact@v4
@@ -50,13 +62,39 @@ jobs:
           path: |
             output/ai-experiment-*.mp4
             output/story-*.json
+          if-no-files-found: error
           retention-days: 7
 
-      - name: Commit topic history
+      - name: Send Video to Telegram
+        continue-on-error: true
+        uses: PonomarevDA/telegram-upload@v1
+        with:
+          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          files: output/ai-experiment-*.mp4
+          message: "🎨 New AI Science Video: ${{ steps.get_topic.outputs.topic_name }}"
+
+      - name: Commit topic history safely to main
+        shell: bash
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add topic_history.json
-          git commit -m "Update AI topic history [skip ci]" || exit 0
-          git pull --rebase origin main
-          git push
+          if git diff --cached --quiet; then
+            echo "No topic history changes to commit."
+            exit 0
+          fi
+          git commit -m "Update AI topic history [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:refs/heads/main; then
+              echo "Topic history published."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed."
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+          done
+          echo "Could not publish topic history after 5 attempts."
+          exit 1
