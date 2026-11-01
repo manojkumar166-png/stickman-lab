@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+concurrency:
+  group: ai-video-main-writer
+  cancel-in-progress: false
 
 jobs:
   generate-ai:
@@ -14,6 +17,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
