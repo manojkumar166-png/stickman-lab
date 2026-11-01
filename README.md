@@ -1,156 +1,192 @@
-🎬 Automated Daily Science Video Generator
+# Stickman Lab — automated science video production
 
-This project is a fully automated Python pipeline that generates high-quality educational science videos. It uses AI for the script, Text-to-Speech for the voice, and FFmpeg for the video rendering. It runs 100% for free using GitHub Actions.
+This repository contains **two related but separate video pipelines**:
 
-This repository contains **three separate, autonomous workflows** that generate 3 videos per day.
+1. **Science Channel (episode workflow):** Gemini plans a new 48-scene episode, you review the narration and create its 48 images, and GitHub Actions renders the finished 8–10 minute video. Telegram can deliver prompts, receive images, and deliver the final MP4.
+2. **Legacy AI video experiment (single-run workflow):** a separate generator creates a narrated video using Gemini for the story and Cloudflare Workers AI for scene artwork.
 
-## 📂 Project Structure & File Details
-
-### Core Execution Scripts
-- **`main.py`**: The entry point for the **Daily Stickman Workflow**. It calls the story generator, draws 4K anti-aliased stickman artwork using pure Python (Pillow), generates the voiceover, and renders the final video. It is 100% reliable and never touches AI image APIs.
-- **`main_ai.py`**: The entry point for the **Cloudflare AI Workflow**. Uses Cloudflare Workers AI (FLUX) to generate beautiful 2D vector illustrations.
-- **`main_gemini.py`**: The entry point for the **Gemini AI Workflow**. Uses Google Gemini image generation for all 47 scenes.
-
-### Configuration & Data
-- **`config.json`**: The control center. Holds settings for length, scene count, resolution (1280x720), fps, Gemini model, and TTS voice.
-- **`topics.txt`**: A seed list of 20 science topics.
-- **`topic_history.json`**: The memory. Saves the last 100 topics used so the script doesn't repeat them. The GitHub Action automatically commits this back to your repo.
-- **`requirements.txt`**: Python packages (Pillow, requests, edge-tts, aiohttp).
-
-### The `scripts/` Folder (The Engine)
-- **`scripts/generate_story.py`**: Connects to Gemini. Writes the 47-scene script. If `topics.txt` is empty, it tells Gemini to invent a brand new topic that matches the *exact style* of your original topics, avoiding everything in the history.
-- **`scripts/make_art_python.py`**: The pure Python artist. Draws the 4K anti-aliased stickman images.
-- **`scripts/make_art.py`**: The Cloudflare artist. Uses the cheap `flux-2-klein-4b` model. If quota runs out, it reuses previous successful AI images (no stickmen).
-- **`scripts/make_art_gemini.py`**: The Gemini artist. Uses only Gemini, no fallback.
-- **`scripts/make_voice.py`**: Uses `edge-tts` to convert the script into an MP3. Includes a retry loop to handle Microsoft's temporary network drops.
-- **`scripts/render_video.py`**: Uses FFmpeg. Holds the images perfectly still (no panning) and syncs them with the audio at 24fps.
-
-### The `.github/workflows/` Folder
-- **`daily-video.yml`**: Runs at **10:00 AM IST**. Generates the pure Python Stickman video.
-- **`ai-video-test.yml`**: Runs at **11:00 AM IST**. Generates the Cloudflare AI video.
-- **`gemini-video.yml`**: Runs at **12:00 PM IST**. Generates the Gemini AI video.
-
-All three workflows send the finished video to Telegram, including the exact topic name in the message.
+The Science Channel pipeline is the current episode-based workflow. Its planning, Telegram upload, ZIP import, rendering and cleanup workflows operate on **main only**. Do not use the adaptive-cinematic-effects branch for Science Channel episodes or uploads.
 
 ---
 
-## ⚙️ How to Customize Everything
+## Start here: which workflow should I use?
 
-### 1. Change the Topics
-Open `topics.txt` and add one topic per line. Once the list is used, Gemini takes over and invents new ones forever in the exact same style.
+| What you want to do | GitHub Actions workflow | How it starts |
+|---|---|---|
+| Create a new Science Channel episode and its 48 image prompts | **Science Channel — Daily Gemini Planner** | Daily schedule or manual |
+| Send 48 scene images to the bot, one by one or as one ZIP | **Telegram Image Receiver** | Polls Telegram every 5 minutes; can also be run manually |
+| Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
+| Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
+| Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
 
-### 2. Change the AI Script Model (Gemini)
-Open `config.json`:
-- `"gemini-3.5-flash-lite"` (Default - Fastest, best for free tier)
+There are **five active workflow files** in .github/workflows. The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
-### 3. Change the Voice
-Open `config.json`:
-- `"en-US-AndrewMultilingualNeural"` (Default - Warm male voice)
-- `"en-US-EmmaMultilingualNeural"` (Female voice)
-- `"en-GB-RyanNeural"` (British male voice)
+## Workflow map and detailed behavior
 
-### 4. Change Video Length
-Open `config.json`:
-- `"scene_count": 47` (47 scenes = roughly 8 to 9 minutes).
+### 1. Science Channel — Daily Gemini Planner
 
----
+File: [.github/workflows/science-channel-daily-planner.yml](.github/workflows/science-channel-daily-planner.yml)
 
-## 🚀 How to Run Locally
-Requirements: Python 3.11+, FFmpeg, internet access.
+- **Automatic schedule:** every day at 01:15 UTC (06:45 India Standard Time).
+- **Manual start:** Actions → Science Channel — Daily Gemini Planner → Run workflow. Select main.
+- **What it does:** calls Gemini to select one fresh, broad-interest science topic, writes the episode metadata and narration, creates 48 numbered scene records, and generates 48 matching image prompts.
+- **Topic repetition protection:** checks the saved topic history and existing episode metadata. It rejects exact/title-similar and semantically overlapping subjects; accepted topics are reserved in the history before the package is built.
+- **What it commits:** a new folder under science-channel/daily-episodes/YYYY-MM-DD/episode-NNN-topic/, including episode.json, script.md, scenes.json, image-prompts.md and images/incoming/.gitkeep. It also commits science-channel/history/generated-topics.json.
+- **Telegram:** after the episode has been committed and verified on main, it optionally sends image-prompts.md to Telegram. Missing Telegram secrets or prompt-delivery failure do not undo the episode commit.
+- **What it does not do:** it does not create the 48 images and does not render a video. You create/review the images and then submit them using one of the upload routes below.
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+The schedule is in UTC. GitHub Actions scheduled runs can start later than the exact cron minute during periods of high GitHub load.
 
-set GEMINI_API_KEY="your-key"
-python main.py
-⚠️ Crucial Limits & Rules
-GitHub Storage: GitHub gives you 500 MB of free Artifact storage. Download your videos within 7 days.
+### 2. Telegram Image Receiver
 
-Telegram Limit: Telegram bots have a 50MB upload limit. If your video is larger, the upload will fail.
+File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram-image-receiver.yml)
 
-Cloudflare Limit: You get 10,000 free neurons per day (resets at 5:30 AM IST). The Cloudflare workflow uses the cheap Klein model to ensure you never run out of quota.
+- **Automatic polling:** every 5 minutes (cron: */5 * * * *).
+- **Manual start:** Actions → Telegram Image Receiver → Run workflow. This performs a poll immediately.
+- **Branch:** checks out and commits only to main.
+- **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
+- **Accepted uploads:** send 48 individual image files/photos, or send one ZIP containing exactly 48 supported images. Supported receiver formats are JPG/JPEG, PNG and WebP. The bot numbers individual images into the next available scene slot; a ZIP is sorted and expanded into scene files.
+- **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files and bot polling state to main. That commit triggers the renderer.
+- **Telegram commands:** /start and /help show instructions; /episode YYYY-MM-DD/episode-NNN selects an existing main-branch episode.
+- **Important:** send uploads to the configured bot chat. The bot only accepts messages from the configured TELEGRAM_CHAT_ID. A ZIP must contain exactly 48 images and cannot be mixed with already-uploaded scene images.
 
-edge-tts: Free Microsoft service. It drops connections occasionally. The script retries automatically up to 5 times.
+This is the easiest route when you want to send images directly from Telegram. The receiver is a polling workflow, not a continuously running server; it checks for messages when the scheduled or manually started Action runs.
 
-🔐 GitHub Secrets Required
-Add these to your Repository (Settings > Secrets and variables > Actions):
+### 3. Telegram ZIP Import (repository staging route)
 
-GEMINI_API_KEY
+File: [.github/workflows/telegram-zip-import.yml](.github/workflows/telegram-zip-import.yml)
 
-CF_ACCOUNT_ID
+Use this route when you first upload a ZIP file to the repository rather than sending it to the bot.
 
-CF_API_TOKEN
+1. Upload the ZIP directly into science-channel/telegram-uploads/ on main. The filename can be anything ending in .zip, for example dream.zip, my-scene-images.zip or Telegram Upload.zip.
+2. Open Actions → Telegram ZIP Import → Run workflow.
+3. Enter the exact episode folder in episode_path, for example science-channel/daily-episodes/2026-11-01/episode-001.
+4. Enter the repository path of the ZIP in zip_path, for example science-channel/telegram-uploads/dream.zip.
+5. Start the workflow.
 
-TELEGRAM_BOT_TOKEN
+The importer validates the episode and ZIP, requires exactly 48 supported image files, rejects unsafe archive paths and oversized files, extracts and numbers the images in that episode's images/incoming/ folder, creates READY.txt, commits the images to main, and removes the staged ZIP from the repository. The resulting commit starts the renderer.
 
-TELEGRAM_CHAT_ID
+**ZIP naming rules:** the filename is not fixed; any .zip name is accepted. The ZIP must be directly inside science-channel/telegram-uploads/ (not a nested folder), and the archive itself must be valid and contain exactly 48 supported images. The ZIP is limited to 25 MB and each image to 20 MB.
 
-text
+**Required secret:** GH_PAT. It must be a personal access token with permission to write repository contents, because this workflow pushes the extracted files to main. Do not paste the token into a workflow input or commit it to the repository.
 
-### 3. Save and Push
-```cmd
-git pull origin main --rebase
-git add README.md
-git commit -m "Update README with all three workflows and latest fixes"
-git push
+### 4. Free Science Visuals — Render Ready Episode
 
----
+File: [.github/workflows/free-science-visuals.yml](.github/workflows/free-science-visuals.yml)
 
-## 🎥 Science Channel: Upload, Render & Telegram Delivery
+- **Automatic trigger:** a push to main that adds or changes real files under an episode's images/incoming/ directory, or changes that episode's READY.txt. The .gitkeep placeholder alone is ignored.
+- **Manual start:** Actions → Free Science Visuals — Render Ready Episode → Run workflow. You may enter the exact episode folder in the optional episode_path input. If it is blank, the workflow chooses the newest episode with a READY marker or incoming images.
+- **One episode per push:** a push-triggered run must identify exactly one episode. Upload or commit files for different episodes in separate commits.
+- **Validation:** checks the episode package and requires the expected 48 scenes and 48 supported input images. Use either one ZIP or 48 individual image files, not a mixture.
+- **Rendering:** uses the episode narration, Edge TTS and FFmpeg to produce the final 16:9 video. It also creates word-aligned karaoke captions using faster-whisper.
+- **Artifact:** uploads the final MP4 as a topic-named GitHub Actions artifact. The artifact retention period is **2 days**; download it promptly from the workflow run's Artifacts section.
+- **Telegram delivery:** attempts to send the finished MP4 to the configured Telegram chat. The send step is allowed to fail without stopping the workflow.
+- **Cleanup after successful delivery:** only if Telegram reports a successful send, the workflow deletes uploaded ZIP/image files from images/incoming/ and removes READY.txt, while preserving .gitkeep, episode metadata, script, prompts and rendered output. It commits those deletions to main. This also means a filename such as dream.zip can be reused after cleanup has completed.
+- **If Telegram delivery fails:** cleanup is skipped and the uploaded files remain in the repository so you can retry. The MP4 artifact was uploaded before the Telegram step, so it can still be downloaded even if Telegram delivery fails.
 
-The Science Channel rendering workflow runs from **`main`**. Upload scene images or a ZIP archive into the relevant episode's incoming folder:
+Wait for the cleanup commit to reach main before uploading the same ZIP filename again to the same episode. A new upload should be a new commit after the prior cleanup has completed.
 
-```text
-science-channel/daily-episodes/YYYY-MM-DD/episode-NNN-your-topic/
-└── images/
-    └── incoming/
-        ├── .gitkeep
-        └── dream.zip
-```
+### 5. AI Video Experiment (separate legacy generator)
 
-Replace the date and episode folder with the actual episode you want to render. Keep the ZIP directly inside `images/incoming/`; do not put it beside the rendered MP4 or in the episode's top-level folder.
+File: [.github/workflows/ai-video-test.yml](.github/workflows/ai-video-test.yml)
 
-### Reusing the same ZIP filename for testing
-
-You can repeatedly use a filename such as `dream.zip`. After the workflow renders the episode and **successfully sends the video to Telegram**, it automatically:
-
-- Deletes the uploaded ZIP and scene image files from `images/incoming/`.
-- Removes the episode's `READY.txt` marker, if present.
-- Keeps `.gitkeep`, the episode script and metadata, and the rendered video.
-- Commits the upload cleanup to **`main`**.
-
-Once that cleanup commit has reached `main`, upload `dream.zip` again to the same episode folder to run another test. Wait for the previous cleanup to finish before re-uploading the same filename.
-
-**If Telegram delivery fails**, cleanup is skipped and the uploaded files are retained so you can retry. The workflow uses the rendered MP4 as an Actions artifact as well.
-
-### Workflow
-
-- Workflow file: `.github/workflows/free-science-visuals.yml`
-- Trigger: a push that adds or changes files under an episode's `images/incoming/` folder or its `READY.txt` marker.
-- Manual runs: use **Actions → Free Science Visuals — Render Ready Episode → Run workflow**. You can optionally provide the exact episode folder path.
-- Branch: this workflow checks out and commits changes to **`main`**.
-
-Do not upload test ZIPs to `adaptive-cinematic-effects`; the Science Channel upload and rendering process is intended to run on `main`.
+- **Automatic schedule:** every day at 05:30 UTC (11:00 India Standard Time).
+- **Manual start:** Actions → AI Video Experiment → Run workflow.
+- **Entry point:** main_ai.py.
+- **What it does:** generates a story using the root-level generator, creates AI scene artwork through the Cloudflare Workers AI integration, generates narration with Edge TTS, and renders an MP4 with FFmpeg.
+- **Telegram and artifact:** sends the experiment video to Telegram and uploads the video plus story JSON as an Actions artifact retained for 7 days.
+- **Topic history:** commits the root topic_history.json back to main after generation.
+- **Keep it separate:** this is not the 48-image Science Channel episode pipeline. It uses the root config.json, root scripts/ folder and root topic history. It does not use science-channel/settings.json or Science Channel episode folders.
 
 ---
 
-## 🔁 Alternative LLM Providers (Gemini Backup)
+## Science Channel: episode lifecycle
 
-**Important: If the Gemini API or the model currently configured for this project is discontinued, unavailable, or its free quota is exhausted, check this catalog for alternative free LLM APIs and currently listed models:**
+The episode package is created first; images are a separate human-reviewed stage; rendering happens only after the images are committed.
 
-➡️ **[Awesome Free LLM APIs — provider and model list](https://github.com/mnfst/awesome-free-llm-apis/blob/main/README.md)**
+Example folder:
 
-The catalog lists multiple providers and their available models, including options such as Groq, Cloudflare Workers AI, OpenRouter, Mistral, Cohere, and others. Visit the repository directly before choosing a replacement because model availability, free-tier quotas, rate limits, and provider terms can change.
+    science-channel/
+      daily-episodes/
+        2026-11-01/
+          episode-001-example-topic/
+            episode.json
+            script.md
+            scenes.json
+            image-prompts.md
+            images/
+              incoming/
+                .gitkeep
+            output/
 
-### Before switching away from Gemini
+| File/folder | What it contains |
+|---|---|
+| episode.json | Episode title, metadata and expected scene count |
+| script.md | Narration divided into Scene 01 through Scene 48 |
+| scenes.json | Structured scene descriptions and narration |
+| image-prompts.md | One image-generation prompt for each scene |
+| images/incoming/ | ZIP or 48 individual scene images waiting to render |
+| READY.txt | Marker indicating that the image set is ready for rendering |
+| output/ | Rendered MP4 and temporary/supporting render output |
 
-1. Open the catalog and choose a provider/model that supports the text generation your workflow needs.
-2. Check that provider's current API documentation, free-tier limits, supported regions, and data/privacy terms.
-3. Create an API key if the provider requires one, then add it under **GitHub → Settings → Secrets and variables → Actions**.
-4. Update the relevant workflow and Python client configuration for that provider's API endpoint, authentication method, and model ID.
+### Recommended image workflow
 
-**Note:** A model name from the catalog is not necessarily a drop-in replacement for Gemini. This project currently uses Gemini-specific integration in parts of its generation pipeline, so changing only the model ID may not be enough. The API request format and client code may also need to be adapted and tested.
+1. Run the Daily Gemini Planner or wait for its scheduled run.
+2. Review episode.json, script.md, scenes.json and image-prompts.md. Keep all 48 scenes in order.
+3. Generate one landscape 16:9 image for each scene prompt.
+4. Upload the 48 images using Telegram Image Receiver, Telegram ZIP Import, or directly into the episode's images/incoming/ folder.
+5. For direct repository uploads, include READY.txt in the commit or manually start the renderer with the exact episode_path.
+6. Download the topic-named artifact from the renderer run within 2 days.
 
-Keep this catalog link as the starting point for finding a replacement whenever the configured Gemini model stops working.
+Detailed image preparation, ZIP sizing, file editing, scene validation and troubleshooting instructions are in the [Science Channel operating guide](science-channel/README.md).
+
+## Repository layout
+
+- **Root generator:** main.py, main_ai.py, main_gemini.py, main_hybrid.py and free_science_video.py are separate local/experimental entry points. The scheduled root AI experiment uses main_ai.py.
+- **Root configuration:** config.json controls the legacy generator's scene count, output dimensions, frame rate, Gemini model and voice.
+- **Root scripts/:** story generation, image generation, voice generation, visual rendering and FFmpeg assembly for the root generator.
+- **Science Channel:** science-channel/settings.json, topics.txt, history/, scripts/ and daily-episodes/ contain the episode-based pipeline.
+- **GitHub Actions:** .github/workflows/ contains the five workflows described above.
+- **AI_README.md:** additional notes for the separate Cloudflare AI Video Experiment.
+
+## GitHub repository configuration
+
+Open **Settings → Secrets and variables → Actions** to configure the following repository secrets:
+
+| Secret / variable | Required for | Purpose |
+|---|---|---|
+| GEMINI_API_KEY | Daily Gemini Planner; AI Video Experiment; local Gemini-based generation | Gemini text generation for scripts, topics and prompts |
+| TELEGRAM_BOT_TOKEN | Telegram prompt/image/video workflows | Authenticates the Telegram bot |
+| TELEGRAM_CHAT_ID | Telegram prompt/image/video workflows | Restricts delivery and accepted messages to the intended chat |
+| GH_PAT | Telegram ZIP Import | Token with repository contents write access, used to push imported images to main |
+| CF_ACCOUNT_ID | AI Video Experiment | Cloudflare account identifier |
+| CF_API_TOKEN | AI Video Experiment | Cloudflare Workers AI API access |
+| SCIENCE_GEMINI_MODEL (repository variable, optional) | Daily Gemini Planner | Overrides the model configured in science-channel/settings.json |
+
+Secrets are sensitive: add them in GitHub repository settings, never in README files, source code, workflow inputs or commits. The root AI experiment also needs the Cloudflare secrets; the Science Channel planner does not.
+
+## Separate local/experimental entry points
+
+These Python files are not separate scheduled workflows in the current .github/workflows directory:
+
+- **main.py:** local classic generator using Python-drawn stickman artwork.
+- **main_gemini.py:** local Gemini image-generation variant.
+- **main_hybrid.py:** local hybrid image-generation variant.
+- **free_science_video.py:** local Blender-stills experiment.
+- **main_ai.py:** the entry point used by the scheduled AI Video Experiment workflow.
+
+For local use, install Python 3.11+, install requirements.txt, install FFmpeg/ffprobe, configure the relevant environment variables and run the selected entry point from the repository root. The root config.json is separate from Science Channel settings.
+
+## Alternative free LLM providers (Gemini backup)
+
+If Gemini API access or the configured model becomes unavailable, consult the community-maintained [Awesome Free LLM APIs catalogue](https://github.com/mnfst/awesome-free-llm-apis/blob/main/README.md) for current providers and models, including options such as Groq, Cloudflare Workers AI, OpenRouter, Mistral and Cohere.
+
+Provider availability, free quotas, rate limits, model IDs and terms change. Check the provider's official documentation before switching. A model listed in the catalogue is **not necessarily a drop-in Gemini replacement**: the project may need a different endpoint, authentication method, request schema or client implementation, followed by testing. Add any required API key as a GitHub Actions secret.
+
+## Operational notes
+
+- Science Channel episodes, uploads, receiver state and cleanup commits are intended for **main only**. The planner and Telegram receiver share a concurrency group to serialize main-branch writes.
+- Do not upload a ZIP to the repository root or beside an MP4. Use the exact episode images/incoming/ folder for direct renderer uploads, or science-channel/telegram-uploads/ for the manual Telegram ZIP Import route.
+- Telegram delivery requires a reachable bot and valid token/chat ID. A failed send does not necessarily mean rendering failed; check the artifact section of the Actions run.
+- GitHub Actions artifacts expire automatically according to the retention period stated for each workflow: 2 days for Science Channel renders and 7 days for the AI Video Experiment.
+- Workflow schedules use UTC. India Standard Time is UTC+05:30.
