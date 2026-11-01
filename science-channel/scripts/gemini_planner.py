@@ -67,10 +67,17 @@ def has_same_underlying_subject(candidate_title, candidate_angle, candidate_pill
     # A second Gemini review compares meaning, not just title wording.
     # Fail closed: if the reviewer cannot return a clear decision, stop rather
     # than risk publishing a duplicate episode.
-    history_for_review = used_topic_details or [
+    history_for_review = list(used_topic_details)
+    detailed_titles = {
+        topic_key(item.get("title", ""))
+        for item in history_for_review if isinstance(item, dict)
+    }
+    # Include every legacy title too, even when newer records have richer metadata.
+    history_for_review.extend(
         {"title": old, "angle": "", "pillar": ""}
-        for old in used_topics if isinstance(old, str)
-    ]
+        for old in used_topics
+        if isinstance(old, str) and topic_key(old) not in detailed_titles
+    )
     review = gemini("""You are a strict duplicate-episode detector for a science YouTube channel.
 Compare the proposed episode with the COMPLETE historical episode list.
 Return { "duplicate": true, "reason": "..." } if it covers the same core scientific
