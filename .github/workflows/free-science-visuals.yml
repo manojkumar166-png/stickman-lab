@@ -30,11 +30,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/huggingface
+          key: whisper-small-${{ runner.os }}-v1
       - name: Install rendering tools
         run: |
-          sudo apt-get update
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
           sudo apt-get install -y ffmpeg fonts-dejavu-core
-          python -m pip install --upgrade edge-tts faster-whisper
+          python -m pip install --upgrade pip
+          python -m pip install edge-tts faster-whisper
       - name: Resolve exact episode path
         id: episode
         shell: bash
@@ -68,7 +79,11 @@ jobs:
           test -f "$P/episode.json" || { echo "episode.json not found in $P"; exit 1; }
           echo "path=$P" >> "$GITHUB_OUTPUT"
       - name: Validate, narrate and render
-        run: python science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
+        env:
+          HF_HOME: ${{ runner.temp }}/huggingface
+        run: |
+          set -euo pipefail
+          python -u science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
       - name: Resolve topic-based artifact name
         id: artifact
         env:
