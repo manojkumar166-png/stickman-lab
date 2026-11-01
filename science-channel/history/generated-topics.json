@@ -13,7 +13,8 @@
     "How do wood frogs completely freeze solid and wake up months later?",
     "What lives inside the mile-deep rock that hasn't seen the sun in two billion years?",
     "What would happen if your body temperature dropped to room temperature and you woke back up?",
-    "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?"
+    "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?",
+    "What if the Sun suddenly blinked out of existence for just one hour?"
   ],
   "topic_details": [
     {
@@ -70,6 +71,11 @@
       "title": "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?",
       "angle": "Explores the extreme engineering feats, hidden redundancy systems, and terrifying physics required to keep mega-bridges from tearing themselves apart under impossible loads.",
       "pillar": "Engineering and mega-structures"
+    },
+    {
+      "title": "What if the Sun suddenly blinked out of existence for just one hour?",
+      "angle": "This episode hooks viewers with a terrifying cosmic blackout, then reveals the strange, cascading physics of why Earth would keep glowing, orbiting, and freezing in slow motion.",
+      "pillar": "Space and astronomy"
     }
   ]
 }
