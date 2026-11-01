@@ -161,31 +161,39 @@ async def make_audio():
     for index, chunk in enumerate(chunks, 1):
         part = chunk_dir/f"narration-{index:03d}.mp3"
         last_error = None
-        for attempt in range(1, 5):
+        for attempt in range(1, 6):
             part.unlink(missing_ok=True)
             try:
                 communicate = edge_tts.Communicate(
                     chunk, SETTINGS["voice"], rate=SETTINGS["speech_rate"]
                 )
-                await communicate.save(str(part))
+                await asyncio.wait_for(communicate.save(str(part)), timeout=180)
                 if not part.is_file() or part.stat().st_size < 1024:
                     raise RuntimeError("TTS returned an empty or incomplete audio file")
+                probe_part = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                     "-of", "default=noprint_wrappers=1:nokey=1", str(part)],
+                    capture_output=True, text=True, timeout=30
+                )
+                if probe_part.returncode != 0 or not probe_part.stdout.strip():
+                    raise RuntimeError("TTS output is not a readable audio stream")
                 last_error = None
                 print(f"TTS chunk {index}/{len(chunks)} completed.")
                 break
             except Exception as exc:
                 last_error = exc
-                if attempt < 4:
-                    delay = 2 ** attempt
+                part.unlink(missing_ok=True)
+                if attempt < 5:
+                    delay = min(30, 2 ** attempt)
                     print(
                         f"TTS chunk {index}/{len(chunks)} failed "
-                        f"(attempt {attempt}/4): {exc}. Retrying in {delay}s."
+                        f"(attempt {attempt}/5): {exc}. Retrying in {delay}s."
                     )
                     await asyncio.sleep(delay)
         if last_error is not None:
             raise RuntimeError(
                 f"TTS failed for narration chunk {index}/{len(chunks)} "
-                f"after 4 attempts. Check Edge TTS availability, voice "
+                f"after 5 attempts. Check Edge TTS availability, voice "
                 f"'{SETTINGS['voice']}', and network/rate limits. Last error: {last_error}"
             ) from last_error
         audio_parts.append(part)
@@ -193,7 +201,8 @@ async def make_audio():
     concat_list = work/"audio-chunks.txt"
     with concat_list.open("w", encoding="utf-8") as handle:
         for part in audio_parts:
-            handle.write(f"file '{part.resolve().as_posix()}'\\n")
+            escaped = part.resolve().as_posix().replace("'", "'\\''")
+            handle.write(f"file '{escaped}'\n")
     subprocess.run(
         ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i",
          str(concat_list), "-c", "copy", str(audio)],
