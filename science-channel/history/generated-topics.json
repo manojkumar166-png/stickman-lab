@@ -15,7 +15,8 @@
     "What would happen if your body temperature dropped to room temperature and you woke back up?",
     "What happens when you cut a suspension bridge cable thick enough to hold an aircraft carrier?",
     "What if the Sun suddenly blinked out of existence for just one hour?",
-    "Why do leaves change color in autumn?"
+    "Why do leaves change color in autumn?",
+    "Why do stars twinkle?"
   ],
   "topic_details": [
     {
@@ -82,6 +83,11 @@
       "title": "Why do leaves change color in autumn?",
       "angle": "An exploration of the chemical breakdown of chlorophyll and the hidden pigments that reveal themselves just before deciduous trees shed their leaves.",
       "pillar": "Plants and the natural world"
+    },
+    {
+      "title": "Why do stars twinkle?",
+      "angle": "Explore how starlight travels across light-years of empty space only to be bent and scrambled in the final milliseconds by Earth's moving atmosphere.",
+      "pillar": "Light, sound and vision"
     }
   ]
 }
