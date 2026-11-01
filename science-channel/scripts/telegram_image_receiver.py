@@ -13,7 +13,6 @@ CHAT_ID = str(os.environ["TELEGRAM_CHAT_ID"])
 API = f"https://api.telegram.org/bot{TOKEN}"
 STATE_PATH = Path("science-channel/telegram-bot-state.json")
 ROOT = Path("science-channel/daily-episodes")
-SCENE_RE = re.compile(r"(?:scene[-_ ]?)?(0?[1-9]|[1-4][0-9])\b", re.I)
 EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3})$")
 
 def api(method, **kwargs):
@@ -73,16 +72,25 @@ def image_payload(message):
             return doc["file_id"], ext
     return None, None
 
+def scene_numbers(directory):
+    found = set()
+    if directory.exists():
+        for path in directory.glob("scene-*.*"):
+            match = re.fullmatch(r"scene-(\d{2})\.(?:jpg|png|webp)", path.name, re.I)
+            if match and 1 <= int(match.group(1)) <= 48:
+                found.add(int(match.group(1)))
+    return found
+
 def main():
     state = load_state()
-    # Automatically follow the newest generated episode so daily uploads need no /episode command.
     latest = newest_episode()
     selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
     if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
         state["episode_path"] = str(latest)
-        send(f"Automatically selected the newest episode: {latest.parent.name}/{latest.name}. Send all 48 images in order; I will number them automatically from scene-01 to scene-48.")
+        send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images.")
+
     updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
-    changed = bool(latest and state.get("episode_path") == str(latest))
+    changed = False
     for update in updates:
         state["offset"] = update["update_id"] + 1
         msg = update.get("message", {})
@@ -91,44 +99,38 @@ def main():
             continue
         text = (msg.get("text") or "").strip()
         if text.startswith("/start") or text.startswith("/help"):
-            send("I automatically select the newest episode. Send 48 images one by one, or one ZIP containing exactly 48 images. ZIP images are numbered by filename order. You can optionally use /episode YYYY-MM-DD/episode-001 to choose a different episode. I create READY.txt only when all 48 are present.")
+            send("This bot only handles episodes committed on the main branch. Send 48 images one by one or one ZIP containing exactly 48 images. Use /episode YYYY-MM-DD/episode-001 to select another existing main-branch episode.")
             continue
         if text.startswith("/episode"):
             value = text.split(maxsplit=1)[1] if len(text.split(maxsplit=1)) == 2 else ""
             folder = valid_episode(value)
             if not folder:
-                send("I couldn't find that episode. Use /episode YYYY-MM-DD/episode-001 and make sure the episode already exists in the repository.")
+                send("Episode not found on main. Use /episode YYYY-MM-DD/episode-001 and ensure the episode package exists on the main branch.")
             else:
                 state["episode_path"] = str(folder)
                 changed = True
-                send(f"Selected {folder.parent.name}/{folder.name}. Send images in order; I will number them automatically.")
+                send(f"Selected main-branch episode {folder.parent.name}/{folder.name}. Send images in order.")
             continue
+
         file_id, ext = image_payload(msg)
         if not file_id:
             continue
         episode = Path(state.get("episode_path", ""))
         if not state.get("episode_path") or not (episode / "episode.json").is_file():
-            send("No episode is available yet. Wait until the daily planner creates one, then send your image again.")
+            send("No episode committed on main is selected. Wait until the planner publishes one to main, then send your images.")
             continue
-        # Always assign the next empty scene in arrival order; users never need to rename or caption images.
-        present = {int(m.group(1)) for p in (episode / "images/incoming").glob("scene-*.*") if (m := re.match(r"scene-(\\d{2})\\.", p.name))}
-        number = next((n for n in range(1, 49) if n not in present), 0)
-        if not 1 <= number <= 48:
-            send("All 48 scene slots are already filled. No more images were added.")
-            continue
+
         dest_dir = episode / "images/incoming"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / f"scene-{number:02d}.{ext}"
-        if dest.exists():
-            send(f"Scene {number:02d} already has an image. I left it unchanged; rename or remove the existing file before replacing it.")
-            continue
+        present = scene_numbers(dest_dir)
         info = api("getFile", data={"file_id": file_id})
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{info['file_path']}"
         download = requests.get(file_url, timeout=120)
         download.raise_for_status()
         if len(download.content) > 50 * 1024 * 1024:
-            send("That upload is over 50 MB, so it was skipped. Please send a smaller file.")
+            send("Upload is over 50 MB and was skipped. Please send a smaller file.")
             continue
+
         if ext == "zip":
             try:
                 with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
@@ -136,18 +138,17 @@ def main():
                                if not item.is_dir() and item.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
                     entries.sort(key=lambda item: item.filename.lower())
                     if len(entries) != 48:
-                        send(f"ZIP skipped: I found {len(entries)} supported images; it must contain exactly 48.")
+                        send(f"ZIP skipped: found {len(entries)} supported images; it must contain exactly 48.")
                         continue
                     images = [(archive.read(item), item.filename) for item in entries]
             except (zipfile.BadZipFile, RuntimeError, OSError):
                 send("I couldn't read that ZIP. Please send a valid ZIP containing exactly 48 images.")
                 continue
-            present = {int(m.group(1)) for p in dest_dir.glob("scene-*.*") if (m := re.match(r"scene-(\\d{2})\\.", p.name))}
             if present:
-                send("ZIP skipped because this episode already has some images. Send a ZIP only to an empty episode folder.")
+                send("ZIP skipped because this episode already has images. Send a ZIP only to an empty incoming folder.")
                 continue
             if any(len(data) > 20 * 1024 * 1024 for data, _ in images):
-                send("ZIP skipped: at least one image is over 20 MB. Please reduce the image sizes.")
+                send("ZIP skipped: at least one image is over 20 MB. Please reduce image sizes.")
                 continue
             for index, (data, filename) in enumerate(images, start=1):
                 suffix = Path(filename).suffix.lower().lstrip(".")
@@ -156,19 +157,24 @@ def main():
             changed = True
         else:
             if len(download.content) > 20 * 1024 * 1024:
-                send("That image is over 20 MB, so it was skipped. Please send a smaller image.")
+                send("Image is over 20 MB and was skipped. Please reduce its size.")
                 continue
-            dest.write_bytes(download.content)
+            if len(present) >= 48:
+                send("All 48 scene slots are already filled. No more images were added.")
+                continue
+            number = next((n for n in range(1, 49) if n not in present), 0)
+            (dest_dir / f"scene-{number:02d}.{ext}").write_bytes(download.content)
             changed = True
-        present = {int(m.group(1)) for p in dest_dir.glob("scene-*.*") if (m := re.match(r"scene-(\\d{2})\\.", p.name))}
+
+        present = scene_numbers(dest_dir)
         missing = [n for n in range(1, 49) if n not in present]
         if not missing:
-            ready = episode / "READY.txt"
-            ready.write_text("All 48 scene images received through Telegram.\n", encoding="utf-8")
-            send(f"All 48 images are present for {episode.parent.name}/{episode.name}. READY.txt created; video rendering will start after this upload is committed.")
+            (episode / "READY.txt").write_text("All 48 scene images received through Telegram.\n", encoding="utf-8")
+            send(f"All 48 images are present for {episode.parent.name}/{episode.name}. READY.txt created; uploads will be committed to main.")
         else:
-            send(f"Saved scene {number:02d}. {len(present)}/48 images received. Next missing: scene-{missing[0]:02d}.")
-    if changed or state.get("offset"):
+            send(f"Saved image. {len(present)}/48 received. Next missing: scene-{missing[0]:02d}.")
+
+    if changed or updates:
         save_state(state)
 
 if __name__ == "__main__":
