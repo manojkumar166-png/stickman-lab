@@ -219,7 +219,7 @@ async def make_audio():
         )
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip()
-        print(f"FFmpeg narration assembly failed:\\n{detail}")
+        print(f"FFmpeg narration assembly failed:\n{detail}")
         raise RuntimeError(
             f"Could not combine {len(audio_parts)} valid Edge TTS chunks. "
             f"FFmpeg reported: {detail or 'no diagnostic output'}"
