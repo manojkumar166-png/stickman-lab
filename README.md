@@ -228,3 +228,45 @@ Make changes on **main** unless you are deliberately working on a separate exper
 
 The [Science Channel operating guide](science-channel/README.md#customize-the-science-channel) explains every Science Channel setting, prompt, upload rule and render option. The [AI Video Experiment guide](AI_README.md) explains the separate root-level generator and how to customize its art, voice, topics and model.
 
+
+
+---
+
+# ☁️ Cloudflare & 📲 Telegram — integration manuals
+
+The two integrations are used differently by the two video pipelines. Read the correct guide before changing credentials, providers, upload limits or workflow behavior.
+
+## ☁️ Cloudflare Workers AI
+
+Cloudflare Workers AI is currently used by the **root AI Video Experiment only**. It generates the scene illustrations through the FLUX-2-KLEIN-4B model. The Science Channel episode pipeline does not currently call Cloudflare for its image generation.
+
+- Required secrets: `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
+- Active implementation: `scripts/make_art.py`.
+- Current model endpoint: `@cf/black-forest-labs/flux-2-klein-4b`.
+- Current image request: 1024 × 576, multipart form data, bearer-token authentication, 120-second request timeout and 6-second delay between scene requests.
+- Failure behavior: failed individual scenes reuse a successful generated image; if all Cloudflare image requests fail, the root generator uses locally drawn stickman artwork.
+
+For step-by-step Cloudflare account/token setup, API endpoint and request schema, model replacement, dimensions, art prompt, pacing, retries, fallback behavior and error troubleshooting, read [AI Video Experiment — Cloudflare setup and customization](AI_README.md#-cloudflare-workers-ai--complete-setup-configuration-and-troubleshooting).
+
+## 📲 Telegram
+
+Telegram has four roles in the Science Channel and one in the legacy AI experiment:
+
+1. Sends the Science Channel's `image-prompts.md` document after the planner commits an episode.
+2. Receives 48 individual images or one ZIP using the Telegram Image Receiver.
+3. Can import a ZIP staged in `science-channel/telegram-uploads/` using the manual Telegram ZIP Import workflow.
+4. Receives the final Science Channel MP4 after rendering.
+5. Receives the separate AI Video Experiment MP4.
+
+Shared Science Channel/legacy secret names:
+- `TELEGRAM_BOT_TOKEN` — token created through Telegram's official @BotFather.
+- `TELEGRAM_CHAT_ID` — numeric private-chat or group ID used as the destination and incoming-chat allowlist.
+- `GH_PAT` — additional GitHub token required only by the staged ZIP import workflow so it can push extracted images.
+
+The Telegram Image Receiver polls every five minutes; it is not a continuously running server. It accepts JPG/JPEG, PNG and WebP, supports 48 individual images or one 48-image ZIP, and writes a READY marker when all 48 scene slots exist. The staged ZIP importer has separate validation and size limits. The renderer sends the MP4 and cleans source images only after successful Telegram delivery.
+
+Read the detailed manuals:
+- [Science Channel — Telegram bot setup, commands, image uploads, ZIP import, video delivery and cleanup](science-channel/README.md#-telegram-operations--detailed-science-channel-manual)
+- [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order, modification and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
+
+**Security:** Never commit Cloudflare tokens, Telegram bot tokens, Gemini keys or GitHub PATs. Store them in repository Settings → Secrets and variables → Actions → Secrets. Keep the Science Channel workflows on `main`.
