@@ -57,7 +57,7 @@ def parse_gemini_json(raw_text):
     return json.loads(text[start:end])
 
 
-def gemini(prompt, temperature=0.7, max_output_tokens=8192):
+def gemini(prompt, temperature=0.7):
     """Call Gemini with automatic model failover and retries for transient/invalid responses.
 
     The configured primary model is always tried first on a fresh run. Once a model
@@ -82,8 +82,7 @@ def gemini(prompt, temperature=0.7, max_output_tokens=8192):
             payload = {
                 "contents": [{"parts": [{"text": request_prompt}]}],
                 "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "maxOutputTokens": min(max_output_tokens, 32768 if model.startswith("gemma-4-") else 65536)
+                    "responseMimeType": "application/json"
                 }
             }
             try:
@@ -172,7 +171,7 @@ def gemini(prompt, temperature=0.7, max_output_tokens=8192):
         "All configured Gemini models failed. " + " | ".join(failures)
     )
 
-def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3, max_output_tokens=8192):
+def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
     """Regenerate Gemini output when its JSON is valid but fails stage-specific checks."""
     if not callable(validator):
         raise TypeError(
@@ -186,7 +185,7 @@ def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3, max_
     stage_started = time.perf_counter()
     for attempt in range(1, attempts + 1):
         try:
-            result = gemini(retry_prompt, temperature, max_output_tokens)
+            result = gemini(retry_prompt, temperature)
             validator(result)
             print(f"{stage} completed in {time.perf_counter() - stage_started:.1f}s", flush=True)
             return result
@@ -318,7 +317,7 @@ Proposed episode: """ + json.dumps({
         "title": candidate_title, "angle": candidate_angle, "pillar": candidate_pillar
     }, ensure_ascii=False) + """
 Historical episodes: """ + json.dumps(history_for_review, ensure_ascii=False),
-    validate_duplicate_review, "Semantic duplicate review", temperature=0.1, max_output_tokens=512)
+    validate_duplicate_review, "Semantic duplicate review", temperature=0.1)
     if review["duplicate"]:
         print("Rejected semantically repeated topic: " + str(review.get("reason", "same underlying subject")))
     return review["duplicate"]
@@ -394,7 +393,7 @@ Create a title that sounds like a compelling YouTube episode, usually as a quest
 The subject itself must be completely new, not merely a differently worded title. Never reuse the same underlying question, event, scientific phenomenon, or central explanation from any previously generated episode. Treat synonyms, paraphrases, alternate wording, and narrow variations of an old topic as repeats. Compare against the COMPLETE lifetime used-topic list below; if the idea overlaps, choose a genuinely different subject.
 Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explaining the hook and why viewers will care"}.
 Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
-"\nThe only permitted category for this episode is: " + selected_pillar, validate_topic, "Topic generation", 0.45, max_output_tokens=512)
+"\nThe only permitted category for this episode is: " + selected_pillar, validate_topic, "Topic generation", 0.45)
     candidate = topic_data.get("title", "").strip()
     candidate_angle = topic_data.get("angle", "").strip()
     if candidate and not is_duplicate_topic(candidate):
@@ -425,7 +424,7 @@ scenes must contain EXACTLY 48 objects, each with scene_number (1..48), narratio
 about 20–30 words), and visual_beat (brief description of what the narration is showing).
 Narration across all 48 scenes must form a coherent complete script of about 1,100–1,350 words.
 No image prompt in this stage. Number scenes consecutively from 1 to 48."""
-episode = gemini_validated(script_prompt, validate_episode, "48-scene script", 0.65, max_output_tokens=8192)
+episode = gemini_validated(script_prompt, validate_episode, "48-scene script", 0.65)
 scenes = episode["scenes"]
 
 # Derive exactly one image prompt from each finalized narration scene.
@@ -454,7 +453,7 @@ Avoid unnecessarily huge textures or empty high-detail backgrounds. Keep the ful
 No text, captions, logos or watermarks. The optional image-preparation utility can resize and convert
 supported source images to numbered JPGs for smaller browser uploads; conversion is not required.
 Return JSON only: {"prompts":[{"scene_number":1,"prompt":"..."}]}.
-Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), validate_image_prompts, "48 image prompts", 0.55, max_output_tokens=12288)
+Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), validate_image_prompts, "48 image prompts", 0.55)
 prompts = prompt_data["prompts"]
 
 # Reserve the topic only after the full script and all 48 prompts validate.
