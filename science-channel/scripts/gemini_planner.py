@@ -19,19 +19,104 @@ def topic_slug(value):
     slug = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
     return slug[:70].strip("-") or "untitled-topic"
 
-def gemini(prompt, temperature=0.7):
-    payload = {"contents":[{"parts":[{"text":prompt}]}],
-               "generationConfig":{"temperature":temperature,"responseMimeType":"application/json"}}
-    for attempt in range(5):
-        r = requests.post(API, params={"key":API_KEY}, json=payload, timeout=180)
-        if r.ok:
-            data = r.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(re.sub(r"^\s*```json|\s*```$", "", text.strip()))
-        if r.status_code not in (429,500,502,503): r.raise_for_status()
-        time.sleep(3 * (attempt + 1))
-    r.raise_for_status()
+def parse_gemini_json(raw_text):
+    """Parse Gemini JSON, tolerating Markdown fences and harmless surrounding text."""
+    text = raw_text.strip().lstrip("\ufeff")
+    text = re.sub(r"^\s*\`\`\`(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*\`\`\`\s*$", "", text)
 
+    # Isolate the first complete JSON object if Gemini adds surrounding prose.
+    start = text.find("{")
+    if start < 0:
+        raise json.JSONDecodeError("No JSON object found in Gemini response", text, 0)
+    depth = 0
+    in_string = False
+    escaped = False
+    end = None
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = index + 1
+                break
+    if end is None:
+        raise json.JSONDecodeError("Gemini response contains an incomplete JSON object", text, len(text))
+    return json.loads(text[start:end])
+
+
+def gemini(prompt, temperature=0.7):
+    request_prompt = prompt
+    last_error = None
+    for attempt in range(5):
+        payload = {"contents":[{"parts":[{"text":request_prompt}]}],
+                   "generationConfig":{"temperature":temperature,"responseMimeType":"application/json"}}
+        r = requests.post(API, params={"key":API_KEY}, json=payload, timeout=180)
+        if not r.ok:
+            if r.status_code not in (429,500,502,503):
+                r.raise_for_status()
+            if attempt == 4:
+                r.raise_for_status()
+            time.sleep(3 * (attempt + 1))
+            continue
+
+        data = r.json()
+        candidates = data.get("candidates") or []
+        if not candidates:
+            last_error = RuntimeError(
+                "Gemini returned no candidates. Prompt feedback: " +
+                json.dumps(data.get("promptFeedback", {}), ensure_ascii=False)[:1000]
+            )
+        else:
+            candidate = candidates[0]
+            parts = candidate.get("content", {}).get("parts", [])
+            response_text = "".join(
+                part.get("text", "") for part in parts if isinstance(part, dict)
+            )
+            try:
+                return parse_gemini_json(response_text)
+            except (json.JSONDecodeError, TypeError) as exc:
+                last_error = exc
+                finish_reason = candidate.get("finishReason", "unknown")
+                print(
+                    f"Gemini returned invalid JSON (attempt {attempt + 1}/5; "
+                    f"finishReason={finish_reason}; {exc}). Retrying...",
+                    flush=True
+                )
+                if attempt < 4:
+                    request_prompt = (
+                        prompt +
+                        "\n\nIMPORTANT RETRY: Your previous response was invalid JSON. "
+                        "Regenerate the complete response from scratch. Return exactly one "
+                        "valid JSON object, with every string correctly escaped, every "
+                        "property separated by commas, and no Markdown or commentary. "
+                        "Do not truncate the response."
+                    )
+                    time.sleep(2 * (attempt + 1))
+                    continue
+        if attempt < 4:
+            request_prompt = (
+                prompt +
+                "\n\nIMPORTANT RETRY: Return one complete valid JSON object only. "
+                "Do not include Markdown or commentary."
+            )
+            time.sleep(2 * (attempt + 1))
+
+    raise RuntimeError(
+        f"Gemini failed to return valid JSON after 5 attempts. Last error: {last_error}"
+    )
 history = json.loads(HISTORY.read_text()) if HISTORY.exists() else {"topics":[]}
 # Also recover topics from existing episode packages, so an interrupted run cannot
 # cause an already-created topic to be selected again.
