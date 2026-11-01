@@ -6,18 +6,18 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-daily-planner
+  group: science-channel-main-writer
   cancel-in-progress: false
 jobs:
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      SCIENCE_BRANCH: adaptive-cinematic-effects
+      SCIENCE_BRANCH: main
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: adaptive-cinematic-effects
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -43,7 +43,7 @@ jobs:
           fi
           EPISODE_DIR="$(dirname "${FILES[0]}")"
           echo "path=$EPISODE_DIR" >> "$GITHUB_OUTPUT"
-      - name: Commit episode to adaptive branch (retry safely)
+      - name: Commit episode to main (retry safely)
         id: source_commit
         env:
           EPISODE_PATH: ${{ steps.generated.outputs.path }}
@@ -55,27 +55,25 @@ jobs:
           git add "$EPISODE_PATH"
           git commit -m "Add Gemini-planned episode"
           for attempt in 1 2 3; do
-            git fetch origin "$SCIENCE_BRANCH"
-            git rebase "origin/$SCIENCE_BRANCH"
-            if git push origin "HEAD:refs/heads/$SCIENCE_BRANCH"; then
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:refs/heads/main; then
               echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "Push attempt $attempt failed; retrying after fetching latest branch."
-            if [ "$attempt" -lt 3 ]; then
-              sleep $((attempt * 3))
-            fi
+            echo "Push attempt $attempt failed; retrying."
+            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 3)); fi
           done
-          echo "Could not publish episode after 3 push attempts."
+          echo "Could not publish episode to main after 3 attempts."
           exit 1
-      - name: Verify episode exists on GitHub branch
+      - name: Verify episode exists on main
         env:
           EPISODE_PATH: ${{ steps.generated.outputs.path }}
         run: |
-          git fetch origin "$SCIENCE_BRANCH"
-          git cat-file -e "origin/$SCIENCE_BRANCH:$EPISODE_PATH/episode.json"
-          echo "Verified $EPISODE_PATH on $SCIENCE_BRANCH."
-      - name: Send episode prompts to Telegram only after GitHub commit
+          git fetch origin main
+          git cat-file -e "origin/main:$EPISODE_PATH/episode.json"
+          echo "Verified $EPISODE_PATH on main."
+      - name: Send episode prompts to Telegram only after main commit
         if: success()
         continue-on-error: true
         env:
@@ -94,5 +92,5 @@ jobs:
           curl --fail --silent --show-error \
             -F "chat_id=$TELEGRAM_CHAT_ID" \
             -F "document=@$PROMPT_FILE;filename=image-prompts.md" \
-            -F "caption=🖼️ Episode package committed to $SCIENCE_BRANCH: $TITLE | Upload 48 numbered images to $EPISODE_PATH/images/incoming/" \
+            -F "caption=🖼️ Episode package committed to main: $TITLE | Upload 48 numbered images to $EPISODE_PATH/images/incoming/" \
             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument"
