@@ -4,7 +4,8 @@
     "How do plants communicate underground?",
     "How do glassfrogs render themselves completely transparent?",
     "How do pistol shrimp create underwater shockwaves hotter than the Sun?",
-    "What if the universe has a hidden speed limit faster than light?"
+    "What if the universe has a hidden speed limit faster than light?",
+    "What happens to the human body if we live in lunar gravity for fifty years?"
   ],
   "topic_details": [
     {
@@ -16,6 +17,11 @@
       "title": "What if the universe has a hidden speed limit faster than light?",
       "angle": "Exploring the mind-bending physics of cosmic inflation and warp bubbles to reveal why empty space itself isn't bound by the speed of light, and what that means for our cosmic horizon.",
       "pillar": "Mysteries of science and the universe"
+    },
+    {
+      "title": "What happens to the human body if we live in lunar gravity for fifty years?",
+      "angle": "Explore the profound, unsettling ways our bones, blood, and internal organs would structurally adapt and potentially degrade over generations living in one-sixth Earth gravity.",
+      "pillar": "Future possibilities and human survival"
     }
   ]
 }
