@@ -132,18 +132,35 @@ The category for THIS episode has already been randomly selected and is mandator
 Selected category: """ + selected_pillar + """
 Example of the desired broad, accessible question style: """ + pillar_example + """
 Generate exactly ONE exceptionally compelling, fresh episode topic strictly within the selected category.
-GOAL: choose a topic with a powerful curiosity gap that makes someone scrolling YouTube stop and think,
-"I need to know what happens" or "I've never thought about that before." Optimize for genuine viewer
-interest and click-worthy curiosity, not textbook chapter headings.
-A strong topic should combine at least TWO of these: a surprising consequence, a familiar thing behaving
-in an unexpected way, a high-stakes "what if", a hidden process people never notice, a counterintuitive
-scientific fact, or a big unanswered-but-scientifically-investigable question.
-Prefer specific, vivid, surprising questions with clear stakes and an imaginable visual payoff.
-Make the title concise, natural, emotionally engaging, and understandable to a general audience.
-Avoid bland/generic titles (for example, "How do stars work?"), school-assignment phrasing, listicle bait,
-sensational misinformation, fake mysteries, and claims that science cannot support.
-The topic must sustain a complete 8–10 minute story with a strong opening hook, escalating discoveries,
-and a satisfying scientifically accurate explanation.
+PRIMARY GOAL: earn the click AND keep the viewer watching. Imagine the audience is scrolling YouTube:
+the title must make a broad, curious viewer instantly feel "Wait, is that really possible?" or
+"I have to know what happens." Prioritize mass audience appeal, instant comprehension, and a powerful
+curiosity gap over showing off obscure scientific knowledge.
+
+Before choosing, silently brainstorm several different candidate ideas and select the strongest one.
+Score the best candidate against these standards; reject it unless it is excellent:
+- INSTANT HOOK: creates a vivid question, surprising possibility, relatable mystery, or high-stakes scenario.
+- BROAD APPEAL: connects to something people already care about: their body, everyday life, Earth, animals,
+  space, danger, survival, the future, or a familiar technology.
+- CLEAR PAYOFF: viewers can imagine what they will discover, and the answer is more surprising than the premise.
+- VISUAL STORY: can be shown through striking scenes, experiments, comparisons, scale, or consequences.
+- RETENTION: naturally unfolds into escalating revelations, not a one-fact explanation.
+A strong idea should combine at least TWO of these: a shocking-but-true consequence, a familiar thing behaving
+in an unexpected way, a relatable "what if", a hidden process with an astonishing result, a counterintuitive
+scientific fact, or a big question with a genuinely surprising evidence-based answer.
+
+Prefer topics with a human connection, real-world stakes, wonder, or a "this changes how I see the world" payoff.
+Use concrete, vivid language. Make the title concise, natural, emotionally engaging, and understandable to a
+12-year-old without dumbing down the science. The angle must explain the specific hook and the sequence of
+discoveries that will keep viewers watching.
+
+Avoid bland textbook topics ("How do stars work?"), dry school-assignment phrasing, jargon, obscure trivia,
+tiny niche facts, generic "amazing facts", listicle bait, fake urgency, misleading exaggeration, sensational
+misinformation, and claims science cannot support. Do not choose a topic merely because it sounds technically
+impressive. Do not sacrifice truth for clickbait.
+The topic must sustain a complete 8–10 minute story: open with an irresistible question or visual moment,
+raise the stakes, reveal increasingly surprising facts, and finish with a satisfying scientifically accurate
+answer or twist.
 Do NOT switch to another category. Do NOT choose obscure species, highly specialized biological mechanisms,
 technical research-paper questions, or tiny niche facts. For Animals, focus on familiar or visually striking
 animals and extraordinary abilities/survival strategies that reveal a bigger scientific idea. For Technology,
