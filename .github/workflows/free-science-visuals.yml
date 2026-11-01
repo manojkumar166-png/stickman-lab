@@ -124,12 +124,18 @@ jobs:
         run: |
           set -euo pipefail
           incoming="$EPISODE_PATH/images/incoming"
-          # Keep .gitkeep so the incoming folder remains in the repository.
-          find "$incoming" -maxdepth 1 -type f ! -name '.gitkeep' -delete
+          # Delete every uploaded file but preserve .gitkeep. This also removes
+          # dream.zip, allowing that exact filename to be uploaded again later.
+          if [ -d "$incoming" ]; then
+            find "$incoming" -maxdepth 1 -type f ! -name '.gitkeep' -delete
+          fi
           rm -f "$EPISODE_PATH/READY.txt"
-          git add -A "$incoming" "$EPISODE_PATH/READY.txt"
+          git add -A -- "$incoming"
+          if git ls-files --error-unmatch "$EPISODE_PATH/READY.txt" >/dev/null 2>&1; then
+            git rm -f -- "$EPISODE_PATH/READY.txt"
+          fi
           if git diff --cached --quiet; then
-            echo "No uploaded image files or READY marker to clean up."
+            echo "No uploaded files or READY marker need cleanup."
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -139,7 +145,7 @@ jobs:
             git fetch origin main
             git rebase origin/main
             if git push origin HEAD:main; then
-              echo "Uploaded ZIP/images and READY marker removed from main."
+              echo "Cleanup committed to main. The same ZIP filename can now be uploaded again."
               exit 0
             fi
             echo "Push attempt $attempt failed; retrying."
