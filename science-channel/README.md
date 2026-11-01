@@ -1,10 +1,10 @@
 # Science Channel — complete operating guide
 
-This guide explains how to create an episode, edit its script, generate and upload images, render the video, and download or delete the result. The pipeline is isolated to `science-channel/` and its two dedicated GitHub Actions workflows.
+This guide explains how to create an episode, edit its script, generate and upload images, render the video, and download or delete the result. The Science Channel uses four coordinated GitHub Actions workflows: the Gemini planner, Telegram image receiver, Telegram ZIP importer, and video renderer. All four operate on the `main` branch.
 
 ## How the complete workflow operates
 
-The Science Channel pipeline has two separate GitHub Actions workflows. The first plans an episode and prepares the material; the second turns the completed episode package and its 48 images into a narrated video. Image generation and uploading are the human-in-the-loop part between those two workflows.
+The Science Channel pipeline has four GitHub Actions workflows. The planner creates the episode package; either Telegram workflow can receive/import the 48 images; the renderer turns the completed package and images into a narrated video. Image generation and review remain a human-in-the-loop stage.
 
 ### The end-to-end process
 
@@ -42,7 +42,7 @@ Daily schedule or manual start
 6. VALIDATE AND RENDER
    Checks 48 scenes, narration sections and images
    Makes 16:9 visuals + Edge TTS narration
-   Combines them into final-video.mp4 (no subtitles)
+   Combines them into final-video.mp4 with word-aligned karaoke captions
             |
             v
 7. OUTPUT ARTIFACT IS UPLOADED
@@ -51,7 +51,7 @@ Daily schedule or manual start
             v
 8. POST-RENDER TASKS
    Attempts Telegram video delivery (non-blocking)
-   Attempts to delete processed ZIP from the Git repository
+   After successful Telegram delivery, removes uploaded ZIP/images and READY.txt from the Git repository
 ```
 
 ### Workflow A — Daily Gemini Planner
@@ -62,6 +62,30 @@ Daily schedule or manual start
 - **What gets saved:** The planner creates the episode folder and its five starter items: `episode.json`, `script.md`, `scenes.json`, `image-prompts.md`, and `images/incoming/.gitkeep`. It also updates the topic history so the topic is not selected again.
 - **How it finishes:** The workflow optionally sends `image-prompts.md` to Telegram, then commits the generated Science Channel package to the repository. Telegram is non-blocking: a missing Telegram secret or a send failure does not prevent the episode package commit.
 - **What it does not do:** The planner does not generate the 48 image files and does not render the MP4. You generate the images and upload them before rendering.
+
+### Workflow B — Telegram Image Receiver
+
+File: `.github/workflows/telegram-image-receiver.yml`
+
+- **Schedule:** polls the configured Telegram bot every 5 minutes. You can also start it manually from Actions to poll immediately.
+- **Branch:** checks out and commits only to `main`; it does not read or write `adaptive-cinematic-effects`.
+- **Episode selection:** automatically selects the newest episode package on `main`. Send `/episode YYYY-MM-DD/episode-001` to choose another existing episode.
+- **Uploads:** accepts individual JPG/JPEG, PNG or WebP images, or one ZIP containing exactly 48 supported images. Individual images are placed into the next missing scene number. A ZIP is expanded into 48 numbered scene files.
+- **Completion:** when all 48 scene slots are present, the bot creates `READY.txt`. The workflow commits the images and Telegram polling state to `main`; the image commit triggers the render workflow.
+- **Chat restriction:** only messages from the configured `TELEGRAM_CHAT_ID` are processed. `/start` and `/help` display bot instructions.
+
+### Workflow C — Telegram ZIP Import
+
+File: `.github/workflows/telegram-zip-import.yml`
+
+This is an alternative to sending the ZIP directly to the bot. First upload any `.zip` file directly into `science-channel/telegram-uploads/` on `main`. Then open Actions → **Telegram ZIP Import** → Run workflow and provide both required inputs:
+
+- `episode_path`: the exact episode folder, for example `science-channel/daily-episodes/2026-11-01/episode-001`.
+- `zip_path`: the full staged ZIP path, for example `science-channel/telegram-uploads/dream.zip`.
+
+The filename does not need to follow a special naming pattern, but the file must end in `.zip` and be directly inside `science-channel/telegram-uploads/`. The importer checks that the archive is valid and contains exactly 48 supported images, rejects unsafe paths and oversized files, extracts the images into the episode's `images/incoming/` folder, creates `READY.txt`, commits the images to `main`, and removes the staged ZIP. That commit starts the renderer.
+
+This workflow uses the `GH_PAT` repository secret to push imported files. Configure it as a personal access token with repository contents write permission. Do not put the token in a workflow input or source file.
 
 ### The manual creative stage — your review and images
 
@@ -75,15 +99,17 @@ If you revise narration after generating images, revise the matching prompt and 
 - **Choosing the episode:** For a manual run, enter the exact folder in the optional `episode_path` field. If left blank, it chooses the newest episode it finds with a READY marker or incoming image files. For a push run, the changed files must identify exactly one episode; commits affecting multiple episodes are rejected.
 - **Validation:** It checks the episode metadata and scene data, requires exactly 48 ordered scene records, checks for 48 numbered narration sections in `script.md`, and requires exactly 48 supported images (either one ZIP or individual files, not a mixture).
 - **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It uses faster-whisper Small on CPU to align narration word-by-word, then burns phrase-based karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline.**
-- **Artifact upload:** After rendering and resolving the topic-based artifact name, it uploads the contents of the episode's `output/` folder as a GitHub Actions artifact. The artifact includes the final MP4 and supporting render files and is retained for **2 days**.
-- **After upload:** Telegram video delivery is attempted but is non-blocking. The workflow then tries to delete any processed ZIP archive from the Git repository, with up to three attempts. Individual image files are not automatically deleted.
+- **Artifact upload:** after rendering, it uploads the final MP4 only as a topic-named GitHub Actions artifact. The artifact is retained for **2 days**.
+- **Telegram delivery:** the workflow attempts to send the MP4 to the configured Telegram chat. This step is non-blocking, so a Telegram failure does not erase an artifact that has already been uploaded.
+- **Cleanup after successful delivery:** only when Telegram reports success, the workflow deletes every uploaded file in the episode's `images/incoming/` folder except `.gitkeep`, and removes `READY.txt`. It commits the cleanup to `main`. This removes both ZIP archives and individual scene images, and allows the same ZIP filename to be uploaded again after the cleanup commit reaches `main`.
+- **If Telegram delivery fails:** cleanup is skipped. The ZIP/images and READY marker remain in the repository so you can retry delivery/rendering. The MP4 artifact may still be available because artifact upload occurs before Telegram delivery.
 
 ### What happens if a step fails?
 
 - If the planner fails before committing, a new complete episode package may not be available. Check the planner run's logs in Actions.
 - If you have not uploaded all 48 images, or the script/scenes do not pass validation, rendering stops and the rendered artifact is not uploaded.
 - If rendering or artifact-name generation fails before the upload step, there is no rendered-video artifact from that run.
-- If artifact upload succeeds and a later Telegram or ZIP-cleanup step fails, the workflow run can show **Failed**, but the artifact that was already uploaded remains available until manually deleted or its 2-day retention expires.
+- If artifact upload succeeds and Telegram delivery fails, the workflow continues but skips cleanup; the artifact remains available until manually deleted or its 2-day retention expires. If the cleanup commit itself cannot be pushed, the run fails after artifact upload and Telegram delivery, and the uploaded source files may remain in the repository.
 - The planner's episode files and uploaded individual images are repository files. The rendered artifact is a separate downloadable item under the Actions run; it is not automatically committed as a video file in the episode folder.
 
 ## Quick workflow
@@ -93,9 +119,9 @@ If you revise narration after generating images, revise the matching prompt and 
 3. Review or edit `script.md`, `scenes.json`, `episode.json`, and `image-prompts.md`.
 4. Generate exactly 48 images from the image prompts.
 5. Run `science-channel/scripts/prepare_images.py` to resize/compress the images into one ZIP targeting under 23 MiB, or use Git command line for larger files.
-6. Upload that ZIP (or 48 individual images) into that episode's `images/incoming/` folder.
-6. Add an empty `READY.txt` file in the episode folder and commit the images and marker. Alternatively, run the render workflow manually and enter the episode folder path.
-7. Open the render workflow run, download the artifact, and save the MP4.
+6. Upload that ZIP (or 48 individual images) into that episode's `images/incoming/` folder, or use one of the Telegram upload workflows described above.
+7. For direct repository uploads, add an empty `READY.txt` file in the episode folder and commit the images and marker. Alternatively, run the render workflow manually and enter the episode folder path.
+8. Open the render workflow run, download the MP4 artifact, and save it.
 
 ## 1. Create a new episode
 
@@ -268,7 +294,7 @@ The artifact upload happens before Telegram delivery and ZIP cleanup. Therefore,
 
 ## 7. ZIP cleanup and repository files
 
-After the artifact upload, the render workflow attempts to delete processed ZIP archives from the repository's `images/incoming/` folder, retrying up to three times. Individual image files are not automatically deleted. A ZIP-cleanup failure can make the workflow run show as failed even though the video artifact was already uploaded.
+After the artifact upload and **only if Telegram delivery succeeds**, the render workflow deletes all uploaded files directly inside the repository's `images/incoming/` folder (ZIP archives and individual scene images), preserves `.gitkeep`, removes `READY.txt`, and pushes the cleanup commit to `main`. This permits reuse of the same ZIP filename after the cleanup commit has completed. If Telegram delivery fails, cleanup is skipped and the uploaded files remain available for retry. If the cleanup push fails, the artifact may already be available even though the overall workflow run reports failure.
 
 ## 8. GitHub Actions settings required
 
@@ -282,9 +308,11 @@ The render workflow installs FFmpeg, DejaVu fonts, Edge TTS and faster-whisper i
 
 ## 9. What this pipeline changes
 
-Science Channel code, settings, topics, history and episode files are kept under `science-channel/`. Planning and rendering use only these dedicated workflows:
+Science Channel code, settings, topics, history and episode files are kept under `science-channel/`. The complete workflow set is:
 
-- `.github/workflows/science-channel-daily-planner.yml`
-- `.github/workflows/free-science-visuals.yml`
+- `.github/workflows/science-channel-daily-planner.yml` — creates the episode package and prompts.
+- `.github/workflows/telegram-image-receiver.yml` — polls Telegram every five minutes and commits uploaded images to `main`.
+- `.github/workflows/telegram-zip-import.yml` — manually imports a staged ZIP from `science-channel/telegram-uploads/`.
+- `.github/workflows/free-science-visuals.yml` — validates, renders, uploads the MP4 artifact, sends it to Telegram and cleans source uploads after successful delivery.
 
-Unrelated repository workflows, scripts, topics, shared configuration and dependencies are outside this pipeline's scope and should not be edited for normal episode production.
+All four Science Channel workflows use `main`. The separate `.github/workflows/ai-video-test.yml` is a legacy root-level AI Video Experiment and is not part of the episode pipeline. Unrelated root-level generator scripts, topics, history and configuration are outside the Science Channel pipeline's scope.
