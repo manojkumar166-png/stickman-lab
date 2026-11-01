@@ -202,6 +202,195 @@ For the Science Channel's customization options, image upload methods, Telegram 
 
 ---
 
+# 🧩 Cloudflare Workers — create, deploy, configure and modify a Worker
+
+> **Important distinction:** this repository currently uses the **Workers AI REST API directly** from GitHub Actions. It does **not** currently contain a Cloudflare Worker application, a `wrangler.jsonc` file, or a Worker deployment workflow. You do not need to deploy a Worker to use the current image-generation setup described below. This section explains how to create and manage a real Cloudflare Worker if you want a stable API/proxy layer, custom authentication, request validation, rate limiting or centralized configuration in front of Workers AI.
+
+## 1. What is the difference?
+
+| Product | What it is | Used by the current repository? |
+|---|---|---|
+| Cloudflare Workers | A serverless application you write and deploy to a `*.workers.dev` URL or your own domain | **No** — no Worker is deployed by this repository today |
+| Cloudflare Workers AI | Cloudflare-hosted AI models that your code can call using an API or a Worker AI binding | **Yes** — `scripts/make_art.py` calls the Workers AI REST API |
+| Wrangler | Cloudflare's command-line tool for developing, configuring and deploying Workers | Not currently part of the root GitHub Actions workflow |
+
+**Current architecture:** GitHub Actions → `main_ai.py` → `scripts/make_art.py` → Cloudflare Workers AI REST API → image bytes. The GitHub workflow holds `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
+
+**Optional Worker architecture:** GitHub Actions (or another client) → your deployed Worker URL → Workers AI → image response. In this design the Worker holds the Cloudflare AI credentials, and the client calls your Worker instead of the Cloudflare account API endpoint. You must change `scripts/make_art.py` and the GitHub secrets/configuration to use this architecture; simply creating a Worker does not make this repository use it.
+
+## 2. Create a Worker in the Cloudflare dashboard
+
+1. Sign in to the [Cloudflare dashboard](https://dash.cloudflare.com/).
+2. Open **Workers & Pages**.
+3. Choose **Create application** / **Create Worker** (the dashboard wording can change).
+4. Choose the basic Worker starter/Hello World template.
+5. Give it a clear name, for example `stickman-image-gateway`.
+6. Create and deploy it. Cloudflare assigns a `https://<worker-name>.<your-subdomain>.workers.dev` address when the workers.dev route is enabled.
+7. Open the URL to confirm the starter Worker responds.
+8. Open the Worker in **Workers & Pages** whenever you need to edit its code, settings, routes or bindings.
+
+This creates a real Worker, but it is initially just the starter application. It does not automatically connect to this repository or Workers AI.
+
+## 3. Create and deploy a Worker with Wrangler (developer workflow)
+
+Use this route if you want the Worker source code stored in Git and modified locally.
+
+Requirements: Node.js/npm and a Cloudflare account.
+
+```bash
+npm create cloudflare@latest -- stickman-image-gateway
+cd stickman-image-gateway
+npx wrangler login
+npx wrangler dev
+```
+
+- Follow the create-cloudflare prompts and choose a Worker starter.
+- `wrangler login` opens Cloudflare authentication in your browser.
+- `wrangler dev` runs the Worker locally; use the local URL printed by Wrangler to test it.
+- Edit the generated entry file (commonly `src/index.js` or `src/index.ts`) to change request handling and responses.
+- Deploy when ready:
+
+```bash
+npx wrangler deploy
+```
+
+Cloudflare recommends keeping the Wrangler configuration file as the source of truth. New projects can use `wrangler.jsonc`; older projects may use `wrangler.toml`. See the official [Wrangler commands](https://developers.cloudflare.com/workers/wrangler/commands/workers/) and [configuration guide](https://developers.cloudflare.com/workers/wrangler/configuration/).
+
+## 4. Configure Worker variables and secrets
+
+A Worker can have ordinary configuration values and encrypted secrets.
+
+- **Variables** are for non-sensitive values such as a model name, default image width, environment label or feature flag.
+- **Secrets** are for sensitive values such as API tokens and shared client keys. Never put tokens in source code or ordinary `vars`.
+
+### Configure in the dashboard
+
+1. Open **Workers & Pages** and select your Worker.
+2. Open **Settings → Variables and Secrets**.
+3. Select **Add**.
+4. Choose the appropriate type (Text/JSON for non-sensitive configuration; **Secret** for credentials).
+5. Enter the binding name and value.
+6. Save and deploy the updated Worker version.
+
+### Configure with Wrangler
+
+Set a secret (Wrangler prompts for the value):
+
+```bash
+npx wrangler secret put CF_ACCOUNT_ID
+npx wrangler secret put CF_API_TOKEN
+```
+
+If your Worker endpoint should require its own client authentication, create a separate secret such as `CLIENT_API_KEY`; do not reuse or expose the Cloudflare API token as the client key.
+
+For local development, create a `.dev.vars` file beside the Wrangler config:
+
+```dotenv
+CF_ACCOUNT_ID="your-cloudflare-account-id"
+CF_API_TOKEN="your-cloudflare-api-token"
+CLIENT_API_KEY="your-private-client-key"
+```
+
+Add `.dev.vars` and `.dev.vars.*` to `.gitignore`. Never commit the real values. For production, use dashboard secrets or `wrangler secret put`, not a committed local file.
+
+Official guides: [Worker environment variables](https://developers.cloudflare.com/workers/configuration/environment-variables/) and [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/).
+
+## 5. Modify an existing Worker
+
+You can modify a deployed Worker in either of two ways. Pick one source of truth and avoid making conflicting dashboard and local-code changes.
+
+### Option A — edit in the dashboard
+
+1. Go to **Workers & Pages → your Worker**.
+2. Open **Edit code** (or the code editor shown for that Worker).
+3. Change the JavaScript/TypeScript handler.
+4. Save and deploy a new version.
+5. Test the deployed URL with a harmless request.
+6. Review the deployment/version history and logs if the behavior is not correct.
+
+Use this for quick changes. If the Worker is managed by Wrangler from a Git repository, make the durable code change in that repository too; a later Wrangler deployment may overwrite dashboard-only edits.
+
+### Option B — edit locally with Wrangler
+
+1. Open the Worker project directory.
+2. Modify the entry file under `src/` (or the entry path specified in `wrangler.jsonc` / `wrangler.toml`).
+3. Change bindings, compatibility settings, routes, observability or environment configuration in the Wrangler config.
+4. Test locally using `npx wrangler dev`.
+5. Deploy with `npx wrangler deploy`.
+6. For a staging environment, configure it in Wrangler and deploy with `npx wrangler deploy --env staging`; configure that environment's secrets separately.
+
+Example configuration shape (illustrative; adapt the entry point and name to the generated project):
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stickman-image-gateway",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "vars": {
+    "IMAGE_MODEL": "@cf/black-forest-labs/flux-2-klein-4b",
+    "IMAGE_WIDTH": "1024",
+    "IMAGE_HEIGHT": "576"
+  },
+  "secrets": {
+    "required": ["CF_ACCOUNT_ID", "CF_API_TOKEN", "CLIENT_API_KEY"]
+  }
+}
+```
+
+The example declares names only; it does not contain secret values or implement an AI endpoint. Confirm the current model identifier and its input/output schema before using it. Wrangler config options can change, so validate the file with your installed Wrangler version.
+
+## 6. What to change when you want this repository to call your Worker
+
+Creating/deploying the Worker is only the Cloudflare side. To route the AI Video Experiment through it, you would also need to:
+
+1. Implement and deploy an endpoint in the Worker that authenticates the caller, validates the prompt and dimensions, calls the selected Workers AI model, and returns the image in a response format the Python client understands.
+2. Decide whether the Worker or GitHub Actions owns the Cloudflare credentials. Prefer keeping `CF_API_TOKEN` only as a Worker secret if the Worker is the gateway.
+3. Add a client-side secret (for example `CF_WORKER_API_KEY`) to GitHub Actions so only your workflow can call the gateway.
+4. Modify `scripts/make_art.py` so `cf_image_cheap()` calls the Worker URL rather than constructing the Cloudflare account REST endpoint. Update request headers/body and response decoding to match the Worker contract.
+5. Add the Worker URL and client key to GitHub repository secrets (for example `CF_WORKER_URL` and `CF_WORKER_API_KEY`) and pass them into the image-generation step in `.github/workflows/ai-video-test.yml`.
+6. Test a single image, then a complete run. Check non-200 responses, timeouts, authentication failures, image content type, output dimensions and provider usage.
+
+**Do not change the current Python endpoint to a guessed Worker URL.** First deploy and test the Worker endpoint, define its request/response contract, then update the Python caller and workflow secrets together. No Worker gateway is currently deployed by this repository.
+
+## 7. Common Worker changes and where to make them
+
+| What you want to change | Where to change it |
+|---|---|
+| Worker name, entry file, compatibility date | `wrangler.jsonc` / `wrangler.toml` |
+| Request method, URL paths, validation, authentication | Worker entry file, e.g. `src/index.js` |
+| AI model name, default dimensions, feature switches | Worker code and/or Wrangler `vars` |
+| Cloudflare account ID/token | Worker **Secrets**, never plaintext vars |
+| Custom domain or workers.dev route | Worker **Settings → Domains & Routes** or Wrangler route configuration |
+| Development/staging/production settings | Wrangler environments and their separately configured secrets |
+| Logs and runtime failures | Worker **Logs / Observability** and Wrangler tail |
+| Deploy a code change | `npx wrangler deploy` |
+| Update a secret | `npx wrangler secret put SECRET_NAME` |
+| Remove a secret | `npx wrangler secret delete SECRET_NAME` |
+
+## 8. Troubleshoot Worker deployment and requests
+
+| Symptom | What to check |
+|---|---|
+| Worker URL returns 404 | Confirm the Worker deployed successfully and the workers.dev/custom-domain route is enabled and correct. |
+| Deploy fails | Run Wrangler from the Worker project directory; check authentication, config syntax and the configured entry file. |
+| Missing binding/secret | Check the exact binding name and configure it for the environment being deployed. Secrets are not automatically shared between environments. |
+| Dashboard edit disappears | A later Wrangler deployment may overwrite dashboard configuration; keep the Wrangler project as source of truth. |
+| Worker returns 401/403 | Check client authentication separately from the Cloudflare API token, and verify the token's Workers AI permissions. |
+| AI request fails | Inspect Worker logs, account/model availability, request schema, quota and response handling. |
+| Local works, production fails | Compare local `.dev.vars` with deployed Worker secrets and production environment configuration. |
+| GitHub Actions cannot reach Worker | Check the Worker URL, route, client key secret, request contract and outbound response handling. |
+
+Useful official references:
+- [Create and deploy Workers](https://developers.cloudflare.com/workers/get-started/guide/)
+- [Wrangler commands](https://developers.cloudflare.com/workers/wrangler/commands/workers/)
+- [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+- [Environment variables](https://developers.cloudflare.com/workers/configuration/environment-variables/)
+- [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+- [Workers AI](https://developers.cloudflare.com/workers-ai/)
+
+---
+
 # ☁️ Cloudflare Workers AI — complete setup, configuration and troubleshooting
 
 > **Scope:** Cloudflare is used by the separate root-level **AI Video Experiment** through `scripts/make_art.py`. The Science Channel episode pipeline currently does **not** use Cloudflare to generate its 48 scene images. Science Channel image creation is an external/manual stage; its Telegram workflows receive the images and the renderer assembles them.
