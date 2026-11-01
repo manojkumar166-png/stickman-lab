@@ -174,6 +174,13 @@ def gemini(prompt, temperature=0.7):
 
 def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
     """Regenerate Gemini output when its JSON is valid but fails stage-specific checks."""
+    if not callable(validator):
+        raise TypeError(
+            f"{stage!r}: validator must be a callable function; got {type(validator).__name__}. "
+            "Expected gemini_validated(prompt, validator, stage, temperature=...)."
+        )
+    if not isinstance(stage, str) or not stage.strip():
+        raise TypeError("gemini_validated stage must be a non-empty string")
     last_error = None
     retry_prompt = prompt
     for attempt in range(1, attempts + 1):
@@ -309,7 +316,7 @@ Proposed episode: """ + json.dumps({
         "title": candidate_title, "angle": candidate_angle, "pillar": candidate_pillar
     }, ensure_ascii=False) + """
 Historical episodes: """ + json.dumps(history_for_review, ensure_ascii=False),
-    0.1, validate_duplicate_review, "Semantic duplicate review")
+    validate_duplicate_review, "Semantic duplicate review", temperature=0.1)
     if review["duplicate"]:
         print("Rejected semantically repeated topic: " + str(review.get("reason", "same underlying subject")))
     return review["duplicate"]
