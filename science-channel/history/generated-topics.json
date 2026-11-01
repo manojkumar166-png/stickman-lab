@@ -17,7 +17,8 @@
     "What if the Sun suddenly blinked out of existence for just one hour?",
     "Why do leaves change color in autumn?",
     "Why do stars twinkle?",
-    "Why does onions make us cry?"
+    "Why does onions make us cry?",
+    "Why does time seem to speed up as we get older?"
   ],
   "topic_details": [
     {
@@ -94,6 +95,11 @@
       "title": "Why does onions make us cry?",
       "angle": "An exploration of the volatile sulfur compounds released when cell walls break and how they react with moisture in our eyes.",
       "pillar": "Food and everyday chemistry"
+    },
+    {
+      "title": "Why does time seem to speed up as we get older?",
+      "angle": "Explores the cognitive and neurological reasons why our perception of the passage of time accelerates as we age, from proportional memory scaling to neural processing rates.",
+      "pillar": "Brain, memory and senses"
     }
   ]
 }
