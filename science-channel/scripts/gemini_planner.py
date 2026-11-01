@@ -36,6 +36,7 @@ history = json.loads(HISTORY.read_text()) if HISTORY.exists() else {"topics":[]}
 # Also recover topics from existing episode packages, so an interrupted run cannot
 # cause an already-created topic to be selected again.
 used_topics = list(history.get("topics", []))
+used_topic_details = list(history.get("topic_details", []))
 episode_root = ROOT / "daily-episodes"
 if episode_root.exists():
     for metadata in episode_root.glob("*/episode-*/episode.json"):
@@ -43,6 +44,11 @@ if episode_root.exists():
             saved = json.loads(metadata.read_text())
             if saved.get("title"):
                 used_topics.append(saved["title"])
+                used_topic_details.append({
+                    "title": saved["title"],
+                    "angle": saved.get("angle", ""),
+                    "pillar": saved.get("pillar", "")
+                })
         except (OSError, json.JSONDecodeError):
             continue
 
@@ -54,8 +60,37 @@ def is_duplicate_topic(candidate):
     key = topic_key(candidate)
     return key in seen or any(
         difflib.SequenceMatcher(None, key, topic_key(old)).ratio() >= 0.88
-        for old in used_topics if old.strip()
+        for old in used_topics if isinstance(old, str) and old.strip()
     )
+
+def has_same_underlying_subject(candidate_title, candidate_angle, candidate_pillar):
+    # A second Gemini review compares meaning, not just title wording.
+    # Fail closed: if the reviewer cannot return a clear decision, stop rather
+    # than risk publishing a duplicate episode.
+    history_for_review = used_topic_details or [
+        {"title": old, "angle": "", "pillar": ""}
+        for old in used_topics if isinstance(old, str)
+    ]
+    review = gemini("""You are a strict duplicate-episode detector for a science YouTube channel.
+Compare the proposed episode with the COMPLETE historical episode list.
+Return { "duplicate": true, "reason": "..." } if it covers the same core scientific
+subject, event, phenomenon, question, mechanism, or substantially the same viewer takeaway,
+even when the wording, framing, example, or title is different.
+Treat paraphrases and alternate consequences of the same central phenomenon as duplicates.
+For example, "What if the Sun disappeared?" and "How long could Earth survive without sunlight?"
+are duplicates because both explore Earth losing the Sun/sunlight.
+Return duplicate=false only when the central subject and explanation are genuinely distinct.
+When uncertain, return duplicate=true. Compare meanings, not keyword overlap.
+Proposed episode: """ + json.dumps({
+        "title": candidate_title, "angle": candidate_angle, "pillar": candidate_pillar
+    }, ensure_ascii=False) + """
+Historical episodes: """ + json.dumps(history_for_review, ensure_ascii=False),
+    0.1)
+    if not isinstance(review.get("duplicate"), bool):
+        raise RuntimeError("Semantic duplicate review returned no reliable decision; refusing to create an episode.")
+    if review["duplicate"]:
+        print("Rejected semantically repeated topic: " + str(review.get("reason", "same underlying subject")))
+    return review["duplicate"]
 # Every episode must belong to one of these seven broad, viewer-friendly pillars.
 # Choose the pillar randomly in Python so Gemini cannot drift into unrelated niche subjects.
 topic_pillars = [
@@ -113,8 +148,11 @@ Return JSON only: {"title":"...","angle":"one-sentence distinctive angle explain
 Previously used topics (never repeat these): """ + json.dumps(used_topics, ensure_ascii=False) +
 "\nThe only permitted category for this episode is: " + selected_pillar, 0.45)
     candidate = topic_data.get("title", "").strip()
+    candidate_angle = topic_data.get("angle", "").strip()
     if candidate and not is_duplicate_topic(candidate):
-        topic = {"title": candidate, "angle": topic_data.get("angle", "")}
+        if has_same_underlying_subject(candidate, candidate_angle, selected_pillar):
+            continue
+        topic = {"title": candidate, "angle": candidate_angle}
         break
 if topic is None:
     raise RuntimeError("Gemini did not provide a new unused topic after 5 attempts; no episode was created.")
@@ -124,6 +162,11 @@ title = topic["title"]
 # Reserve the topic immediately after Gemini generates and accepts it. This means
 # even an interrupted/failed package build cannot cause the same topic to be reused.
 history.setdefault("topics", []).append(title)
+history.setdefault("topic_details", []).append({
+    "title": title,
+    "angle": topic.get("angle", ""),
+    "pillar": selected_pillar
+})
 HISTORY.parent.mkdir(parents=True, exist_ok=True)
 HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 # Use the next available episode number for today; never overwrite an earlier run.
@@ -189,6 +232,7 @@ images.mkdir(parents=True, exist_ok=False)
 (folder / "episode.json").write_text(json.dumps({
     "episode_id": f"{TODAY}-episode-{episode_number:03d}",
     "date": TODAY, "title": final_title,
+    "angle": topic.get("angle", ""), "pillar": selected_pillar,
     "description": episode.get("description", ""),
     "scene_count": 48, "target_minutes": "8-10",
     "status": "awaiting_images"
