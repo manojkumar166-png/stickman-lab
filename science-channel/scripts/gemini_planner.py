@@ -62,7 +62,7 @@ def gemini(prompt, temperature=0.7):
     last_error = None
     for attempt in range(5):
         payload = {"contents":[{"parts":[{"text":request_prompt}]}],
-                   "generationConfig":{"temperature":temperature,"responseMimeType":"application/json"}}
+                   "generationConfig":{"temperature":temperature,"responseMimeType":"application/json","maxOutputTokens":16384}}
         r = requests.post(API, params={"key":API_KEY}, json=payload, timeout=180)
         if not r.ok:
             if r.status_code not in (429,500,502,503):
@@ -268,16 +268,6 @@ if topic is None:
 
 title = topic["title"]
 
-# Reserve the topic immediately after Gemini generates and accepts it. This means
-# even an interrupted/failed package build cannot cause the same topic to be reused.
-history.setdefault("topics", []).append(title)
-history.setdefault("topic_details", []).append({
-    "title": title,
-    "angle": topic.get("angle", ""),
-    "pillar": selected_pillar
-})
-HISTORY.parent.mkdir(parents=True, exist_ok=True)
-HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
 # Use the next available episode number for today; never overwrite an earlier run.
 day_root = episode_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
@@ -333,6 +323,17 @@ Final script scenes: """ + json.dumps(scenes, ensure_ascii=False), 0.55)
 prompts = prompt_data.get("prompts", [])
 if len(prompts) != 48 or [p.get("scene_number") for p in prompts] != list(range(1,49)):
     raise ValueError("Expected exactly 48 ordered image prompts")
+
+# Reserve the topic only after the full script and all 48 prompts validate.
+# A malformed/truncated Gemini response therefore does not consume a topic.
+history.setdefault("topics", []).append(title)
+history.setdefault("topic_details", []).append({
+    "title": title,
+    "angle": topic.get("angle", ""),
+    "pillar": selected_pillar
+})
+HISTORY.parent.mkdir(parents=True, exist_ok=True)
+HISTORY.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\\n")
 
 final_title = episode.get("title", title).strip()
 folder = day_root / f"episode-{episode_number:03d}-{topic_slug(final_title)}"
