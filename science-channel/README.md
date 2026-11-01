@@ -316,3 +316,161 @@ Science Channel code, settings, topics, history and episode files are kept under
 - `.github/workflows/free-science-visuals.yml` — validates, renders, uploads the MP4 artifact, sends it to Telegram and cleans source uploads after successful delivery.
 
 All four Science Channel workflows use `main`. The separate `.github/workflows/ai-video-test.yml` is a legacy root-level AI Video Experiment and is not part of the episode pipeline. Unrelated root-level generator scripts, topics, history and configuration are outside the Science Channel pipeline's scope.
+
+
+## Customize the Science Channel
+
+This section explains which settings are safe to change, where to change them, and which changes require coordinated code updates. Make changes on **main**. In GitHub, open a file, select the pencil icon, edit it, and commit. For larger changes, clone the repository, edit locally, run checks, then push or open a pull request.
+
+### 1. Settings you can change in one place
+
+File: `science-channel/settings.json`
+
+| Setting | Current value | What it controls | Change guidance |
+|---|---:|---|---|
+| `scene_count` | 48 | Number of narration scenes | Keep at 48 unless all planner, receiver, importer and renderer assumptions are updated together. |
+| `target_minutes_min` / `target_minutes_max` | 8 / 10 | Planner's target episode duration | You may adjust the target, but also review the narration prompt in `gemini_planner.py`. |
+| `language` | English | Intended episode language | Change only together with the planner prompt and a voice that supports the language. |
+| `aspect_ratio` | 16:9 | Intended image/video shape | Renderer currently normalizes images to 1280×720 before producing the configured output dimensions. |
+| `width` / `height` | 1920 / 1080 | Final video resolution | Keep a 16:9 pair unless you also update image prompts and rendering/caption layout. |
+| `fps` | 30 | Final frame rate | Higher values increase render time and file size. |
+| `gemini_model` | gemini-3.5-flash-lite | Planner text model | Must be a model available to your Gemini API key. Workflow variable `SCIENCE_GEMINI_MODEL` overrides this value. |
+| `voice` | en-US-AndrewMultilingualNeural | Edge TTS voice | Use a valid Edge TTS voice name that supports the episode language. |
+| `speech_rate` | +0% | Narration speed | Example adjustments: `-5%` slower or `+5%` faster. Listen to a test render. |
+| `required_uploaded_images` | 48 | Expected image count documentation/config | Keep aligned with all code; do not change alone. |
+| `uploaded_image_folder` | images/incoming | Input folder name | Changing it requires updating workflows and scripts too. |
+
+Example voice/speed edit:
+
+```json
+{
+  "voice": "en-US-EmmaMultilingualNeural",
+  "speech_rate": "-5%"
+}
+```
+
+Keep the JSON valid: use double quotes, commas between properties, and no trailing comma. The renderer reads voice, speech_rate, width, height and fps from this settings file. A new voice or speed affects the next render; it does not change an MP4 that has already been created.
+
+### 2. Change the Gemini model
+
+There are two ways:
+
+1. Edit `gemini_model` in `science-channel/settings.json`.
+2. Or, preferably for workflow-only overrides, open repository Settings → Secrets and variables → Actions → Variables and set `SCIENCE_GEMINI_MODEL`.
+
+The planner workflow passes that variable as `GEMINI_MODEL`; if it is empty, the planner uses `settings.json`. The current planner calls the Gemini `generateContent` API and expects JSON output. Choose a model that supports the API and structured JSON generation. A different provider is not a drop-in replacement: the API client, authentication and response parsing in `gemini_planner.py` would need to be adapted.
+
+### 3. Change topic ideas and topic-generation behavior
+
+**Add seed topics:** edit `science-channel/topics.txt`. Put one topic idea on each line. Keep ideas broad, understandable and curiosity-driven. The planner uses this file as inspiration alongside its randomly selected category; it is not a strict queue of topics.
+
+**Change categories and examples:** edit the `topic_pillars` list in `science-channel/scripts/gemini_planner.py`. Each entry contains a category and a sample question. The planner randomly selects one category for each run.
+
+**Change title quality, audience or narration rules:** in the same Python file, edit the prompt text inside the topic-generation and episode-generation requests. You can adjust:
+- target audience and reading level;
+- curiosity gap and title style;
+- acceptable subject areas and subjects to avoid;
+- narration tone, factual caution and scene pacing;
+- visual prompt style and the no-presenter preference.
+
+Do not remove the semantic duplicate-review step or its historical episode list. The planner checks exact/near-identical titles and asks Gemini to compare the underlying subject against the full history. It fails closed if the duplicate reviewer cannot return a reliable boolean decision. This is a strong safeguard, not a mathematical guarantee that no related topic can ever recur.
+
+**Topic history:** `science-channel/history/generated-topics.json` stores titles and, where available, topic angles and categories. The planner also scans existing episode metadata. Do not casually delete or reset this file; doing so weakens repeat protection. If you intentionally reset history, understand that older episode subjects may be selected again.
+
+### 4. Change an individual episode without changing the generator
+
+Open the episode folder under `science-channel/daily-episodes/YYYY-MM-DD/episode-NNN-topic/`.
+
+| File | Safe edits | Keep in sync |
+|---|---|---|
+| `episode.json` | Title, description and metadata | Keep `scene_count` at 48. |
+| `script.md` | Spoken narration under Scene 01–48 | Keep every heading, order and non-empty narration. |
+| `scenes.json` | Scene titles, visual descriptions and narration metadata | Exactly 48 ordered scene records numbered 1–48. |
+| `image-prompts.md` | Image-generation prompts | One prompt per scene, matching the final narration and visual. |
+
+If you change a scene's narration, update its matching scenes.json entry and image prompt, then regenerate that image. If you change the episode title, update the metadata consistently before rendering because the title is used for the artifact and MP4 filename. Editing an episode does not automatically regenerate its images or video.
+
+### 5. Change the karaoke captions
+
+File: `science-channel/scripts/karaoke_subtitles.py`.
+
+The caption style is defined in the ASS `Style:` line inside `generate_karaoke_ass()`. Current behavior:
+- faster-whisper Small runs on CPU and creates word timestamps;
+- words are grouped into phrases of up to 7 words, with sentence punctuation also ending a phrase;
+- the current spoken word is highlighted yellow; other words are white;
+- DejaVu Sans is bold, with a dark outline and shadow;
+- captions are horizontally centered near the bottom of the frame.
+
+You can change the font name, font size multiplier, primary/highlight colors, outline width, shadow and vertical margin in the ASS style. Change `make_groups(words, max_words=7)` to alter phrase length. Keep ASS color values in ASS format (not ordinary HTML hex). Test a short render after changing subtitle code. The renderer installs DejaVu fonts and faster-whisper as part of the workflow.
+
+### 6. Change image requirements or upload behavior
+
+**Image-generation instructions:** edit the prompt-building logic in `science-channel/scripts/gemini_planner.py`. The prompts currently request landscape 16:9 images, prefer WebP when supported by the image tool, and describe a practical file-size target. The actual renderer accepts PNG, JPG/JPEG, WebP, BMP, GIF, TIF and TIFF.
+
+**Telegram Image Receiver:** edit `science-channel/scripts/telegram_image_receiver.py` to change accepted Telegram formats, individual-image size checks, ZIP image checks, episode auto-selection or bot replies. It currently accepts JPG/JPEG, PNG and WebP; limits each image to 20 MiB; and expects exactly 48 images in a ZIP. It polls every five minutes because of the workflow schedule in `.github/workflows/telegram-image-receiver.yml`.
+
+**ZIP Import:** edit `science-channel/scripts/import_telegram_zip.py` to change staging validation. The current importer accepts any filename ending in `.zip` directly inside `science-channel/telegram-uploads/`, requires exactly 48 supported images, limits the ZIP to 25 MiB and each image to 20 MiB, rejects unsafe archive paths/symlinks and duplicate basenames, and refuses to overwrite existing incoming images.
+
+**Image preparation:** `science-channel/scripts/prepare_images.py` converts exactly 48 source images to numbered 1920×1080 JPGs and creates a ZIP. Default target is 23 MiB; use `--max-mb 20` for a smaller target. It requires Pillow:
+
+```bash
+python -m pip install Pillow
+python science-channel/scripts/prepare_images.py "/path/to/48-images" "science-channel-images.zip"
+```
+
+Do not mix ZIP and individual image files in one episode's incoming folder. Direct renderer uploads accept the broader set of image formats listed above, but the Telegram receiver/importer intentionally support a smaller set.
+
+### 7. Change workflow schedules, triggers and artifact retention
+
+Workflow files are under `.github/workflows/`.
+
+| Workflow file | Current schedule/trigger | Important settings |
+|---|---|---|
+| `science-channel-daily-planner.yml` | Daily at 01:15 UTC; manual dispatch | 60-minute timeout, main branch, Gemini and optional Telegram secrets. |
+| `telegram-image-receiver.yml` | Every 5 minutes; manual dispatch | 8-minute timeout, main branch, Telegram bot secrets. |
+| `telegram-zip-import.yml` | Manual dispatch only | Requires `episode_path` and `zip_path`; uses GH_PAT. |
+| `free-science-visuals.yml` | Push of incoming files/READY.txt on main; manual dispatch | 90-minute timeout; final MP4 artifact retention is 2 days. |
+| `ai-video-test.yml` | Daily at 05:30 UTC; manual dispatch | Separate root pipeline; artifact retention is 7 days. |
+
+To change a cron schedule, edit the `cron:` expression in the matching YAML file. Cron uses UTC. For example:
+- `15 1 * * *` = 01:15 UTC every day = 06:45 IST.
+- `*/10 * * * *` = every 10 minutes.
+- `30 5 * * *` = 05:30 UTC every day = 11:00 IST.
+
+Change artifact retention by editing `retention-days` in the relevant `actions/upload-artifact` step. GitHub repository/plan limits still apply. Keep the renderer's push path filters and main-only checkout intact. The planner and receiver share a concurrency group so writes to main are serialized.
+
+### 8. Required secrets and variables
+
+Repository → Settings → Secrets and variables → Actions:
+
+| Name | Type | Used by | How to obtain/use |
+|---|---|---|---|
+| `GEMINI_API_KEY` | Secret | Science planner and legacy AI experiment | Create an API key in Google AI Studio; never commit it. |
+| `SCIENCE_GEMINI_MODEL` | Variable (optional) | Science planner | Model override; takes precedence over settings.json. |
+| `TELEGRAM_BOT_TOKEN` | Secret | Planner prompt send, image receiver and render video send | Create a bot with Telegram's BotFather; store its token as a secret. |
+| `TELEGRAM_CHAT_ID` | Secret | Telegram workflows | The chat/group ID authorized for receiving and sending bot messages. |
+| `GH_PAT` | Secret | Telegram ZIP Import | Personal access token with repository contents write access. |
+| `CF_ACCOUNT_ID` | Secret | Legacy AI Video Experiment | Cloudflare account identifier. |
+| `CF_API_TOKEN` | Secret | Legacy AI Video Experiment | Cloudflare API token authorized for Workers AI. |
+
+After changing a secret, rerun the relevant workflow. Do not put tokens in YAML, Python, README, issue comments or workflow inputs. If a token is exposed, revoke it and create a replacement.
+
+### 9. What NOT to change casually
+
+- Do not change the Science Channel scene count from 48 in just one file. Planner, receiver, importer, READY detection, image prompts and renderer must agree.
+- Do not change the Science Channel folder paths without updating workflow path filters and Python paths.
+- Do not change Science Channel workflows to check out or push to `adaptive-cinematic-effects`; the required branch is `main`.
+- Do not delete topic history unless you intentionally want to allow old topics to be proposed again.
+- Do not remove the planner/receiver concurrency group or fetch/rebase/push protections without considering simultaneous scheduled and manual runs.
+- Do not assume that changing the Gemini model ID switches to another LLM provider. Different providers often need different API clients and response parsing.
+- Do not change a workflow's artifact retention and assume the artifact is permanent; download important videos locally.
+
+### 10. Test changes before relying on automation
+
+1. Validate JSON files after editing settings or episode metadata.
+2. Validate YAML indentation after editing workflows.
+3. Run the relevant Python script locally where practical, with secrets supplied through environment variables rather than hardcoded.
+4. For caption or rendering changes, use a test episode and inspect the MP4 before changing production settings.
+5. For workflow changes, use **Actions → workflow → Run workflow** on `main` when safe.
+6. Check the complete Actions log, downloaded artifact, Telegram delivery and cleanup commit. A successful code commit is not proof of an end-to-end successful workflow run.
+
