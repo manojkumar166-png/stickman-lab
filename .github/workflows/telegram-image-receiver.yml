@@ -31,12 +31,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --retries 5 --timeout 60 requests
       - name: Receive Telegram images for main branch episodes only
+        id: process
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -u science-channel/scripts/telegram_image_receiver.py
       - name: Commit received images and receiver state to main
         id: publish
+        env:
+          COMPLETED_EPISODES: ${{ steps.process.outputs.completed_episodes }}
         shell: bash
         run: |
           set -euo pipefail
@@ -55,11 +58,23 @@ jobs:
             if git push origin HEAD:refs/heads/main; then
               echo "Telegram uploads committed to main."
               git fetch origin main
-              EPISODE_PATH="$(python -c 'import json; print(json.load(open("science-channel/telegram-bot-state.json", encoding="utf-8")).get("episode_path", ""))')"
-              if [[ "$EPISODE_PATH" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && git cat-file -e "origin/main:$EPISODE_PATH/READY.txt" 2>/dev/null; then
-                echo "episode_path=$EPISODE_PATH" >> "$GITHUB_OUTPUT"
+              : > /tmp/completed-episodes.txt
+              while IFS= read -r EPISODE_PATH; do
+                [ -n "$EPISODE_PATH" ] || continue
+                if [[ "$EPISODE_PATH" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && git cat-file -e "origin/main:$EPISODE_PATH/READY.txt" 2>/dev/null; then
+                  printf '%s\\n' "$EPISODE_PATH" >> /tmp/completed-episodes.txt
+                else
+                  echo "Ignoring invalid or uncommitted completed episode path: $EPISODE_PATH"
+                fi
+              done <<< "$COMPLETED_EPISODES"
+              if [ -s /tmp/completed-episodes.txt ]; then
+                {
+                  echo "episode_paths<<EPISODES_EOF"
+                  cat /tmp/completed-episodes.txt
+                  echo "EPISODES_EOF"
+                } >> "$GITHUB_OUTPUT"
               else
-                echo "No complete READY episode was published; renderer dispatch is not needed."
+                echo "No newly completed READY episode was published; renderer dispatch is not needed."
               fi
               exit 0
             fi
@@ -68,15 +83,18 @@ jobs:
           done
           echo "Could not publish received images to main after 5 attempts."
           exit 1
-      - name: Start renderer for the completed Telegram episode
-        if: steps.publish.outputs.episode_path != ''
+      - name: Start renderer for each newly completed Telegram episode
+        if: steps.publish.outputs.episode_paths != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          EPISODE_PATH: ${{ steps.publish.outputs.episode_path }}
+          EPISODE_PATHS: ${{ steps.publish.outputs.episode_paths }}
         run: |
           set -euo pipefail
-          gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"
-          echo "Dispatched the renderer for $EPISODE_PATH."
+          while IFS= read -r EPISODE_PATH; do
+            [ -n "$EPISODE_PATH" ] || continue
+            gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"
+            echo "Dispatched the renderer for $EPISODE_PATH."
+          done <<< "$EPISODE_PATHS"
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
