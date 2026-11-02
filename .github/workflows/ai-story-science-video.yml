@@ -28,7 +28,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: ai-story-science-video
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 
 jobs:
