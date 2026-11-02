@@ -50,7 +50,13 @@ if meta.get("smoke_test") is True:
         subprocess.run(["ffmpeg","-y","-f","lavfi","-i",f"color=c={color}:s=1280x720:d=1","-frames:v","1",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         visual_paths.append(target)
 else:
-    archives = sorted([p for p in incoming.iterdir() if p.is_file() and p.suffix.lower()==".zip"], key=lambda p:p.name.casefold())
+    # source-upload.zip is an archival copy retained by the ZIP importer.
+    # The importer has already extracted its 48 images beside it, so do not
+    # treat that backup as a second render input.
+    archives = sorted([
+        p for p in incoming.iterdir()
+        if p.is_file() and p.suffix.lower() == ".zip" and p.name.casefold() != "source-upload.zip"
+    ], key=lambda p:p.name.casefold())
     individual = sorted([p for p in incoming.iterdir() if p.is_file() and p.suffix.lower() in allowed], key=lambda p:p.name.casefold())
     if archives and individual:
         raise SystemExit("Upload either ZIP archive(s) or individual image files, not both in the same incoming folder.")
@@ -62,20 +68,42 @@ else:
         extract_dir.mkdir(exist_ok=True)
         with zipfile.ZipFile(archives[0]) as zf:
             members = []
+            total_uncompressed = 0
+            seen_names = set()
             for info in zf.infolist():
                 if info.is_dir():
                     continue
                 member = PurePosixPath(info.filename)
-                if member.is_absolute() or ".." in member.parts:
-                    raise SystemExit("ZIP contains an unsafe path.")
+                mode = (info.external_attr >> 16) & 0o170000
+                if member.is_absolute() or ".." in member.parts or "\\" in info.filename or mode == 0o120000:
+                    raise SystemExit("ZIP contains an unsafe path or symbolic link.")
                 if member.suffix.lower() in allowed:
+                    if info.file_size <= 0 or info.file_size > 20 * 1024 * 1024:
+                        raise SystemExit(f"ZIP image has an invalid or excessive size: {member.name}")
+                    total_uncompressed += info.file_size
+                    if total_uncompressed > 250 * 1024 * 1024:
+                        raise SystemExit("ZIP expands beyond the 250 MiB total image limit.")
+                    flat_name = member.name.casefold()
+                    if flat_name in seen_names:
+                        raise SystemExit(f"ZIP contains duplicate image filenames: {member.name}")
+                    seen_names.add(flat_name)
                     members.append(info)
             if len(members) != scene_count:
                 raise SystemExit(f"ZIP must contain exactly {scene_count} images; found {len(members)}.")
             for info in members:
                 dest = extract_dir/Path(info.filename).name
+                written = 0
                 with zf.open(info) as src, dest.open("wb") as dst:
-                    dst.write(src.read())
+                    while True:
+                        chunk = src.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > 20 * 1024 * 1024:
+                            raise SystemExit(f"ZIP image expanded beyond 20 MiB: {info.filename}")
+                        dst.write(chunk)
+                if written != info.file_size:
+                    raise SystemExit(f"ZIP image size mismatch while extracting: {info.filename}")
                 sources.append(dest)
     else:
         if len(individual) != scene_count:
