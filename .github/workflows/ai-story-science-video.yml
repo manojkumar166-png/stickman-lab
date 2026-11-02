@@ -26,6 +26,7 @@ on:
           - "10"
           - "12"
           - "16"
+          - "48"
       voice:
         description: Edge TTS narration voice
         required: true
@@ -41,7 +42,7 @@ concurrency:
 jobs:
   create-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - name: Check out main
         uses: actions/checkout@v4
