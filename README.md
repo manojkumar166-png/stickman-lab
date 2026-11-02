@@ -282,3 +282,91 @@ Read the detailed manuals:
 - [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
 
 **Security:** Never commit Cloudflare tokens, Telegram bot tokens, Gemini keys or GitHub PATs. Store them in repository Settings → Secrets and variables → Actions → Secrets. Keep the Science Channel workflows on `main`.
+
+## 🛠️ Troubleshooting: Telegram bot stops replying (Cloudflare Worker)
+
+Use this checklist if the Telegram bot ignores `/start`, `/menu`, `/help`, upload commands, or stops forwarding image uploads. This documents the recovery procedure that fixed the November 2026 outage.
+
+**Architecture:** Telegram sends updates to the Cloudflare Worker webhook. The Worker handles control-centre commands and forwards image/ZIP uploads to the GitHub Actions Telegram Image Receiver. GitHub Actions does not poll Telegram. Do not add a second polling process or call Telegram `getUpdates` while the webhook is active.
+
+### 1. Check the live Worker
+
+Open these URLs in a browser:
+
+- Health check: [Worker /health](https://frosty-disk-7c9e.pallipattumanoj.workers.dev/health)
+- Webhook setup: [Worker /setup](https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup)
+
+The health endpoint should return a successful response. The setup endpoint registers the Telegram webhook. A successful setup response looks like:
+
+```json
+{
+  "webhook_url": "https://frosty-disk-7c9e.pallipattumanoj.workers.dev/",
+  "telegram_response": {
+    "ok": true,
+    "result": true,
+    "description": "Webhook was set"
+  }
+}
+```
+
+Only run/open `/setup` when you intend to (re)register the webhook. It changes the bot's webhook configuration. If Telegram reports an error, check the Worker secrets and URL before trying again.
+
+### 2. Confirm the complete Worker source is deployed
+
+A previous failure was caused by an incomplete `cloudflare-worker.js` in the repository: the message handler called the command router, but the deployed source did not contain the router and several command functions. Incoming Telegram messages therefore could not be handled correctly.
+
+1. Open [the canonical cloudflare-worker.js on main](https://github.com/manojkumar166-png/stickman-lab/blob/main/cloudflare-worker.js).
+2. Confirm it is the complete current file. Do not restore an older or shortened copy.
+3. In [Cloudflare Dashboard](https://dash.cloudflare.com/), open **Workers & Pages** and select the existing Worker **frosty-disk-7c9e**.
+4. Open **Edit code** and replace the Worker editor contents with the complete current `cloudflare-worker.js` from the repository.
+5. Save and **Deploy**.
+6. Recheck `/health`, then open `/setup` once to register the webhook again.
+7. Send `/start` to the bot in Telegram.
+
+**Important:** a commit or push to GitHub does not by itself prove that the existing Cloudflare Worker has been deployed. If this Worker is not connected to an automatic deployment pipeline, deploy it manually as described above.
+
+### 3. Verify Cloudflare Worker environment variables and secrets
+
+In Cloudflare Dashboard → Workers & Pages → **frosty-disk-7c9e** → **Settings** → **Variables and Secrets**, check that the following are configured for the deployed environment:
+
+| Name | What to check |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Valid bot token from @BotFather. Keep it secret. |
+| `TELEGRAM_ALLOWED_USER_ID` | Your numeric Telegram user ID, as a string or number. It must match the account sending commands; an @username is not a substitute. |
+| `TELEGRAM_WEBHOOK_SECRET` | The webhook secret used by the Worker when registering the webhook. It must be present and consistent with the webhook registration. |
+| `GITHUB_TOKEN` | GitHub token used by the Worker for repository operations/inbox forwarding. It needs the repository permissions required by the Worker, including contents write access for inbox commits. |
+| `PUBLIC_WORKER_URL` | Optional public base URL. If set, it must be the deployed Worker URL; otherwise the Worker may use its built-in default URL. |
+
+Do not paste tokens, secrets, or full credential values into Telegram, GitHub issues, screenshots, or chat messages. If a credential may have been exposed, rotate it at its issuing service and update the Cloudflare secret.
+
+**Silent no-reply check:** the Worker authorizes commands by comparing the sender's numeric Telegram user ID with `TELEGRAM_ALLOWED_USER_ID`. If that variable is blank or incorrect, the message handler intentionally ignores the message. Verify the exact numeric ID before changing code.
+
+**Webhook authentication check:** if the Worker rejects webhook POST requests with HTTP 401, verify that `TELEGRAM_WEBHOOK_SECRET` is configured and matches the secret used when `/setup` registered the webhook. After correcting it, run `/setup` once again.
+
+### 4. Check Cloudflare logs and classify the symptom
+
+In Cloudflare Dashboard → Workers & Pages → **frosty-disk-7c9e** → **Logs** (or Observability), inspect requests while sending a fresh `/start` message.
+
+| Symptom | Likely check |
+|---|---|
+| Telegram message receives no reply and there is no useful Worker activity | Confirm the webhook URL is set, the Worker is deployed, and the bot token is correct. |
+| Webhook POST returns **401** | Check `TELEGRAM_WEBHOOK_SECRET` and re-register with `/setup`. |
+| Worker receives the update but no command reply is sent | Check `TELEGRAM_ALLOWED_USER_ID` against the sender's numeric Telegram user ID; inspect Worker exceptions and Telegram API errors. |
+| Error mentions `handleCommand is not defined` or another missing function | The deployed Worker source is incomplete or outdated. Redeploy the complete repository `cloudflare-worker.js`. |
+| Commands reply, but image/ZIP uploads do not reach GitHub Actions | Check `GITHUB_TOKEN`, repository write permissions, GitHub API errors, and the Telegram Image Receiver workflow run/inbox. |
+| Webhook setup fails | Check `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_WORKER_URL`, and the response body returned by Telegram. |
+
+### 5. Verify end-to-end recovery
+
+After correcting the issue:
+
+1. Confirm `/health` responds successfully.
+2. Confirm `/setup` returns Telegram `ok: true` and `description: "Webhook was set"` (only after intentionally registering the webhook).
+3. Send `/start` in the authorized Telegram account and confirm the bot replies.
+4. Test the relevant command, such as `/menu` or `/status`.
+5. If testing image intake, send a test image and verify that the GitHub **Telegram Image Receiver** workflow starts and records the upload. Continue using the existing 48-image process.
+
+### 6. Protect the working video pipeline
+
+When fixing Telegram connectivity, change only the Cloudflare Worker deployment or the specific incorrect Worker secret. Do not delete or rewrite Science Channel episode folders, the 48-image upload receiver, ZIP importer, renderer, READY marker, or delivery/cleanup logic as a shortcut. Keep the existing workflows on `main`. If a code change is required, start from the complete current `cloudflare-worker.js`, review the diff, and test commands plus upload forwarding before changing other pipeline components.
+
