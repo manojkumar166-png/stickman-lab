@@ -39,7 +39,7 @@ Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No
 - Gemini and GitHub Actions have separate account quotas and terms. Do not enable billing if you want a strict no-card setup.
 
 ## Output package
-During the run, the job creates story.json, script.md, images/scene-XX.png, audio/scene-XX.mp3, segments/segment-XX.mp4 and final-video.mp4. The workflow then burns karaoke subtitles, renames the finished MP4 using the story title, and uploads **only that final MP4** as a 7-day artifact. Telegram delivery also sends only the final MP4.
+During the run, the job creates story.json, script.md, images/scene-XX.png, audio/scene-XX.mp3, segments/segment-XX.mp4 and final-video.mp4. The workflow then attempts to publish the used-topic history in an isolated Git worktree with fetch-and-retry handling. This bookkeeping step is non-blocking: a concurrent `main` update or history-sync failure must not prevent the rendered video from reaching subtitle generation. Next, the workflow generates word timings with faster-whisper, burns karaoke subtitles into the MP4 with FFmpeg, verifies the subtitled file, renames it using the story title, and uploads **only that final MP4** as a 7-day artifact. Telegram delivery also sends only the final MP4.
 
 
 ## Gemini model configuration
@@ -74,6 +74,7 @@ The Actions screen intentionally has no inputs. Change settings by editing the f
 | Image providers, order, retries and pacing | Same Python file: `ovh()`, `ai_horde()`, `vexa()`, `pollinations()` and `generate_all()`. |
 | Video encoding | Same Python file, function `render()`. |
 | Karaoke caption design | `science-channel/scripts/karaoke_subtitles.py`. |
+| Topic-history push conflicts | The history step uses a separate worktree, refreshes `origin/main` on each retry, merges the generated topic into the latest JSON list without duplicating its core topic, and is marked non-blocking so subtitles and delivery can continue. A warning means topic history may need manual repair; it does not mean the video should be discarded. |
 | Artifact and Telegram delivery | `.github/workflows/ai-story-science-video.yml`. |
 
 The exact one-click command is:
