@@ -8,7 +8,7 @@ Shared captions helper: [karaoke_subtitles.py](../../../science-channel/scripts/
 
 This workflow validates uploaded scene images, generates narration, renders the episode video, burns karaoke captions, uploads the final MP4 artifact and attempts Telegram delivery.
 
-It starts when a push to `main` adds/modifies files under `science-channel/daily-episodes/**/images/incoming/**` (except `.gitkeep`) or a `READY.txt` marker. It can also be started manually from **Actions → Free Science Visuals — Render Ready Episode** with an optional `episode_path`.
+It starts when a push to `main` adds/modifies files under `science-channel/daily-episodes/**/images/incoming/**` (except `.gitkeep`) or a `READY.txt` marker. The Telegram Image Receiver also explicitly dispatches this workflow after it commits a newly completed episode, because its own `GITHUB_TOKEN` push does not trigger another workflow. It can also be started manually from **Actions → Free Science Visuals — Render Ready Episode** with an optional `episode_path`.
 
 For a manual run:
 - Supply the exact episode folder, e.g. `science-channel/daily-episodes/2026-10-30/episode-001`; or
@@ -20,7 +20,7 @@ For push-triggered runs, exactly one changed episode must be identifiable. If a 
 
 1. Checks out `main`, installs Python 3.11, FFmpeg, DejaVu fonts, Edge TTS and faster-whisper; caches the Whisper model.
 2. Resolves and validates the episode path and requires `episode.json`.
-3. Runs `science-channel/scripts/render_episode.py`, which validates the episode metadata, ordered scene records, script sections and incoming images; it supports either one ZIP archive or individual image files, not both together.
+3. Runs `science-channel/scripts/render_episode.py`, which validates the episode metadata, ordered scene records, script sections and incoming images; it supports either one input ZIP archive or individual image files, not both together. The reserved `source-upload.zip` file is an archival backup of an already-extracted ZIP and is deliberately ignored as a render input.
 4. The renderer normalizes images to 1280×720, creates narration from the episode's `script.md` using settings in `science-channel/settings.json`, aligns word timestamps with Whisper and renders the final video with karaoke subtitles.
 5. The workflow derives the final MP4 filename and artifact name from the episode title, then uploads only the final MP4 as a 2-day artifact.
 6. It attempts to send the MP4 to Telegram. This step is non-blocking.
@@ -43,7 +43,7 @@ The episode folder must include the files required by the renderer, including:
 - `episode.json` with a title and scene count;
 - `scenes.json` with exactly the expected ordered scene records;
 - `script.md` with one non-empty `## Scene N` narration section per scene;
-- either exactly the required number of supported individual images or one ZIP containing that number of images in `images/incoming/`.
+- either exactly the required number of supported individual images or one input ZIP containing that number of images in `images/incoming/`. If a ZIP importer created `source-upload.zip` beside the extracted scene images, that one file is retained as a backup and is not counted as a second input.
 
 The current pipeline defaults to 48 scenes. The renderer validates image files and normalizes them before narration/rendering. Do not mix a ZIP and individual images in the same incoming folder.
 
