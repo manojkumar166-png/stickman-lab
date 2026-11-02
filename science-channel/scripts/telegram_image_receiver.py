@@ -118,10 +118,12 @@ def order_image_entries(entries):
 
 def main():
     state = load_state()
+    state_changed = False
     latest = newest_episode()
     selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
     if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
         state["episode_path"] = str(latest)
+        state_changed = True
         send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
 
     # This receiver uses polling, not webhooks. Remove a stale webhook without
@@ -139,7 +141,7 @@ def main():
             print("No update offset was advanced; the next scheduled run will retry.")
             return
         raise
-    changed = False
+    changed = state_changed
     for update in updates:
         state["offset"] = update["update_id"] + 1
         msg = update.get("message", {})
