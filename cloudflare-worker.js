@@ -249,27 +249,49 @@ function shouldForwardToImageReceiver(message, env) {
 
 async function forwardTelegramUpdate(update, env) {
   const token = requireEnv(env, "GITHUB_TOKEN");
-  const response = await fetch(
-    "https://api.github.com/repos/" + OWNER + "/" + REPO + "/dispatches",
-    {
-      method: "POST",
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "content-type": "application/json",
-        "user-agent": "StickmanLab-Control-Bot"
-      },
-      body: JSON.stringify({
-        event_type: "telegram_image_upload",
-        client_payload: { update }
-      })
-    }
-  );
+  const updateId = String(update.update_id || "");
+  if (!/^\d+$/.test(updateId)) {
+    throw new Error("Telegram update is missing a valid update_id.");
+  }
 
-  if (!response.ok) {
+  const path = `.github/telegram-inbox/${updateId}.json`;
+  const endpoint = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "content-type": "application/json",
+    "user-agent": "StickmanLab-Control-Bot"
+  };
+
+  // The inbox file is a durable queue. GitHub Actions can safely coalesce
+  // push events because every pending Telegram update remains in this folder.
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const existing = await fetch(endpoint + "?ref=" + BRANCH, { headers });
+    if (existing.ok) return; // Telegram retried this same webhook update.
+    if (existing.status !== 404) {
+      throw new Error(`Could not check Telegram inbox (${existing.status}): ${(await existing.text()).slice(0, 400)}`);
+    }
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(update) + "\n")));
+    const response = await fetch(endpoint, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        message: `Queue Telegram update ${updateId} for Science Channel receiver`,
+        content,
+        branch: BRANCH
+      })
+    });
+
+    if (response.ok) return;
     const detail = await response.text();
-    throw new Error(`Could not hand Telegram upload to GitHub Actions (${response.status}): ${detail.slice(0, 500)}`);
+    if (response.status !== 409 && response.status !== 422) {
+      throw new Error(`Could not queue Telegram update (${response.status}): ${detail.slice(0, 400)}`);
+    }
+    if (attempt === 4) {
+      throw new Error(`Could not queue Telegram update after retries: ${detail.slice(0, 400)}`);
+    }
   }
 }
 
