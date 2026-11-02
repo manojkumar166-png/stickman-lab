@@ -4,7 +4,7 @@ This guide explains how to create an episode, edit its script, generate and uplo
 
 ## Telegram + Cloudflare Worker connection
 
-The Cloudflare Worker is the Telegram webhook and Stickman Lab control centre. It handles normal bot commands and GitHub controls. For image photos, image documents, ZIP files and `/episode YYYY-MM-DD/episode-NNN` selections, it forwards the Telegram update to GitHub using the `telegram_image_upload` repository_dispatch event. The existing Python receiver downloads the media from Telegram, validates it, writes the numbered images, and commits to `main`.
+The Cloudflare Worker is the Telegram webhook and Stickman Lab control centre. It handles normal bot commands and GitHub controls. For image photos, image documents, ZIP files and `/episode YYYY-MM-DD/episode-NNN` selections, it stores the Telegram update as a uniquely named JSON file under `.github/telegram-inbox/`. The inbox commit triggers the receiver workflow. The existing Python receiver downloads the media from Telegram, validates it, writes the numbered images, and commits to `main`.
 
 **Important:** do not run Telegram `getUpdates` polling or call `deleteWebhook` from the GitHub receiver. Telegram supports one update-delivery mode per bot token; the Worker webhook must remain registered.
 
@@ -525,7 +525,7 @@ Telegram Bot API
   └─ Cloudflare Worker webhook
        ├─ handles control commands and GitHub operations
        └─ forwards photo/document/ZIP and /episode updates
-            └─ .github/workflows/telegram-image-receiver.yml (repository_dispatch)
+            └─ .github/workflows/telegram-image-receiver.yml (durable inbox push)
                  └─ science-channel/scripts/telegram_image_receiver.py
                       ├─ read TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
                       ├─ load telegram-bot-state.json (selected episode)
@@ -555,7 +555,7 @@ Telegram Bot API
 
 ### Workflow internals
 
-`.github/workflows/telegram-image-receiver.yml` is triggered by the Cloudflare Worker when the Worker commits a queued update under `.github/telegram-inbox/` and also supports manual maintenance runs. It checks out `main`, installs Python 3.11 and `requests`, maps the Telegram secrets and forwarded update JSON into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
+`.github/workflows/telegram-image-receiver.yml` is triggered by the Cloudflare Worker when the Worker commits a queued update under `.github/telegram-inbox/` and also supports manual maintenance runs. It checks out `main`, installs Python 3.11 and `requests`, maps the Telegram secrets into environment variables; the receiver reads queued update JSON files from `.github/telegram-inbox/`, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
 
 ### How the outgoing messages are sent
 
@@ -567,7 +567,7 @@ Telegram Bot API
 
 - To change bot token or chat, replace `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` in GitHub Secrets. Do not hardcode them.
 - To change bot replies or add a command, edit `main()` and `send()` in `science-channel/scripts/telegram_image_receiver.py`. Handle the command before file processing and use `continue` after replying.
-- Telegram intake is webhook-triggered. Do not add a `getUpdates` schedule or call `deleteWebhook`; keep `repository_dispatch` and `workflow_dispatch` enabled.
+- Telegram intake is webhook-triggered. Do not add a `getUpdates` schedule or call `deleteWebhook`; keep the inbox `push` trigger and `workflow_dispatch` enabled.
 - To change upload formats/limits, update `image_payload()`, ZIP suffix checks and the size guards together. Also update this README and the AI README's Telegram manual.
 - To change outgoing captions, edit the `sendDocument` caption in the planner workflow or the upload action's `message` in the renderer workflow.
 - To change the number of images, update every component that assumes 48 scenes: planner, receiver, ZIP importer, episode settings, renderer, validation, prompts and documentation. A partial change will break the upload-to-render handoff.
@@ -599,7 +599,7 @@ Never add tokens to the repository, README, source code, workflow inputs or epis
 
 Workflow: [telegram-image-receiver.yml](../.github/workflows/telegram-image-receiver.yml)
 
-- Trigger: Cloudflare Worker sends a `telegram_image_upload` repository_dispatch event for each image/ZIP upload or `/episode` selection.
+- Trigger: Cloudflare Worker commits a JSON update under `.github/telegram-inbox/` for each image/ZIP upload or `/episode` selection.
 - Manual run: GitHub Actions → Telegram Image Receiver → Run workflow (maintenance only; it has no Telegram update to process).
 - Runtime: Ubuntu latest, Python 3.11, `requests`, 8-minute job timeout.
 - Permissions: repository contents write.
@@ -714,7 +714,7 @@ After rendering, the workflow uploads the MP4 artifact first (2-day retention), 
 | What you want to change | Edit this | Details |
 |---|---|---|
 | Bot credentials or destination | Repository Actions secrets | Update `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID`; never hardcode them. |
-| Poll interval | `.github/workflows/telegram-image-receiver.yml` | Change `schedule.cron`; keep `workflow_dispatch` if manual polling is desired. |
+| Telegram intake | Cloudflare Worker + `.github/telegram-inbox/` | Keep the Worker webhook and inbox push trigger enabled; do not add a polling schedule. |
 | Job timeout/Python version | Same receiver workflow | Change `timeout-minutes` or `python-version`. |
 | Bot commands/replies | `science-channel/scripts/telegram_image_receiver.py` | Edit command checks and `send()` messages. |
 | Incoming chat filter | Same receiver script | Edit comparison with `CHAT_ID`; retain a strict allowlist for security. |
