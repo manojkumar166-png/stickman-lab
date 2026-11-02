@@ -3,14 +3,6 @@ name: AI Story & Science Video Creator
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: Choose the video type
-        required: true
-        default: science
-        type: choice
-        options:
-          - science
-          - animated
       topic:
         description: Optional topic or story idea (blank lets Gemini invent one)
         required: false
@@ -68,14 +60,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite' }}
-          MODE: ${{ inputs.mode }}
           TOPIC: ${{ inputs.topic }}
           SCENES: ${{ inputs.scenes }}
           VOICE: ${{ inputs.voice }}
         shell: bash
         run: |
           set -euo pipefail
-          python -u scripts/ai_story_video.py --mode "$MODE" --topic "$TOPIC" --scenes "$SCENES" --voice "$VOICE"
+          python -u scripts/ai_story_video.py --topic "$TOPIC" --scenes "$SCENES" --voice "$VOICE"
       - name: Resolve artifact
         id: artifact
         shell: bash
