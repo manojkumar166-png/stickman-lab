@@ -6,6 +6,7 @@ import re
 import io
 import zipfile
 import time
+import tempfile
 from pathlib import Path
 import requests
 
@@ -234,28 +235,73 @@ def main():
             continue
 
         if ext == "zip":
+            if present or any(
+                item.is_file() and item.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+                for item in dest_dir.iterdir()
+            ):
+                send("ZIP skipped because this episode already has images. Send a ZIP only to an empty incoming folder.")
+                continue
+            if len(download_content) > 50 * 1024 * 1024:
+                send("ZIP skipped: the archive is over 50 MB.")
+                continue
             try:
                 with zipfile.ZipFile(io.BytesIO(download_content)) as archive:
-                    entries = [item for item in archive.infolist()
-                               if not item.is_dir() and item.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
+                    entries = []
+                    total_uncompressed = 0
+                    seen_names = set()
+                    for item in archive.infolist():
+                        if item.is_dir():
+                            continue
+                        member = Path(item.filename.replace("\\", "/"))
+                        mode = (item.external_attr >> 16) & 0o170000
+                        if member.is_absolute() or ".." in member.parts or mode == 0o120000:
+                            raise ValueError("unsafe archive path or symbolic link")
+                        if member.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                            continue
+                        if item.file_size <= 0 or item.file_size > 20 * 1024 * 1024:
+                            raise ValueError(f"image has invalid or excessive size: {member.name}")
+                        total_uncompressed += item.file_size
+                        if total_uncompressed > 250 * 1024 * 1024:
+                            raise ValueError("archive expands beyond 250 MiB")
+                        flat_name = member.name.casefold()
+                        if flat_name in seen_names:
+                            raise ValueError(f"duplicate image filename: {member.name}")
+                        seen_names.add(flat_name)
+                        entries.append(item)
                     if len(entries) != 48:
                         send(f"ZIP skipped: found {len(entries)} supported images; it must contain exactly 48.")
                         continue
-                    ordered = order_image_entries(entries)
-                    images = [(slot, archive.read(item), item.filename) for slot, item in ordered]
-            except (zipfile.BadZipFile, RuntimeError, OSError):
-                send("I couldn't read that ZIP. Please send a valid ZIP containing exactly 48 images.")
+
+                    # Stage every extracted image before touching the episode.
+                    # A CRC/decompression failure must not leave partial scene files.
+                    with tempfile.TemporaryDirectory(prefix=".telegram-zip-", dir=dest_dir) as temp_name:
+                        temp_dir = Path(temp_name)
+                        staged = []
+                        for index, item in order_image_entries(entries):
+                            suffix = Path(item.filename).suffix.lower()
+                            suffix = ".jpg" if suffix == ".jpeg" else suffix
+                            target = temp_dir / f"scene-{index:02d}{suffix}"
+                            written = 0
+                            with archive.open(item) as source, target.open("wb") as destination:
+                                while True:
+                                    chunk = source.read(1024 * 1024)
+                                    if not chunk:
+                                        break
+                                    written += len(chunk)
+                                    if written > 20 * 1024 * 1024 or written > item.file_size:
+                                        raise ValueError(f"image expanded beyond its declared size: {item.filename}")
+                                    destination.write(chunk)
+                            if written != item.file_size:
+                                raise ValueError(f"image size mismatch: {item.filename}")
+                            staged.append((target, dest_dir / target.name))
+                        for source, destination in staged:
+                            source.replace(destination)
+                    # Keep the original archive as a recovery copy until the
+                    # renderer confirms Telegram delivery and performs cleanup.
+                    (dest_dir / "source-upload.zip").write_bytes(download_content)
+            except (zipfile.BadZipFile, RuntimeError, OSError, EOFError, ValueError) as exc:
+                send(f"ZIP skipped: {exc}. Please send a valid ZIP containing exactly 48 supported images.")
                 continue
-            if present:
-                send("ZIP skipped because this episode already has images. Send a ZIP only to an empty incoming folder.")
-                continue
-            if any(len(data) > 20 * 1024 * 1024 for _, data, _ in images):
-                send("ZIP skipped: at least one image is over 20 MB. Please reduce image sizes.")
-                continue
-            for index, data, filename in images:
-                suffix = Path(filename).suffix.lower().lstrip(".")
-                suffix = "jpg" if suffix == "jpeg" else suffix
-                (dest_dir / f"scene-{index:02d}.{suffix}").write_bytes(data)
             changed = True
         else:
             if len(download_content) > 20 * 1024 * 1024:
