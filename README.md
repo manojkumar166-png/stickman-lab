@@ -247,8 +247,8 @@ Cloudflare **Workers AI** is currently used by the **root AI Video Experiment on
 - Current direct API secrets: `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
 - Active implementation: `scripts/make_art.py`.
 - Current model endpoint: `@cf/black-forest-labs/flux-2-klein-4b`.
-- Current image request: 1024 × 576, multipart form data, bearer-token authentication, 120-second request timeout and 6-second delay between scene requests.
-- Failure behavior: failed individual scenes reuse a successful generated image; if all Cloudflare image requests fail, the root generator uses locally drawn stickman artwork.
+- Current image request: Cloudflare FLUX.2 Klein at 1024 × 576 with bearer-token authentication; Cloudflare requests use bounded retries.
+- Provider fallback: Cloudflare → anonymous AI Horde → anonymous OVHcloud SDXL. Images are saved scene-by-scene; if all providers fail for a scene, generation stops. No stickman fallback or unrelated image reuse is used.
 
 The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` builds and sends Workers AI requests, how the GitHub workflow supplies credentials, and exactly where to change the model, prompt, dimensions, timeout, pacing and fallback. Start with [How this repository implemented Cloudflare and how to modify it](ai-video-experiment/README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
 
