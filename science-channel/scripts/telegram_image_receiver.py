@@ -230,7 +230,7 @@ def main():
             value = text.split(maxsplit=1)[1] if len(text.split(maxsplit=1)) == 2 else ""
             folder = valid_episode(value)
             if not folder:
-                send("Episode not found on main. Use /episode YYYY-MM-DD/episode-001 and ensure the episode package exists on the main branch.")
+                send("Episode not found on main. Use the exact /episode YYYY-MM-DD/episode-001-topic-slug folder name and ensure the episode package exists on the main branch.")
             else:
                 state["episode_path"] = str(folder)
                 state["episode_locked"] = True
