@@ -94,7 +94,7 @@ jobs:
           existing = {key(item) for item in history if isinstance(item, dict)}
           if key(entry) not in existing:
               history.append(entry)
-          history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+          history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
 
             git -C "$SYNC_DIR" add used_story_topics.json
