@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Process Telegram image updates forwarded by the Cloudflare Worker webhook."""
+"""Process queued Telegram image updates forwarded by the Cloudflare Worker webhook."""
 import json
 import os
 import re
@@ -171,6 +171,16 @@ def order_image_entries(entries):
 
 
 def main():
+    inbox = Path(".github/telegram-inbox")
+    update_files = sorted(
+        inbox.glob("*.json"),
+        key=lambda path: int(path.stem) if path.stem.isdigit() else path.stem,
+    )
+    if not update_files:
+        print("No queued Telegram webhook updates; nothing to process.")
+        return
+
+    updates = [json.loads(path.read_text(encoding="utf-8")) for path in update_files]
     state = load_state()
     state_changed = False
     latest = newest_episode()
@@ -180,14 +190,8 @@ def main():
         state_changed = True
         send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
 
-    # Telegram updates arrive through the Cloudflare Worker webhook.
-    # Never call deleteWebhook or getUpdates here: the Worker owns delivery.
-    raw_update = os.environ.get("TELEGRAM_UPDATE_JSON", "").strip()
-    if not raw_update:
-        print("No Telegram webhook update was supplied; nothing to process.")
-        return
-    update = json.loads(raw_update)
-    updates = [update]
+    # Telegram updates are durably queued by the Cloudflare Worker as JSON
+    # files. Never call deleteWebhook or getUpdates here: the Worker owns delivery.
     changed = state_changed
     for update in updates:
         state["offset"] = update["update_id"] + 1
