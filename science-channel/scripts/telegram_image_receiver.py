@@ -5,6 +5,7 @@ import os
 import re
 import io
 import zipfile
+import time
 from pathlib import Path
 import requests
 
@@ -16,29 +17,52 @@ ROOT = Path("science-channel/daily-episodes")
 EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3})$")
 
 def api(method, **kwargs):
-    try:
-        response = requests.post(f"{API}/{method}", timeout=60, **kwargs)
-        response.raise_for_status()
-        data = response.json()
-    except requests.HTTPError as exc:
-        response = exc.response
+    """Call Telegram with bounded retries for transient failures."""
+    last_error = None
+    for attempt in range(1, 5):
         try:
-            details = response.json().get("description", response.text[:500])
-        except (ValueError, AttributeError):
-            details = response.text[:500] if response is not None else str(exc)
-        if response is not None and response.status_code == 409 and method == "getUpdates":
-            raise RuntimeError(
-                "Telegram getUpdates returned 409 Conflict. This bot token is being used "
-                "by another long-polling process, or a webhook is configured. The receiver "
-                "removes any webhook before polling; if this persists, stop every other "
-                "script/workflow polling this bot token. Telegram detail: " + str(details)
-            ) from exc
-        raise RuntimeError(f"Telegram {method} HTTP error: {details}") from exc
-    except requests.RequestException as exc:
-        raise RuntimeError(f"Telegram {method} network error: {exc}") from exc
-    if not data.get("ok"):
-        raise RuntimeError(f"Telegram {method} failed: {data}")
-    return data["result"]
+            response = requests.post(f"{API}/{method}", timeout=(15, 60), **kwargs)
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < 4:
+                    retry_after = response.headers.get("Retry-After", "")
+                    try:
+                        delay = max(1, min(60, int(float(retry_after)))) if retry_after else min(30, 2 ** attempt)
+                    except ValueError:
+                        delay = min(30, 2 ** attempt)
+                    print(f"Telegram {method} returned HTTP {response.status_code}; retry {attempt}/4 in {delay}s.", flush=True)
+                    time.sleep(delay)
+                    continue
+            response.raise_for_status()
+            data = response.json()
+            if not data.get("ok"):
+                description = str(data.get("description", data))
+                if method == "getUpdates" and "conflict" in description.casefold():
+                    raise RuntimeError(
+                        "Telegram getUpdates returned 409 Conflict. Another long-polling "
+                        "process may be using this bot token. Telegram detail: " + description
+                    )
+                raise RuntimeError(f"Telegram {method} failed: {description}")
+            return data["result"]
+        except requests.HTTPError as exc:
+            response = exc.response
+            try:
+                details = response.json().get("description", response.text[:500])
+            except (ValueError, AttributeError):
+                details = response.text[:500] if response is not None else str(exc)
+            if response is not None and response.status_code == 409 and method == "getUpdates":
+                raise RuntimeError(
+                    "Telegram getUpdates returned 409 Conflict. Another long-polling "
+                    "process may be using this bot token. Telegram detail: " + str(details)
+                ) from exc
+            raise RuntimeError(f"Telegram {method} HTTP error: {details}") from exc
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == 4:
+                break
+            delay = min(30, 2 ** attempt)
+            print(f"Telegram {method} network error on attempt {attempt}/4: {exc}; retrying in {delay}s.", flush=True)
+            time.sleep(delay)
+    raise RuntimeError(f"Telegram {method} failed after 4 attempts: {last_error}") from last_error
 
 def send(text):
     api("sendMessage", data={"chat_id": CHAT_ID, "text": text})
