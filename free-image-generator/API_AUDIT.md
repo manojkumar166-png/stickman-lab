@@ -1,56 +1,51 @@
-# Free image API audit (2 November 2026)
+# No-card image API audit (2 November 2026)
 
-Cloudflare is deliberately excluded from this generator because the repository owner already uses that account for the AI Video Experiment. This workflow does not read Cloudflare credentials or call Cloudflare.
+This workflow is intentionally configured for providers that can be attempted without adding a payment card. Cloudflare is excluded because it is already used by the AI Video Experiment.
 
-## Provider order in this workflow
+## Enabled providers
 
-| Priority | Provider / model | Free access model | Authentication | Important limits / caveats |
-|---|---|---|---|---|
-| 1 | OVHcloud AI Endpoints — Stable Diffusion XL base 1.0 | Catalog-listed Free model | Anonymous access works; optional `OVH_AI_ENDPOINTS_ACCESS_TOKEN` | Anonymous: 2 requests/minute per IP and model. Authenticated: up to 400/minute/project. API key setup requires a Public Cloud project and payment method; use only the endpoint explicitly marked Free. |
-| 2 | Zhipu AI — CogView-3-Flash | Model listed as free on Zhipu Open Platform | `ZHIPU_API_KEY` | Account concurrency limits apply. Account eligibility/identity checks may apply; availability and limits are account-specific. Confirm model remains marked Free in console. |
-| 3 | Stability AI — Stable Image Core | New-account introductory 25 credits | `STABILITY_API_KEY` | One-time credits, not recurring. Core costs 3 credits per image (roughly 8 images). After credits are exhausted the API fails; this workflow does not purchase credits. |
-| 4 | Pollinations Free API Classic | Anonymous no-account classic image endpoint, best-effort free access | No key | Rate-limited/abuse-controlled and availability can vary. Not a guaranteed throughput tier; service may return throttling or temporary errors. |
+| Priority | Provider / model | Access | No-card safeguards and caveats |
+|---|---|---|---|
+| 1 | OVHcloud AI Endpoints — Stable Diffusion XL base 1.0 | Anonymous endpoint; no API token is sent | Anonymous access is rate-limited (documented at 2 requests/minute per IP/model). The authenticated route is deliberately disabled and no OVH token secret is read. If anonymous access stops working, the workflow skips it. |
+| 2 | Zhipu AI — CogView-3-Flash | User-supplied `ZHIPU_API_KEY` | Confirm in the Zhipu console that this model is still free for your account before adding a key. Account-specific eligibility, concurrency, and quotas apply. No payment details are configured by this workflow. |
+| 3 | Pollinations Free API Classic | Anonymous, no account/key | Best-effort free service; throttling and availability can vary. |
 
-## Providers researched but not enabled
+## Deliberately excluded
 
-| Provider | Why it is not in the automatic free-only chain |
+| Provider | Reason |
 |---|---|
-| Hugging Face Inference Providers | Free accounts receive only $0.10/month routed inference credit; beyond that is pay-as-you-go. Too small and can route to billable third-party providers. |
-| Replicate | Try-for-free models have limited free runs; after the cap, users must add billing and purchase credits. |
-| Together AI | No generally available recurring free image-generation allocation verified. |
-| fal.ai | Image inference is paid; no guaranteed free API allowance verified. |
-| Google Gemini image models | Image generation is not included in the normal free API tier. |
-| YepAPI | Advertises one-time promotional credit, not a recurring free model API. |
-| NVIDIA NIM and other hosted inference catalogs | No dependable, public recurring free image-generation API quota verified for this use. |
+| Stability AI | Removed from the automatic chain because introductory credits are finite and the no-card eligibility/activation path is not sufficiently guaranteed for this setup. |
+| Hugging Face Inference Providers | Small free monthly allowance, routed third-party inference and possible billing after the allowance; not enabled until a robust no-billing cap can be guaranteed. |
+| Replicate | Free runs are limited and continuing generally requires billing/credits. |
+| Together AI / fal.ai | No dependable no-card free image quota verified for this workflow. |
+| Google Gemini image models | No generally available free API image-generation allowance verified. |
+| YepAPI and other trial-credit aggregators | Trial terms and card requirements vary; not enabled without direct verification. |
+| Cloudflare | Deliberately excluded; reserved for the existing AI Video Experiment. |
 
-## Free-only safeguards
+## No-card safety rules
 
-- Cloudflare is not present in the provider list and no Cloudflare secret is passed to this workflow.
-- No paid-only provider is called.
-- Stability's initial credits are finite; the workflow does not buy more credits.
-- Providers without configured keys are skipped.
-- Temporary errors (408, 409, 425, 429, 5xx, and network errors) are retried up to three times before moving on.
-- Permanent authentication/model errors skip that provider immediately.
-- Every response is validated as an image and normalized to PNG.
-- If all providers fail, the job fails visibly. It does not fabricate an image or report success.
+- The workflow does not read or pass any credit-card, billing, or payment credentials.
+- The OVHcloud authenticated route is disabled; only its anonymous endpoint is attempted.
+- No automatic credit purchase, top-up, or paid fallback exists in the code.
+- Zhipu is only called when `ZHIPU_API_KEY` is configured; verify its free status in your own account before adding it.
+- Anonymous services may rate-limit or stop responding. Failures move to the next provider.
+- If all enabled providers fail, the job fails visibly. It does not fabricate an image or report success.
 
-## Required GitHub Actions secrets
+## GitHub Actions secrets
 
-- `ZHIPU_API_KEY`
-- `STABILITY_API_KEY`
-- `OVH_AI_ENDPOINTS_ACCESS_TOKEN` (optional; anonymous OVH access is also attempted)
+Only one optional secret is used:
 
-No Cloudflare secrets are required by this workflow.
+- `ZHIPU_API_KEY` — add only if the Zhipu console confirms free CogView-3-Flash access for your account.
+
+OVHcloud and Pollinations require no secret in this workflow. No Stability, Cloudflare, or billing secrets are read.
 
 ## Primary sources
 
-- OVHcloud free SDXL catalog: https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/stable-diffusion-xl/
-- OVHcloud API capabilities and limits: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-capabilities
-- Zhipu CogView-3-Flash model/pricing listing: https://open.bigmodel.cn/pricing (check account-specific model availability and current free status)
+- OVHcloud SDXL catalog: https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/stable-diffusion-xl/
+- OVHcloud API capabilities and anonymous rate limits: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-capabilities
+- Zhipu pricing/model availability: https://open.bigmodel.cn/pricing
 - Zhipu image generation API: https://open.bigmodel.cn/dev/api#cogview
-- Stability AI pricing (25 introductory credits; Stable Image Core 3 credits): https://platform.stability.ai/pricing
-- Stability AI API authentication and credits: https://platform.stability.ai/docs/getting-started
-- Pollinations Free API Classic privacy/service description: https://enter.pollinations.ai/privacy
-- Hugging Face inference pricing: https://huggingface.co/docs/inference-providers/pricing
-- Replicate Try for Free terms: https://replicate.com/collections/try-for-free
-- Current comparative audit (cross-check only; verify vendor terms before use): https://aifree.dev/learn/free-image-generation-api
+- Pollinations service/privacy: https://enter.pollinations.ai/privacy
+- Stability AI pricing and credit terms (provider excluded): https://platform.stability.ai/pricing
+- Hugging Face inference pricing (provider excluded): https://huggingface.co/docs/inference-providers/pricing
+- Replicate Try for Free terms (provider excluded): https://replicate.com/collections/try-for-free
