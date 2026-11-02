@@ -164,6 +164,28 @@ jobs:
           done
           echo "Could not publish topic history after 5 attempts."
           exit 1
+      - name: Preserve generated images for failed runs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ai-video-scene-images-failed-run
+          path: output/*-gemini/images/
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 0
+
+      - name: Delete generated images after successful run
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image_dir in output/*-gemini/images; do
+            if [[ -d "$image_dir" ]]; then
+              rm -rf -- "$image_dir"
+              echo "Deleted generated scene images: $image_dir"
+            fi
+          done
+
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
