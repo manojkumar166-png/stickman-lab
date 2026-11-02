@@ -509,7 +509,7 @@ Telegram is the transport layer between the episode package and the render workf
 | Telegram operation | Trigger/workflow | File or result |
 |---|---|---|
 | Send the 48 image prompts | Planner workflow, after episode commit | Sends `image-prompts.md` as a document |
-| Receive 48 individual images or one ZIP | Telegram Image Receiver, polls every 5 minutes | Saves numbered files in the selected episode's `images/incoming/` |
+| Receive 48 individual images or one ZIP | Cloudflare Worker webhook → Telegram Image Receiver | Saves numbered files in the selected episode's `images/incoming/` |
 | Import a ZIP staged in GitHub | Telegram ZIP Import, manual workflow | Extracts 48 images into `images/incoming/` |
 | Send finished episode | Render workflow, after MP4 artifact upload | Sends the final MP4 to the configured chat |
 | Cleanup source images | Render workflow, only after successful Telegram send | Deletes incoming images/ZIP and READY marker from main |
@@ -522,13 +522,14 @@ This repository does not run a separate always-on Telegram server. The Science C
 
 ```text
 Telegram Bot API
-  └─ getUpdates (new message updates)
-       └─ .github/workflows/telegram-image-receiver.yml
-            └─ science-channel/scripts/telegram_image_receiver.py
-                 ├─ read TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
-                 ├─ load telegram-bot-state.json (offset + episode_path)
-                 ├─ getUpdates(offset=last_update_id + 1)
-                 ├─ check message.chat.id against configured chat ID
+  └─ Cloudflare Worker webhook
+       ├─ handles control commands and GitHub operations
+       └─ forwards photo/document/ZIP and /episode updates
+            └─ .github/workflows/telegram-image-receiver.yml (repository_dispatch)
+                 └─ science-channel/scripts/telegram_image_receiver.py
+                      ├─ read TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+                      ├─ load telegram-bot-state.json (selected episode)
+                      ├─ check message.chat.id against configured chat ID
                  ├─ handle /start, /help, /episode
                  ├─ getFile and download photo/document
                  ├─ store scene-01 ... scene-48
@@ -545,12 +546,12 @@ Telegram Bot API
 | `TOKEN`, `CHAT_ID`, `API` | Read token/chat ID from environment and construct Bot API base URL | Change credential names only together with workflow secret mapping |
 | `api(method, **kwargs)` | Calls Telegram Bot API with `requests.post`, checks HTTP and Telegram `ok` response | Change HTTP timeout, request handling or API error logging |
 | `send(text)` | Sends a Telegram `sendMessage` reply to configured chat | Change bot reply delivery or default reply formatting |
-| `load_state()`, `save_state()` | Read/write JSON offset and selected episode | Change persistence carefully; offset prevents old updates being replayed |
+| `load_state()`, `save_state()` | Read/write the selected episode path in receiver state | Change persistence carefully; Telegram delivery is managed by the Worker webhook |
 | `valid_episode()` | Validates date/episode path and requires `episode.json` | Change accepted episode naming/path only with planner and renderer |
 | `newest_episode()` | Finds latest episode folder containing `episode.json` | Change automatic episode selection |
 | `image_payload()` | Detects Telegram photos, supported image documents and ZIP documents | Change accepted file formats/MIME rules |
 | `scene_numbers()` | Finds already received scene numbers 01–48 | Change naming/count only with the rest of the 48-scene pipeline |
-| `main()` | Polls updates, filters chat, handles commands, downloads files, writes images and READY marker | Add commands or change upload/selection behavior |
+| `main()` | Processes one Worker-forwarded update, filters chat, handles episode selection, downloads files, writes images and READY marker | Change upload/selection behavior |
 
 ### Workflow internals
 
@@ -566,7 +567,7 @@ Telegram Bot API
 
 - To change bot token or chat, replace `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` in GitHub Secrets. Do not hardcode them.
 - To change bot replies or add a command, edit `main()` and `send()` in `science-channel/scripts/telegram_image_receiver.py`. Handle the command before file processing and use `continue` after replying.
-- To change the polling interval, edit the cron in `.github/workflows/telegram-image-receiver.yml`. Keep `workflow_dispatch` if manual polling is useful.
+- Telegram intake is webhook-triggered. Do not add a `getUpdates` schedule or call `deleteWebhook`; keep `repository_dispatch` and `workflow_dispatch` enabled.
 - To change upload formats/limits, update `image_payload()`, ZIP suffix checks and the size guards together. Also update this README and the AI README's Telegram manual.
 - To change outgoing captions, edit the `sendDocument` caption in the planner workflow or the upload action's `message` in the renderer workflow.
 - To change the number of images, update every component that assumes 48 scenes: planner, receiver, ZIP importer, episode settings, renderer, validation, prompts and documentation. A partial change will break the upload-to-render handoff.
@@ -581,7 +582,7 @@ Create a bot using Telegram's official **@BotFather**:
 3. Save the API token privately.
 4. Open your new bot and press Start.
 5. Send a message to the bot so Telegram has an update containing your chat ID.
-6. Obtain the numeric `message.chat.id` from the Bot API `getUpdates` response. Treat the bot token as a password; do not paste tokenized URLs into public places.
+6. Use the configured numeric `TELEGRAM_CHAT_ID` from the existing bot setup. Do not call `getUpdates` while the Worker webhook is registered. Treat the bot token as a password; do not paste tokenized URLs into public places.
 7. In GitHub, open repository **Settings → Secrets and variables → Actions → Secrets** and add:
 
 | Secret | Value | Purpose |
@@ -594,21 +595,21 @@ The receiver checks the incoming chat ID for exact equality with `TELEGRAM_CHAT_
 
 Never add tokens to the repository, README, source code, workflow inputs or episode files. If a token leaks, revoke it and replace the matching GitHub secret.
 
-## 3. Telegram Image Receiver — every-five-minute poller
+## 3. Telegram Image Receiver — Worker webhook intake
 
 Workflow: [telegram-image-receiver.yml](../.github/workflows/telegram-image-receiver.yml)
 
-- Schedule: `*/5 * * * *` (every five minutes, UTC).
-- Manual run: GitHub Actions → Telegram Image Receiver → Run workflow.
+- Trigger: Cloudflare Worker sends a `telegram_image_upload` repository_dispatch event for each image/ZIP upload or `/episode` selection.
+- Manual run: GitHub Actions → Telegram Image Receiver → Run workflow (maintenance only; it has no Telegram update to process).
 - Runtime: Ubuntu latest, Python 3.11, `requests`, 8-minute job timeout.
 - Permissions: repository contents write.
 - Branch: always checks out and pushes to `main`.
 - State file: `science-channel/telegram-bot-state.json`.
 - Receiver script: `science-channel/scripts/telegram_image_receiver.py`.
 
-This is not a permanently running service. GitHub Actions starts the script on schedule; the script asks Telegram for updates using `getUpdates`, processes the returned messages and exits. Therefore an image may wait until the next scheduled run. GitHub may delay scheduled jobs during heavy load; manually run the workflow if you need to poll sooner.
+The Cloudflare Worker is the always-available Telegram webhook. GitHub Actions starts the receiver when the Worker forwards a relevant update; the receiver downloads and processes that specific Telegram message. The receiver must never call `getUpdates` or `deleteWebhook`, because that would compete with or remove the Worker webhook.
 
-The state file stores the Telegram update offset and selected episode path. The offset prevents the bot from repeatedly processing already handled updates. Do not delete or reset this file without understanding that old updates may be delivered again.
+The state file stores the selected episode path. Telegram update delivery and duplicate webhook retries are handled at the Worker/GitHub event layer; do not delete or reset the selected episode without intending to change the current upload destination.
 
 ### Commands
 
