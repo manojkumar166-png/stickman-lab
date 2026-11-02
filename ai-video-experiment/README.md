@@ -550,14 +550,13 @@ Inside `scripts/make_art.py`:
 
 - `timeout=120` gives each Cloudflare request up to 120 seconds.
 - `time.sleep(6)` waits six seconds between scene requests.
-- There is no explicit retry/backoff loop for a failed image request.
-- A failed scene is recorded as `None`.
-- If at least one image succeeded, missing scenes reuse a random successful image.
-- If all three providers fail for a scene, image generation raises an error and the workflow stops.
+- Cloudflare requests use bounded retries for rate limits and transient failures.
+- Each scene falls through to AI Horde and then OVHcloud if its current provider fails.
+- The first valid image is saved immediately. If all three providers fail for a scene, image generation raises an error and the workflow stops.
 
-You can adjust the six-second delay or timeout, but do not remove the delay without checking Cloudflare's current rate limits. For a robust production change, implement bounded retries with exponential backoff for transient HTTP 429 and 5xx errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
+You can adjust provider retry counts, timeouts and pacing in `scripts/make_art.py`; respect each anonymous provider's published limits. For a robust production change, implement bounded retries with exponential backoff for transient HTTP 429 and 5xx errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
 
-If you want a different fallback policy, change the section under `# If any failed, reuse a successful image to fill the gap`. The current implementation already fails the image-generation step if all providers fail for a scene. That requires changing how `main_ai.py` handles `None` image data and how the artwork function is called. Test the full pipeline after modifying this behavior.
+Provider order, retries, pacing and fail-fast behavior are all controlled by `generate_all_ai_images()` in `scripts/make_art.py`. Test the full pipeline after changing this behavior.
 
 ## H. Change the title and narration strips drawn over images
 
@@ -587,7 +586,7 @@ The bottom strip is a static scene caption, separate from any word-synchronized 
 | HTTP 5xx | Temporary service/model error | Retry a limited number of times with backoff; inspect Cloudflare status. |
 | Request timeout | Slow generation or network issue | Check the 120-second timeout and model latency. |
 | Response JSON has no `image` field | Model response format differs from current decoder | Inspect the documented response schema and update response parsing. |
-| Some scenes repeat | Current fallback intentionally reuses a random successful image | Check the log for `Filled with a random AI image`; change fallback policy if required. |
+| Some scenes repeat | Provider fallback failed | Inspect the Cloudflare, AI Horde and OVHcloud error messages for the scene. |
 | A scene image fails | Check the Cloudflare, AI Horde and OVHcloud errors for that scene; the pipeline intentionally stops rather than substituting artwork. |
 
 ---
@@ -621,7 +620,7 @@ There is no separate Worker URL or custom Worker source in this request path. Th
 | `scripts/make_art.py` → `CF_URL_CHEAP` | Builds `https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}` | Change the account API route or model identifier |
 | `build_prompt()` | Normalizes whitespace, removes double quotes, truncates scene visual text to 250 characters, appends `STYLE` | Change prompt length, cleanup or shared visual style |
 | `cf_image_cheap()` | Checks credentials, sends multipart POST with Bearer token, prompt, width 1024, height 576; timeout 120 seconds | Change authentication, request fields, dimensions, timeout or response handling |
-| `generate_all_ai_images()` | Processes scenes sequentially, waits 6 seconds between calls, records failures and reuses a random successful image for failed scenes | Change concurrency, pacing, retry policy and failed-scene behavior |
+| `generate_all_ai_images()` | Processes scenes sequentially, tries Cloudflare then AI Horde then OVHcloud, validates and saves each successful image immediately | Change concurrency, pacing, retry policy and failed-scene behavior |
 | `make_scene_art()` | Opens returned bytes with Pillow, resizes to output size, draws title/caption bars and saves the final scene image | Change image composition and overlays |
 | 
 
