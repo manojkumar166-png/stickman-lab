@@ -2,28 +2,6 @@ name: AI Story & Science Video Creator
 
 on:
   workflow_dispatch:
-    inputs:
-      topic:
-        description: Optional topic or story idea (blank lets Gemini invent one)
-        required: false
-        type: string
-      scenes:
-        description: Number of scenes
-        required: true
-        default: "8"
-        type: choice
-        options:
-          - "6"
-          - "8"
-          - "10"
-          - "12"
-          - "16"
-          - "48"
-      voice:
-        description: Edge TTS narration voice
-        required: true
-        default: en-US-AndrewMultilingualNeural
-        type: string
 
 permissions:
   contents: write
@@ -65,13 +43,11 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite' }}
-          TOPIC: ${{ inputs.topic }}
-          SCENES: ${{ inputs.scenes }}
-          VOICE: ${{ inputs.voice }}
         shell: bash
         run: |
           set -euo pipefail
-          python -u scripts/ai_story_video.py --topic "$TOPIC" --scenes "$SCENES" --voice "$VOICE"
+          # One-click default: Gemini invents a fresh topic and creates 48 scenes.
+          python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
       - name: Save used topic history
         shell: bash
         run: |
