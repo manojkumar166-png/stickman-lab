@@ -75,7 +75,7 @@ def validate_image(data: bytes) -> bytes:
         return output.getvalue()
 
 
-def cloudflare(prompt: str, width: int, height: int) -> bytes:
+def cloudflare(prompt: str) -> bytes:
     account = os.getenv("CF_ACCOUNT_ID", "").strip()
     token = os.getenv("CF_API_TOKEN", "").strip()
     if not account or not token:
@@ -85,7 +85,7 @@ def cloudflare(prompt: str, width: int, height: int) -> bytes:
     response = request_with_retries(
         "cloudflare-workers-ai", "POST", url,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json_body={"prompt": prompt, "width": width, "height": height},
+        json_body={"prompt": prompt, "steps": 4},
     )
     content_type = response.headers.get("Content-Type", "")
     if content_type.startswith("image/"):
