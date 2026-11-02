@@ -9,7 +9,7 @@ STYLE = ("high-quality Pixar-inspired 3D animated feature-film style, polished s
          "immersive family-friendly animated world, 16:9 landscape composition; "
          "clearly three-dimensional, not flat 2D vector art, not a 2D cartoon illustration, "
          "no bold 2D outlines, no flat color fills, no simplistic vector shapes, "
-         "no text, captions, logos or watermarks, not photorealistic live-action")
+         "no text, captions, logos, watermarks, title bars, blue strips, black bars, subtitle panels, borders or graphic overlays, not photorealistic live-action")
 
 def font(size, bold=False):
     try:
@@ -120,35 +120,6 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
     if not ai_image_data:
         return make_scene_art_python(scene, idx, total, path, width, height)
 
-    d = ImageDraw.Draw(im)
-
-    # Title bar
-    title = (scene.get("title") or "Science Discovery")[:58]
-    d.rounded_rectangle((30, 20, width - 30, 90), radius=15, fill="#2A5CAA")
-    d.text((50, 40), title, font=font(28, True), fill="white")
-
-    # Caption bar
-    narration = scene.get("narration", "")
-    words = narration.split()
-    lines = []
-    current_line = ""
-    for word in words:
-        if len(current_line + " " + word) < 75:
-            current_line += word + " "
-        else:
-            lines.append(current_line.strip())
-            current_line = word + " "
-    if current_line:
-        lines.append(current_line.strip())
-    lines = lines[:2]
-    if len(lines) == 2 and len(narration) > 140:
-         lines[1] += "..."
-
-    d.rectangle((0, height - 110, width, height), fill="black")
-    y_offset = height - 90
-    for line in lines:
-        d.text((40, y_offset), line, font=font(24, False), fill="white")
-        y_offset += 35
-
+    # Clean full-frame artwork: no title/caption bars or text overlays.
     im.save(path, quality=95)
     return path
