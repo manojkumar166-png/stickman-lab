@@ -17,9 +17,10 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Send 48 scene images to the bot, one by one or as one ZIP | **Telegram Image Receiver** | Cloudflare Worker webhook forwards uploads; can also be run manually |
 | Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
-| Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |\n| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Check workflow YAML files for common configuration errors | **Validate Workflows** | Repository workflow trigger |
+| Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
+| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Check workflow YAML files for common configuration errors | **Validate Workflows** | Repository workflow trigger |
 
-There are **seven active workflow files** in .github/workflows (including the workflow validator). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
+There are **seven active workflow files** in .github/workflows (including the workflow validator). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
 
