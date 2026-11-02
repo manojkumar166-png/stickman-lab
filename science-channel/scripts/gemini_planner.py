@@ -430,7 +430,7 @@ For example, a scene about flying in dreams should show a human figure soaring t
 clouds and skies, not a man standing and explaining dreams.
 Keep all 48 images visually varied and specific to their own scene; do not force a character into
 scenes that do not need one.
-Use a 16:9 cinematic 3D family-animation aesthetic, composed for a 1920x1080 landscape frame.
+Use a 16:9 Pixar-inspired 3D animated feature-film aesthetic, composed for a 1920x1080 landscape frame. Aim for polished, expressive 3D characters when characters are relevant, appealing stylized shapes, detailed 3D environments, physically based materials, cinematic global illumination, soft realistic shadows, rich color, atmospheric depth, and professional animated-movie lighting. Make scientific subjects feel tangible and immersive in a high-quality 3D animated world. Keep the result clearly 3D, not flat 2D vector art, not a cartoon illustration, not a diagram, and not photorealistic live-action. Avoid bold 2D outlines, flat solid-color fills, and simplistic geometric vector shapes.
 Generate each image in WebP when the image tool supports it, because WebP usually gives an excellent
 quality-to-file-size balance. Otherwise use any available format supported by the renderer: PNG, JPG/JPEG,
 BMP, GIF, TIF or TIFF. Do not require JPG/JPEG and do not sacrifice visual quality just to meet a file-size
