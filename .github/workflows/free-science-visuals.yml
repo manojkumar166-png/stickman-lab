@@ -73,7 +73,7 @@ jobs:
           else
             # Ignore deletion-only cleanup commits: they must not trigger an empty render.
             git diff-tree --no-commit-id --name-only --diff-filter=AM -r "${{ github.event.before }}" "${{ github.sha }}" > /tmp/changed.txt
-            mapfile -t EPISODES < <(grep -E '^science-channel/daily-episodes/.+/(images/incoming/|READY\\.txt)' /tmp/changed.txt | sed -E 's#/(images/incoming/.*|READY\\.txt)$##' | sort -u)
+            mapfile -t EPISODES < <(grep -E '^science-channel/daily-episodes/.+/(images/incoming/|READY\.txt)' /tmp/changed.txt | sed -E 's#/(images/incoming/.*|READY\.txt)$##' | sort -u)
             if [ "${#EPISODES[@]}" -eq 0 ]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
               echo "No added/modified incoming images or READY marker; skipping cleanup-only push successfully."
