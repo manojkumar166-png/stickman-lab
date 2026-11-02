@@ -92,8 +92,8 @@ jobs:
           title = str(story.get("title", "")).strip()
           if not title:
               raise SystemExit("Story title is missing.")
-          safe_title = re.sub(r'[<>:"/\\\\|?*\\r\\n\\x00-\\x1f]', "", title)
-          safe_title = re.sub(r"\\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
+          safe_title = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
+          safe_title = re.sub(r"\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
           if not safe_title or safe_title in {".", ".."}:
               raise SystemExit("Could not make a safe filename from the story title.")
           final_name = safe_title + ".mp4"
