@@ -24,7 +24,12 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install FFmpeg
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/huggingface
+          key: whisper-small-${{ runner.os }}-v1
+      - name: Install FFmpeg and subtitle fonts
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -32,18 +37,50 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 10))
           done
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
       - name: Install Python dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
+          python -m pip install --retries 5 --timeout 60 faster-whisper
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: python main_ai.py
+
+      - name: Generate and burn karaoke subtitles
+        env:
+          HF_HOME: ${{ runner.temp }}/huggingface
+        shell: bash
+        run: |
+          set -euo pipefail
+          TODAY="$(date +%F)"
+          AUDIO="output/narration-$TODAY.mp3"
+          VIDEO="$(find output -maxdepth 1 -type f -name "*-$TODAY.mp4" -print -quit)"
+          test -f "$AUDIO" || { echo "Narration file not found: $AUDIO"; exit 1; }
+          test -n "$VIDEO" && test -f "$VIDEO" || { echo "Today's generated MP4 was not found."; exit 1; }
+          CAPTIONS="output/karaoke-captions-$TODAY.ass"
+          SUBTITLED="output/subtitled-$TODAY.mp4"
+          python - "$AUDIO" "$CAPTIONS" <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
+          from karaoke_subtitles import generate_karaoke_ass
+          import json
+          config = json.loads(Path("config.json").read_text(encoding="utf-8"))
+          count = generate_karaoke_ass(sys.argv[1], sys.argv[2], int(config["width"]), int(config["height"]))
+          print(f"Generated karaoke captions for {count} timed words.")
+          PY
+          ffmpeg -y -hide_banner -loglevel error -i "$VIDEO" \
+            -vf "subtitles=$CAPTIONS:fontsdir=/usr/share/fonts/truetype/dejavu" \
+            -map 0:v:0 -map 0:a:0 -c:v libx264 -preset veryfast -crf 21 \
+            -c:a copy -shortest -movflags +faststart "$SUBTITLED"
+          mv "$SUBTITLED" "$VIDEO"
+          rm -f "$CAPTIONS"
+          echo "Karaoke subtitles burned into $VIDEO"
 
       - name: Get Video Topic
         id: get_topic
