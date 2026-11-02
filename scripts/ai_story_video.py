@@ -144,7 +144,7 @@ def render(scenes,package,voice):
     concat=package/"concat.txt"
     concat.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts),encoding="utf-8")
     final=package/"final-video.mp4"
-    command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c","copy","-movflags","+faststart",str(final)])
+    command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
     if not final.exists() or final.stat().st_size<100000: raise RuntimeError("Final MP4 missing or too small")
     return final
 
