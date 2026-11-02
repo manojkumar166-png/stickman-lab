@@ -17,9 +17,9 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Send 48 scene images to the bot, one by one or as one ZIP | **Telegram Image Receiver** | Cloudflare Worker webhook forwards uploads; can also be run manually |
 | Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
-| Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
+| Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |\n| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Check workflow YAML files for common configuration errors | **Validate Workflows** | Repository workflow trigger |
 
-There are **five active workflow files** in .github/workflows. The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
+There are **seven active workflow files** in .github/workflows (including the workflow validator). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
 
@@ -370,3 +370,44 @@ After correcting the issue:
 
 When fixing Telegram connectivity, change only the Cloudflare Worker deployment or the specific incorrect Worker secret. Do not delete or rewrite Science Channel episode folders, the 48-image upload receiver, ZIP importer, renderer, READY marker, or delivery/cleanup logic as a shortcut. Keep the existing workflows on `main`. If a code change is required, start from the complete current `cloudflare-worker.js`, review the diff, and test commands plus upload forwarding before changing other pipeline components.
 
+
+## AI Story & Science Video Creator — one-click 48-scene workflow
+
+This is a separate generator from the Science Channel episode pipeline and the legacy AI Video Experiment.
+
+**Run it:** Actions → **AI Story & Science Video Creator** → **Run workflow** → select `main` → **Run workflow**. There are no input fields. Each run asks Gemini to invent a fresh topic from the root `topics.txt` inspiration library and generates **48 scene images**, narration and a final MP4. The default voice is `en-US-AndrewMultilingualNeural`.
+
+- Workflow: [`.github/workflows/ai-story-science-video.yml`](.github/workflows/ai-story-science-video.yml)
+- Complete guide: [`ai-story-science-video/README.md`](ai-story-science-video/README.md)
+- Generator code: [`scripts/ai_story_video.py`](scripts/ai_story_video.py)
+- Topic inspiration: [`topics.txt`](topics.txt)
+- Used-topic history: [`used_story_topics.json`](used_story_topics.json)
+
+### Change the defaults
+
+| Want to change | Edit this | Current behaviour |
+|---|---|---|
+| Always generate 48 scenes | `.github/workflows/ai-story-science-video.yml` | The run command contains `--scenes 48`. |
+| Change scene count | Same workflow file, find `--scenes 48` | Change 48 to the desired number (the script accepts 4–48). |
+| Change narration voice | Same workflow file, find `--voice "en-US-AndrewMultilingualNeural"` | Replace with a supported Edge TTS voice ID. |
+| Give Gemini different topic inspiration | Root `topics.txt` | Add or remove one idea per line; Gemini uses it as inspiration, not a fixed queue. |
+| Change Gemini model/fallback | GitHub repository Settings → Secrets and variables → Actions → Variables | Set `GEMINI_MODEL` and optionally `GEMINI_FALLBACK_MODELS`. |
+| Improve image style and framing | `scripts/ai_story_video.py`, function `generation_prompt()` | Cinematic 3D CGI, detailed materials/lighting and 16:9 center-safe composition. |
+| Change image providers/order, rate limits or retries | Same Python file, functions `ovh()`, `ai_horde()`, `vexa()`, `pollinations()`, `generate_all()` | Anonymous free-provider fallback chain; no paid API key is configured. |
+| Change subtitles | `science-channel/scripts/karaoke_subtitles.py` | Reuses the Science Channel word-highlight subtitle generator. |
+| Change video encoding | Same Python file, function `render()` | FFmpeg segment and final-video encoding settings. |
+| Change final artifact/Telegram delivery | `.github/workflows/ai-story-science-video.yml` | Only the final topic-named MP4 is uploaded/sent; artifact retained 7 days. |
+
+**Important:** this workflow is deliberately configured for one-click 48-scene runs. Editing the scene count or voice requires a commit to the workflow file; you do not enter those values on the Actions screen. Free image providers have rate limits and queues, so 48 images can take a long time and are not guaranteed to complete on every run.
+
+## Do workflows have separate README files?
+
+Not every workflow currently has its own README file. The repository uses **feature/pipeline guides** that explain related workflows together:
+
+- [Root README — workflow map and project overview](README.md)
+- [Science Channel guide](science-channel/README.md) — covers the planner, Telegram image receiver, ZIP importer and Science Channel renderer together.
+- [AI Story & Science Video Creator guide](ai-story-science-video/README.md) — dedicated guide for the standalone free-provider 48-scene generator.
+- [AI Video Experiment guide](AI_README.md) — dedicated guide for the legacy Cloudflare-based experiment.
+- [Workflow directory](.github/workflows/) — actual YAML files and run configuration.
+
+This is intentional: workflows that form one pipeline share a guide instead of duplicating the same instructions in several files. The workflow index at [`.github/workflows/README.md`](.github/workflows/README.md) lists each workflow and points to its relevant guide.
