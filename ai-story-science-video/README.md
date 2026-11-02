@@ -2,9 +2,8 @@
 
 A standalone workflow following the AI Video Experiment's end-to-end pattern—Gemini story, per-scene artwork, Edge TTS narration, FFmpeg rendering and artifact upload—but using free anonymous image providers instead of Cloudflare. Supports 6–48 scenes, including 48-image long-form videos.
 
-## Modes
-- Science documentary: Gemini invents or follows a subject, writes a responsible explanatory script, and creates scene-by-scene visual prompts.
-- Animated story: Gemini creates an original story with recurring characters, a continuity bible, narration, scene descriptions and visual prompts.
+## Gemini-led creation
+There is no manual science/animated mode selector. Optionally supply a topic or leave it blank. Gemini invents a topic when blank and decides whether the strongest treatment is a science documentary or an original animated story. It then creates the script, continuity bible and scene-by-scene visual prompts.
 
 ## Pipeline
 1. Gemini creates a complete ordered script and scene plan.
@@ -16,7 +15,7 @@ A standalone workflow following the AI Video Experiment's end-to-end pattern—G
 7. The MP4, story JSON, readable script and images are uploaded as a 7-day artifact.
 
 ## Run
-Open Actions, select AI Story & Science Video Creator, and choose Run workflow. Select science or animated, optionally enter a topic, choose 6/8/10/12/16/48 scenes and a voice.
+Open Actions, select AI Story & Science Video Creator, and choose Run workflow. Optionally enter a topic (or leave it blank for Gemini to invent one), choose 6/8/10/12/16/48 scenes and a voice. Gemini chooses whether to make a science documentary or an animated story.
 
 ## Required secret
 Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No Zhipu, Stability, OVH token, Cloudflare or payment secret is used.
