@@ -30,3 +30,7 @@ Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No
 
 ## Output package
 story.json, script.md, images/scene-XX.png, audio/scene-XX.mp3, segments/segment-XX.mp4 and final-video.mp4. The uploaded artifact contains the final MP4, script, plan and scene images.
+
+
+## Gemini model configuration
+The workflow defaults to `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite`. These defaults were updated after Gemini API returned 404 for the retired/unavailable 2.5 and 2.0 model IDs. You can override them with repository variables `GEMINI_MODEL` and `GEMINI_FALLBACK_MODELS`.
