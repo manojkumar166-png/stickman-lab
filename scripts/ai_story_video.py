@@ -104,7 +104,7 @@ def ovh(prompt):
 
 def ai_horde(prompt):
     base="https://aihorde.net/api/v2"
-    headers={"apikey":"0000000000","Client-Agent":"stickman-lab:1.0:github-actions"}
+    headers={"apikey":"0000000000","Client-Agent":"stickman-lab:1.0:https://github.com/manojkumar166-png/stickman-lab"}
     payload={"prompt":prompt+"###text, watermark, logo, blurry, low quality",
       "params":{"width":1024,"height":576,"steps":20,"n":1},
       "nsfw":False,"censor_nsfw":True,"trusted_workers":False}
