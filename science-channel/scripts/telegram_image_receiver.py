@@ -191,7 +191,14 @@ def main():
     state_changed = False
     latest = newest_episode()
     selected = valid_episode(state.get("episode_path", "")) if state.get("episode_path") else None
-    if latest and (selected is None or (latest.parent.name, latest.name) > (selected.parent.name, selected.name)):
+    manually_selected = bool(state.get("episode_locked", False))
+    if latest and (
+        selected is None
+        or (
+            not manually_selected
+            and (latest.parent.name, latest.name) > (selected.parent.name, selected.name)
+        )
+    ):
         state["episode_path"] = str(latest)
         state_changed = True
         send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
@@ -226,6 +233,7 @@ def main():
                 send("Episode not found on main. Use /episode YYYY-MM-DD/episode-001 and ensure the episode package exists on the main branch.")
             else:
                 state["episode_path"] = str(folder)
+                state["episode_locked"] = True
                 changed = True
                 send(f"Selected main-branch episode {folder.parent.name}/{folder.name}. Send images in order.")
             continue
@@ -335,6 +343,8 @@ def main():
             episode_path = str(episode)
             if episode_path not in completed_episodes:
                 completed_episodes.append(episode_path)
+            if str(state.get("episode_path", "")) == episode_path:
+                state["episode_locked"] = False
             send(f"All 48 images are present for {episode.parent.name}/{episode.name}. ZIP order was normalized automatically using scene numbers when available, otherwise natural filename order. READY.txt created; uploads will be committed to main.")
         else:
             send(f"Saved image. {len(present)}/48 received. Next missing: scene-{missing[0]:02d}.")
