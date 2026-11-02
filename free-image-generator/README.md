@@ -18,9 +18,9 @@ See [API audit](API_AUDIT.md) for current quotas, setup requirements, exclusions
 ## Required GitHub Actions secrets
 
 - `CF_ACCOUNT_ID`
-- `CF_API_TOKEN`
+- `CF_API_TOKEN`\n- Repository variable `CF_WORKERS_FREE_PLAN_CONFIRMED=true` only if the account is on Workers Free (leave unset on Workers Paid)
 - `OVH_AI_ENDPOINTS_ACCESS_TOKEN`
 
-Add keys under **Settings → Secrets and variables → Actions**. Do not commit keys.
+Add keys under **Settings → Secrets and variables → Actions**. Set the Cloudflare confirmation variable only if your account is on the Workers Free plan. The Cloudflare provider is disabled by default until this is explicitly confirmed. Do not commit keys.
 
 Generated images and the provider log are uploaded as a workflow artifact for 14 days. This workflow does not modify or invoke any existing workflow.
