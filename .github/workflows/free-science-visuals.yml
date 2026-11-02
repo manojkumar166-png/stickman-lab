@@ -148,8 +148,7 @@ jobs:
           files: ${{ steps.episode.outputs.path }}/output/*.mp4
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
       - name: Remove uploaded ZIP, scene images and READY marker from main
-        if: steps.episode.outputs.skip != 'true'
-        if: steps.telegram.outcome == 'success'
+        if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome == 'success'
         env:
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
         shell: bash
