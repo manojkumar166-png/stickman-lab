@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Poll Telegram for episode images and stage them in the selected episode folder."""
+"""Process Telegram image updates forwarded by the Cloudflare Worker webhook."""
 import json
 import os
 import re
