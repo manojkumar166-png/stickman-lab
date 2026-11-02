@@ -1,0 +1,102 @@
+name: AI Story Image Fallback Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Image prompt to test the fallback providers"
+        required: true
+        type: string
+        default: "A cinematic 3D CGI scene of a tiny robotic explorer standing beside a glowing crystal cave on an alien moon, wide 16:9 composition, detailed materials, dramatic natural lighting, no text, no logo, no watermark"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-story-image-fallback-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-image-fallbacks:
+    name: Test AI Story image fallback chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install image-generation dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts
+
+      - name: Try AI Horde, then Vexa HD/FLUX, then Pollinations
+        id: generate
+        env:
+          IMAGE_PROMPT: ${{ inputs.prompt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p image-fallback-test
+          python - <<'PY'
+          import importlib.util
+          import os
+          import sys
+          from pathlib import Path
+
+          source = Path("scripts/ai_story_video.py").resolve()
+          spec = importlib.util.spec_from_file_location("ai_story_video", source)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+
+          prompt = os.environ["IMAGE_PROMPT"].strip()
+          if not prompt:
+              raise SystemExit("The image prompt cannot be empty.")
+
+          output = Path("image-fallback-test/fallback-image.png")
+          providers = (
+              ("AI Horde", module.ai_horde),
+              ("Vexa HD then FLUX", module.vexa),
+              ("Pollinations", module.pollinations),
+          )
+          errors = []
+          for name, generate in providers:
+              print(f"Trying image provider: {name}", flush=True)
+              try:
+                  image = module.valid_png(generate(prompt))
+                  output.write_bytes(image)
+                  print(f"SUCCESS: generated and validated image with {name}", flush=True)
+                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+                      handle.write(f"provider={name}\n")
+                  break
+              except Exception as exc:
+                  message = f"{name}: {type(exc).__name__}: {exc}"
+                  errors.append(message)
+                  print(f"FAILED: {message}", file=sys.stderr, flush=True)
+          else:
+              raise SystemExit("All fallback providers failed:\n" + "\n".join(errors))
+
+          print(f"Validated image saved to {output} ({output.stat().st_size} bytes).")
+          PY
+
+      - name: Upload generated test image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ai-story-image-fallback-test
+          path: image-fallback-test/fallback-image.png
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Report successful provider
+        run: echo "Image fallback test passed using ${{ steps.generate.outputs.provider }}."
