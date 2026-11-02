@@ -108,17 +108,19 @@ To change the audience, tone, hook, narration structure, scene descriptions or J
 
 The root pipeline's history is `topic_history.json`; it is separate from `science-channel/history/generated-topics.json`. Do not delete history unless you intentionally want old subjects to become eligible again. The root pipeline's matching is not the same semantic duplicate review used by the Science Channel planner.
 
-## 5. Cloudflare image generation and fallback behavior
+## 5. Image generation and provider fallback behavior
 
-The active image-generation code is in `scripts/make_art.py`.
+The active image generator is `scripts/make_art.py`. It processes each scene separately in this order:
 
-- It sends each scene's visual description plus the shared `STYLE` text to Cloudflare Workers AI.
-- It requests 1024×576 images.
-- It waits 6 seconds between scene requests.
-- If an individual scene request fails but other images succeeded, the code fills that scene with a randomly selected successful image.
-- If Cloudflare fails, the pipeline tries AI Horde and then OVHcloud. If all three providers fail for a scene, the run stops with an error; no stickman fallback is used.
+1. **Cloudflare FLUX.2 Klein** — primary provider, with bounded retries for transient failures and rate limits.
+2. **AI Horde** — anonymous backup if Cloudflare cannot generate the scene.
+3. **OVHcloud SDXL** — final fallback if both earlier providers fail; requests are paced for the anonymous endpoint's rate limit.
 
-This fallback behavior is not a promise that Cloudflare quota is unlimited or that every failed image will be unique. Inspect the generated scene images if image consistency matters. Do not remove the delay without checking the provider's current rate limits.
+Every returned image is validated and saved immediately as `output/<run-folder>/images/scene-NN.png`. This preserves already completed images if a later scene or video-rendering step fails.
+
+There is no stickman-art fallback and no reuse of a different scene's image. If all three providers fail for any scene, image generation stops with an error that identifies the failed scene. The workflow should not silently produce a video with missing or unrelated visuals.
+
+The providers are anonymous/free endpoints where available; their quotas, queue times, availability and terms can change. A fallback is an attempt, not a guarantee that a provider will be available. Inspect the Actions log for the provider name and error reported for each scene.
 
 ## 6. Topic history and output files
 
@@ -551,11 +553,11 @@ Inside `scripts/make_art.py`:
 - There is no explicit retry/backoff loop for a failed image request.
 - A failed scene is recorded as `None`.
 - If at least one image succeeded, missing scenes reuse a random successful image.
-- If no image succeeded, the main pipeline uses the local Python-drawn stickman scene art.
+- If all three providers fail for a scene, image generation raises an error and the workflow stops.
 
 You can adjust the six-second delay or timeout, but do not remove the delay without checking Cloudflare's current rate limits. For a robust production change, implement bounded retries with exponential backoff for transient HTTP 429 and 5xx errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
 
-If you want a different fallback policy, change the section under `# If any failed, reuse a successful image to fill the gap`. For example, you could fail the entire job instead of repeating an image, or use local stickman artwork only for the failed scene. That requires changing how `main_ai.py` handles `None` image data and how the artwork function is called. Test the full pipeline after modifying this behavior.
+If you want a different fallback policy, change the section under `# If any failed, reuse a successful image to fill the gap`. The current implementation already fails the image-generation step if all providers fail for a scene. That requires changing how `main_ai.py` handles `None` image data and how the artwork function is called. Test the full pipeline after modifying this behavior.
 
 ## H. Change the title and narration strips drawn over images
 
@@ -586,7 +588,7 @@ The bottom strip is a static scene caption, separate from any word-synchronized 
 | Request timeout | Slow generation or network issue | Check the 120-second timeout and model latency. |
 | Response JSON has no `image` field | Model response format differs from current decoder | Inspect the documented response schema and update response parsing. |
 | Some scenes repeat | Current fallback intentionally reuses a random successful image | Check the log for `Filled with a random AI image`; change fallback policy if required. |
-| All images become stickman drawings | Every Cloudflare image request failed | Check credentials, model access, quota and response errors. |
+| A scene image fails | Check the Cloudflare, AI Horde and OVHcloud errors for that scene; the pipeline intentionally stops rather than substituting artwork. |
 
 ---
 
@@ -669,7 +671,7 @@ Edit `width` and `height` in `form_data` inside `cf_image_cheap()`. Keep the mod
 
 ### Change what happens when an image request fails
 
-Today, failed requests are stored as `None`. If at least one scene succeeded, each failed slot receives a randomly chosen successful image. If none succeeded, the returned list contains no AI images and `make_scene_art()` uses the local stickman fallback. To use a different policy (retry, stop the run, use a fixed placeholder, or fallback per scene), change the failure-handling block in `generate_all_ai_images()`.
+Today, failed requests are stored as `None`. If at least one scene succeeded, each failed slot receives a randomly chosen successful image. If all three providers fail for a scene, `generate_all_ai_images()` raises an error and the workflow stops. Provider order, retries, request pacing and fail-fast behavior are configured in `generate_all_ai_images()`.
 
 ### Change title/caption overlays
 
