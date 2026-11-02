@@ -128,7 +128,17 @@ def main():
     # dropping queued messages; another active getUpdates client must be stopped
     # separately because Telegram permits only one polling consumer per bot token.
     api("deleteWebhook", data={"drop_pending_updates": "false"})
-    updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
+    try:
+        updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
+    except RuntimeError as exc:
+        # A 409 means another consumer currently owns polling for this token.
+        # Preserve the offset and exit successfully so scheduled runs keep retrying
+        # without marking every five-minute poll as a failed workflow.
+        if "getUpdates returned 409 Conflict" in str(exc):
+            print(f"WARNING: {exc}")
+            print("No update offset was advanced; the next scheduled run will retry.")
+            return
+        raise
     changed = False
     for update in updates:
         state["offset"] = update["update_id"] + 1
