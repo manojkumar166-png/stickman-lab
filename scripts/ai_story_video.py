@@ -8,8 +8,21 @@ from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"ai-story-video-output"
 KEY=os.getenv("GEMINI_API_KEY","").strip()
-MODEL=os.getenv("GEMINI_MODEL","gemini-3.8-flash").strip()
-FALLBACK=[x.strip() for x in os.getenv("GEMINI_FALLBACK_MODELS","gemini-3.5-flash-lite").split(",") if x.strip()]
+# Keep planner calls on Gemini API models listed as free-tier eligible.
+# Paid or unknown model IDs supplied through Actions variables are ignored.
+FREE_GEMINI_MODELS=(
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+)
+_requested_model=os.getenv("GEMINI_MODEL","gemini-3.8-flash").strip()
+MODEL=_requested_model if _requested_model in FREE_GEMINI_MODELS else "gemini-3.8-flash"
+_requested_fallbacks=os.getenv("GEMINI_FALLBACK_MODELS",",".join(FREE_GEMINI_MODELS[1:]))
+FALLBACK=[
+    model for model in (x.strip() for x in _requested_fallbacks.split(","))
+    if model in FREE_GEMINI_MODELS and model != MODEL
+]
 TIMEOUT=(20,180)
 _OVH_LAST_CALL=0.0
 
