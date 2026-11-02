@@ -127,7 +127,8 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"video={destination.as_posix()}\n")
               output.write(f"filename={final_name}\n")
-              output.write(f"title<<TITLE_EOF\n{title}\nTITLE_EOF\n")
+              display_title = " ".join(title.split())
+              output.write(f"title={display_title}\n")
           print(f"Final video ready: {destination}")
           PY
       - name: Resolve artifact
