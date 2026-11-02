@@ -2,9 +2,14 @@ import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, re
 from PIL import Image, ImageDraw, ImageFont
 from scripts.make_art_python import make_scene_art as make_scene_art_python
 
-STYLE = ("flat 2D vector illustration, educational explainer style, clean bold outlines, "
-         "solid flat colors, limited bright palette, simple geometric shapes, "
-         "plain light background, no gradients, no text, no photorealism")
+STYLE = ("high-quality Pixar-inspired 3D animated feature-film style, polished stylized 3D rendering, "
+         "appealing expressive 3D characters when relevant, detailed dimensional environments, "
+         "rich colors, carefully crafted materials and textures, cinematic composition, "
+         "soft global illumination, natural depth, beautiful movie-quality lighting and shadows, "
+         "immersive family-friendly animated world, 16:9 landscape composition; "
+         "clearly three-dimensional, not flat 2D vector art, not a 2D cartoon illustration, "
+         "no bold 2D outlines, no flat color fills, no simplistic vector shapes, "
+         "no text, captions, logos or watermarks, not photorealistic live-action")
 
 def font(size, bold=False):
     try:
