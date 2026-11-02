@@ -172,6 +172,7 @@ def order_image_entries(entries):
 
 def main():
     inbox = Path(".github/telegram-inbox")
+    inbox.mkdir(parents=True, exist_ok=True)
     update_files = sorted(
         inbox.glob("*.json"),
         key=lambda path: int(path.stem) if path.stem.isdigit() else path.stem,
