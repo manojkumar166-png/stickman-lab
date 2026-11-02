@@ -1,4 +1,4 @@
-import os, sys, json, subprocess, shutil, asyncio
+import os, sys, json, subprocess, shutil, asyncio, re
 from pathlib import Path
 from datetime import date
 from scripts.generate_story import generate_story
@@ -51,7 +51,8 @@ def main():
         capture_output=True, text=True).stdout)
     print(f"Narration length: {dur/60:.1f} min")
 
-    video_path = OUT / f"ai-experiment-{day}.mp4"
+    topic_slug = re.sub(r"[^a-z0-9]+", "-", story["topic"].lower()).strip("-")[:80].strip("-") or "science-video"
+    video_path = OUT / f"{topic_slug}-{day}.mp4"
     render_video(scene_dir, narration_path, video_path, story, config)
 
     print(f"Finished: {video_path}")
