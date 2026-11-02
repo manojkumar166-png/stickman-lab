@@ -31,7 +31,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_UPDATE_JSON: ${{ toJSON(github.event.client_payload.update) }}
+          TELEGRAM_UPDATE_JSON: ${{ github.event_name == 'repository_dispatch' && toJSON(github.event.client_payload.update) || '' }}
         run: python -u science-channel/scripts/telegram_image_receiver.py
       - name: Commit received images and receiver state to main
         shell: bash
