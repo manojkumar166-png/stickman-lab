@@ -103,7 +103,7 @@ This is an alternative to sending the ZIP directly to the bot. First upload any 
 - `episode_path`: the exact episode folder, for example `science-channel/daily-episodes/2026-11-01/episode-001`.
 - `zip_path`: the full staged ZIP path, for example `science-channel/telegram-uploads/dream.zip`.
 
-The filename does not need to follow a special naming pattern, but the file must end in `.zip` and be directly inside `science-channel/telegram-uploads/`. The importer checks that the archive is valid and contains exactly 48 supported images, rejects unsafe paths and oversized files, extracts the images into the episode's `images/incoming/` folder, creates `READY.txt`, commits the images to `main`, and removes the staged ZIP. That commit starts the renderer.
+The filename does not need to follow a special naming pattern, but the file must end in `.zip` and be directly inside `science-channel/telegram-uploads/`. The importer checks that the archive is valid and contains exactly 48 supported images, rejects unsafe paths and oversized files, extracts the images into the episode's `images/incoming/` folder, creates `READY.txt`, and copies the original archive there as `source-upload.zip`. It removes the staging copy from `science-channel/telegram-uploads/`, then commits the images, retained source ZIP and READY marker to `main`. That commit starts the renderer.
 
 This workflow uses the `GH_PAT` repository secret to push imported files. Configure it as a personal access token with repository contents write permission. Do not put the token in a workflow input or source file.
 
@@ -121,8 +121,8 @@ If you revise narration after generating images, revise the matching prompt and 
 - **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It uses faster-whisper Small on CPU to align narration word-by-word, then burns phrase-based karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline.**
 - **Artifact upload:** after rendering, it uploads the final MP4 only as a topic-named GitHub Actions artifact. The artifact is retained for **2 days**.
 - **Telegram delivery:** the workflow attempts to send the MP4 to the configured Telegram chat. This step is non-blocking, so a Telegram failure does not erase an artifact that has already been uploaded.
-- **Cleanup after successful delivery:** only when Telegram reports success, the workflow deletes every uploaded file in the episode's `images/incoming/` folder except `.gitkeep`, and removes `READY.txt`. It commits the cleanup to `main`. This removes both ZIP archives and individual scene images, and allows the same ZIP filename to be uploaded again after the cleanup commit reaches `main`.
-- **If Telegram delivery fails:** cleanup is skipped. The ZIP/images and READY marker remain in the repository so you can retry delivery/rendering. The MP4 artifact may still be available because artifact upload occurs before Telegram delivery.
+- **Cleanup after successful delivery:** only when Telegram reports success, the workflow deletes every uploaded file in the episode's `images/incoming/` folder except `.gitkeep` (including `source-upload.zip` and all scene images), and removes `READY.txt`. It commits the cleanup to `main`. The original ZIP remains available during rendering and delivery, then is removed with the extracted images.
+- **If Telegram delivery fails:** cleanup is skipped. The retained original ZIP, extracted images and READY marker remain in the repository so you can retry delivery/rendering. The MP4 artifact may still be available because artifact upload occurs before Telegram delivery.
 
 ### What happens if a step fails?
 
