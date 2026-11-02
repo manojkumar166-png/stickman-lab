@@ -177,7 +177,7 @@ def main() -> int:
     for name, provider in PROVIDERS:
         started = time.monotonic()
         try:
-            image_bytes = provider(args.prompt.strip(), args.width, args.height) if name == "cloudflare-workers-ai" else provider(args.prompt.strip())
+            image_bytes = provider(args.prompt.strip())
             image_bytes = validate_image(image_bytes)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(image_bytes)
