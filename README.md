@@ -48,7 +48,7 @@ File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram
 - **Automatic intake:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and /episode selections to this workflow by saving each update in a durable GitHub inbox.
 - **Manual start:** Actions → Telegram Image Receiver → Run workflow is available for maintenance, but normal Telegram intake is webhook-driven.
 - **Branch:** checks out and commits only to main.
-- **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
+- **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot the exact folder name, for example /episode 2026-11-01/episode-001-topic-slug. The episode must already exist on main.
 - **Accepted uploads:** send 48 individual image files/photos, or send one ZIP containing exactly 48 supported images. Supported receiver formats are JPG/JPEG, PNG and WebP. The bot numbers individual images into the next available scene slot; a ZIP is sorted and expanded into scene files.
 - **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files, receiver state and processed-inbox deletions to main, then explicitly dispatches the renderer for that exact episode.
 - **Telegram commands:** /start and /help show instructions; /episode YYYY-MM-DD/episode-NNN selects an existing main-branch episode.
