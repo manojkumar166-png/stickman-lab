@@ -67,7 +67,7 @@ Use this route when you first upload a ZIP file to the repository rather than se
 4. Enter the repository path of the ZIP in zip_path, for example science-channel/telegram-uploads/dream.zip.
 5. Start the workflow.
 
-The importer validates the episode and ZIP, requires exactly 48 supported image files, rejects unsafe archive paths and oversized files, extracts and numbers the images in that episode's images/incoming/ folder, creates READY.txt, commits the images to main, and removes the staged ZIP from the repository. The resulting commit starts the renderer.
+The importer validates the episode and ZIP, requires exactly 48 supported image files, rejects unsafe archive paths and oversized files, extracts and numbers the images in that episode's images/incoming/ folder, creates READY.txt, and preserves a copy of the original archive there as source-upload.zip. It removes the staging copy from science-channel/telegram-uploads/ and commits the extracted images, retained source ZIP and READY marker to main. The resulting commit starts the renderer.
 
 **ZIP naming rules:** the filename is not fixed; any .zip name is accepted. The ZIP must be directly inside science-channel/telegram-uploads/ (not a nested folder), and the archive itself must be valid and contain exactly 48 supported images. The ZIP is limited to 25 MB and each image to 20 MB.
 
@@ -84,7 +84,7 @@ File: [.github/workflows/free-science-visuals.yml](.github/workflows/free-scienc
 - **Rendering:** uses the episode narration, Edge TTS and FFmpeg to produce the final 16:9 video. It also creates word-aligned karaoke captions using faster-whisper.
 - **Artifact:** uploads the final MP4 as a topic-named GitHub Actions artifact. The artifact retention period is **2 days**; download it promptly from the workflow run's Artifacts section.
 - **Telegram delivery:** attempts to send the finished MP4 to the configured Telegram chat. The send step is allowed to fail without stopping the workflow.
-- **Cleanup after successful delivery:** only if Telegram reports a successful send, the workflow deletes uploaded ZIP/image files from images/incoming/ and removes READY.txt, while preserving .gitkeep, episode metadata, script, prompts and rendered output. It commits those deletions to main. This also means a filename such as dream.zip can be reused after cleanup has completed.
+- **Cleanup after successful delivery:** only if Telegram reports a successful send, the workflow deletes every uploaded file from images/incoming/ (including the retained source-upload.zip and scene images) and removes READY.txt, while preserving .gitkeep, episode metadata, script, prompts and rendered output. It commits those deletions to main. The original ZIP therefore remains available during rendering and delivery, then is removed together with the extracted images.
 - **If Telegram delivery fails:** cleanup is skipped and the uploaded files remain in the repository so you can retry. The MP4 artifact was uploaded before the Telegram step, so it can still be downloaded even if Telegram delivery fails.
 
 Wait for the cleanup commit to reach main before uploading the same ZIP filename again to the same episode. A new upload should be a new commit after the prior cleanup has completed.
