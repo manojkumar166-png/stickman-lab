@@ -7,7 +7,7 @@ There is no manual science/animated mode selector. Optionally supply a topic or 
 
 ## Topic inspiration file
 
-Edit the repository-root topics.txt to control the subject areas and curiosity-driven style that inspire new ideas. Gemini reads every non-empty, non-comment line on each run. It must create a distinct topic rather than copy or lightly rephrase an entry. Keep this file populated; the workflow stops with a clear error if it is missing or empty.
+Edit the repository-root topics.txt to control the subject areas and curiosity-driven style that inspire new ideas. Gemini reads every non-empty, non-comment line on each run. It must create a distinct topic rather than copy or lightly rephrase an entry. Keep this file populated; the workflow stops with a clear error if it is missing or empty. Previously completed topics are tracked separately in used_story_topics.json, so editing topics.txt does not erase the no-repeat history.
 
 ## Pipeline
 1. Gemini creates a complete ordered script and scene plan.
