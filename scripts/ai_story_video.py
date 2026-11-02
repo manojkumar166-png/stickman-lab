@@ -60,7 +60,6 @@ def plan_story(topic,count):
     direction="You are the creative director and writer. Decide whether the best video is a scientifically responsible science documentary or an original animated story. Choose the format yourself based on the topic and audience appeal. If no topic is supplied, invent a fresh compelling idea and choose its format. For science, explain mechanisms accurately and avoid fabricated facts. For animation, create memorable original characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain character appearance and setting continuity. All visuals must be polished cinematic 3D CGI with convincing depth, detailed materials and cinematic lighting. Do not imitate any specific studio, film, franchise, copyrighted character or named artist."
     subject=topic.strip() or "Invent a fresh and compelling subject yourself."
     prompt=f"""Act as a professional screenwriter, documentary writer and storyboard artist.
-MODE: {mode}
 {direction}
 SUBJECT: {subject}
 Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
