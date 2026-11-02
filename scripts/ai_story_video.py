@@ -134,12 +134,14 @@ def valid_png(raw):
 
 def ovh(prompt):
     global _OVH_LAST_CALL
-    wait=max(0.0,35.0-(time.monotonic()-_OVH_LAST_CALL))
+    # Anonymous OVHcloud SDXL is limited to 2 requests/minute/model/IP.
+    # Keep a safe start-to-start interval while trimming some idle time.
+    wait=max(0.0,31.0-(time.monotonic()-_OVH_LAST_CALL))
     if wait: time.sleep(wait)
     _OVH_LAST_CALL=time.monotonic()
     r=requests.post("https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image",
       headers={"accept":"application/octet-stream","Content-Type":"application/json"},
-      json={"prompt":prompt,"negative_prompt":"text, watermark, logo, blurry, low quality"},timeout=TIMEOUT)
+      json={"prompt":prompt,"negative_prompt":"text, letters, typography, watermark, logo, signature, border, collage, split screen, duplicate subjects, extra limbs, malformed hands, deformed face, distorted anatomy, blurry, pixelated, low detail, flat lighting, oversaturated, noisy, jpeg artifacts"},timeout=TIMEOUT)
     r.raise_for_status()
     if "application/json" in r.headers.get("Content-Type",""):
         encoded=(r.json().get("data") or [{}])[0].get("b64_json")
@@ -195,17 +197,30 @@ def pollinations(prompt):
     r=requests.get(url,params={"width":1280,"height":720,"nologo":"true"},headers={"Accept":"image/*"},timeout=TIMEOUT)
     r.raise_for_status(); return valid_png(r.content)
 
+def generation_prompt(scene):
+    # The video renderer center-crops images to 16:9. Keep key action centered.
+    base=scene["image_prompt"].strip()
+    quality=("Premium cinematic 3D CGI still for a polished science documentary or original animated film; "
+      "physically based materials, fine surface detail, believable scale, clear subject separation, "
+      "natural cinematic color grading, realistic global illumination, crisp focal subject, controlled highlights "
+      "and shadows, coherent environment. Compose as a wide 16:9 movie frame even if the generator returns a square "
+      "image; keep faces, key objects and the main action within the central horizontal band, away from top/bottom "
+      "edges. One unified scene, intentional camera framing, no text.")
+    return base+"\n\n"+quality
+
+
 def generate_all(scenes,folder):
     folder.mkdir(parents=True,exist_ok=True); failures=[]
     providers=(("OVHcloud anonymous",ovh,2),("AI Horde anonymous",ai_horde,1),
                ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
         n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
+        prompt=generation_prompt(s)
         for name,fn,retries in providers:
             for attempt in range(retries):
                 print(f"Scene {n}/{len(scenes)}: trying {name} (attempt {attempt+1}/{retries})",flush=True)
                 try:
-                    target.write_bytes(valid_png(fn(s["image_prompt"])))
+                    target.write_bytes(valid_png(fn(prompt)))
                     print(f"Image {n}/{len(scenes)} generated with {name}",flush=True)
                     completed=True; break
                 except Exception as e:
@@ -261,7 +276,7 @@ def main():
     if not 4<=a.scenes<=48: p.error("Scene count must be 4–48")
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
-    print("Images: anonymous OVHcloud -> AI Horde -> Vexa -> Pollinations. Cloudflare is not used.",flush=True)
+    print("Images: free anonymous providers; cinematic prompt enhancement and center-crop-safe framing; OVHcloud first.",flush=True)
     print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
     print("::endgroup::",flush=True)
     OUT.mkdir(exist_ok=True)
