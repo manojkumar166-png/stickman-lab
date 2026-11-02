@@ -27,10 +27,11 @@ Every workflow has a linked detailed guide. The Science Channel overview remains
 
 1. Read the guide linked in the table before changing a workflow.
 2. Keep secrets in GitHub repository Settings → Secrets and variables → Actions. Never paste tokens into YAML or README files.
-3. Check whether another workflow relies on the same folder, artifact, READY marker, Telegram bot, concurrency group or topic-history file.
-4. Preserve existing fallback, upload, delivery and cleanup behaviour unless the change specifically requires modifying it.
-5. Commit to `main` only when the change is intended for the live pipeline; otherwise use a branch and review the diff.
-6. Let the validation workflow pass after code/workflow changes. Then run the affected production workflow from Actions and inspect its logs and artifacts. Static validation does not prove that external APIs, Telegram delivery or a full video render succeeded.
+3. Pin third-party Actions to reviewed full commit SHAs; keep the upstream version in a comment and update pins only after reviewing the release.
+4. Check whether another workflow relies on the same folder, artifact, READY marker, Telegram bot, concurrency group or topic-history file.
+5. Preserve existing fallback, upload, delivery and cleanup behaviour unless the change specifically requires modifying it.
+6. Commit to `main` only when the change is intended for the live pipeline; otherwise use a branch and review the diff.
+7. Let the validation workflow pass after code/workflow changes. Then run the affected production workflow from Actions and inspect its logs and artifacts. Static validation does not prove that external APIs, Telegram delivery or a full video render succeeded.
 
 ## Individual workflow guides
 
