@@ -276,7 +276,9 @@ async function handleMessage(message, env, update) {
     ["application/zip", "application/x-zip-compressed"].includes(documentMime);
   const documentExtension = documentName.includes(".")
     ? documentName.split(".").pop()
-    : "";
+    : documentMime.startsWith("image/")
+      ? documentMime.split("/")[1]
+      : "";
   const isImageDocument = documentMime.startsWith("image/") &&
     ["jpg", "jpeg", "png", "webp"].includes(documentExtension);
   const isPhoto = Array.isArray(message.photo) && message.photo.length > 0;
