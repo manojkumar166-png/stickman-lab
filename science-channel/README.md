@@ -4,7 +4,7 @@ This guide explains how to create an episode, edit its script, generate and uplo
 
 ## Telegram + Cloudflare Worker connection
 
-The Cloudflare Worker is the Telegram webhook and Stickman Lab control centre. It handles normal bot commands and GitHub controls. For image photos, image documents, ZIP files and `/episode YYYY-MM-DD/episode-NNN` selections, it stores the Telegram update as a uniquely named JSON file under `.github/telegram-inbox/`. The inbox commit triggers the receiver workflow. The existing Python receiver downloads the media from Telegram, validates it, writes the numbered images, and commits to `main`.
+The Cloudflare Worker is the Telegram webhook and Stickman Lab control centre. It handles normal bot commands and GitHub controls. For image photos, image documents, ZIP files and `/episode YYYY-MM-DD/episode-NNN-topic-slug` selections, it stores the Telegram update as a uniquely named JSON file under `.github/telegram-inbox/`. The inbox commit triggers the receiver workflow. The existing Python receiver downloads the media from Telegram, validates it, writes the numbered images, and commits to `main`.
 
 **Important:** do not run Telegram `getUpdates` polling or call `deleteWebhook` from the GitHub receiver. Telegram supports one update-delivery mode per bot token; the Worker webhook must remain registered.
 
@@ -622,7 +622,7 @@ The state file stores the selected episode path. Telegram update delivery and du
 Example:
 
 ```text
-/episode 2026-11-01/episode-001
+/episode 2026-11-01/episode-001-topic-slug
 ```
 
 The date and episode folder must match the actual repository path, and `episode.json` must exist on main. The bot does not create an episode from this command.
