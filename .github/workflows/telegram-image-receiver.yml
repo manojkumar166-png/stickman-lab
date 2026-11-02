@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-main-writer
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 jobs:
   receive:
