@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: ai-video-main-writer
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 
 jobs:
