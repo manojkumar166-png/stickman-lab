@@ -294,11 +294,11 @@ def main():
                             if written != item.file_size:
                                 raise ValueError(f"image size mismatch: {item.filename}")
                             staged.append((target, dest_dir / target.name))
+                        archive_copy = temp_dir / "source-upload.zip"
+                        archive_copy.write_bytes(download_content)
+                        staged.append((archive_copy, dest_dir / "source-upload.zip"))
                         for source, destination in staged:
                             source.replace(destination)
-                    # Keep the original archive as a recovery copy until the
-                    # renderer confirms Telegram delivery and performs cleanup.
-                    (dest_dir / "source-upload.zip").write_bytes(download_content)
             except (zipfile.BadZipFile, RuntimeError, OSError, EOFError, ValueError) as exc:
                 send(f"ZIP skipped: {exc}. Please send a valid ZIP containing exactly 48 supported images.")
                 continue
