@@ -2,6 +2,14 @@
 
 This guide explains how to create an episode, edit its script, generate and upload images, render the video, and download or delete the result. The Science Channel uses four coordinated GitHub Actions workflows: the Gemini planner, Telegram image receiver, Telegram ZIP importer, and video renderer. All four operate on the `main` branch.
 
+## Telegram + Cloudflare Worker connection
+
+The Cloudflare Worker is the Telegram webhook and Stickman Lab control centre. It handles normal bot commands and GitHub controls. For image photos, image documents, ZIP files and `/episode YYYY-MM-DD/episode-NNN` selections, it forwards the Telegram update to GitHub using the `telegram_image_upload` repository_dispatch event. The existing Python receiver downloads the media from Telegram, validates it, writes the numbered images, and commits to `main`.
+
+**Important:** do not run Telegram `getUpdates` polling or call `deleteWebhook` from the GitHub receiver. Telegram supports one update-delivery mode per bot token; the Worker webhook must remain registered.
+
+The matching Worker source is [`cloudflare-worker.js`](../cloudflare-worker.js). After updating that source, deploy it to the existing Cloudflare Worker and visit its `/setup` endpoint once to register the webhook. Keep the existing Worker secrets and variables configured, including `GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_ID`, `TELEGRAM_WEBHOOK_SECRET`, `PUBLIC_WORKER_URL`, and `UPLOAD_LINK_SECRET`. The GitHub token must be allowed to create repository dispatch events and control the repository workflows.
+
 ## How the complete workflow operates
 
 The Science Channel pipeline has four GitHub Actions workflows. The planner creates the episode package; either Telegram workflow can receive/import the 48 images; the renderer turns the completed package and images into a narrated video. Image generation and review remain a human-in-the-loop stage.
@@ -79,11 +87,11 @@ To tune the writing style, edit the examples in `science-channel/topics.txt`; to
 
 File: `.github/workflows/telegram-image-receiver.yml`
 
-- **Schedule:** polls the configured Telegram bot every 5 minutes. You can also start it manually from Actions to poll immediately.
+- **Trigger:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and `/episode` selections through `repository_dispatch`. Manual workflow dispatch remains available for maintenance.
 - **Branch:** checks out and commits only to `main`; it does not read or write `adaptive-cinematic-effects`.
 - **Episode selection:** automatically selects the newest episode package on `main`. Send `/episode YYYY-MM-DD/episode-001` to choose another existing episode.
 - **Uploads:** accepts individual JPG/JPEG, PNG or WebP images, or one ZIP containing exactly 48 supported images. Individual images are placed into the next missing scene number. A ZIP is expanded into 48 numbered scene files.
-- **Completion:** when all 48 scene slots are present, the bot creates `READY.txt`. The workflow commits the images and Telegram polling state to `main`; the image commit triggers the render workflow.
+- **Completion:** when all 48 scene slots are present, the bot creates `READY.txt`. The workflow commits the images and receiver state to `main`; the image commit triggers the render workflow.
 - **Chat restriction:** only messages from the configured `TELEGRAM_CHAT_ID` are processed. `/start` and `/help` display bot instructions.
 
 ### Workflow C — Telegram ZIP Import
@@ -323,7 +331,7 @@ The render workflow installs FFmpeg, DejaVu fonts, Edge TTS and faster-whisper i
 Science Channel code, settings, topics, history and episode files are kept under `science-channel/`. The complete workflow set is:
 
 - `.github/workflows/science-channel-daily-planner.yml` — creates the episode package and prompts.
-- `.github/workflows/telegram-image-receiver.yml` — polls Telegram every five minutes and commits uploaded images to `main`.
+- `.github/workflows/telegram-image-receiver.yml` — receives upload events forwarded by the Cloudflare Worker and commits uploaded images to `main`.
 - `.github/workflows/telegram-zip-import.yml` — manually imports a staged ZIP from `science-channel/telegram-uploads/`.
 - `.github/workflows/free-science-visuals.yml` — validates, renders, uploads the MP4 artifact, sends it to Telegram and cleans source uploads after successful delivery.
 
@@ -419,7 +427,7 @@ You can change the font name, font size multiplier, primary/highlight colors, ou
 
 **Image-generation instructions:** edit the prompt-building logic in `science-channel/scripts/gemini_planner.py`. The prompts currently request landscape 16:9 images, prefer WebP when supported by the image tool, and describe a practical file-size target. The actual renderer accepts PNG, JPG/JPEG, WebP, BMP, GIF, TIF and TIFF.
 
-**Telegram Image Receiver:** edit `science-channel/scripts/telegram_image_receiver.py` to change accepted Telegram formats, individual-image size checks, ZIP image checks, episode auto-selection or bot replies. It currently accepts JPG/JPEG, PNG and WebP; limits each image to 20 MiB; and expects exactly 48 images in a ZIP. It polls every five minutes because of the workflow schedule in `.github/workflows/telegram-image-receiver.yml`.
+**Telegram Image Receiver:** edit `science-channel/scripts/telegram_image_receiver.py` to change accepted Telegram formats, individual-image size checks, ZIP image checks, episode auto-selection or bot replies. It currently accepts JPG/JPEG, PNG and WebP; limits each image to 20 MiB; and expects exactly 48 images in a ZIP. It receives update JSON forwarded by the Cloudflare Worker; it must not call `getUpdates` or `deleteWebhook` while the Worker webhook is active.
 
 **ZIP Import:** edit `science-channel/scripts/import_telegram_zip.py` to change staging validation. The current importer accepts any filename ending in `.zip` directly inside `science-channel/telegram-uploads/`, requires exactly 48 supported images, limits the ZIP to 25 MiB and each image to 20 MiB, rejects unsafe archive paths/symlinks and duplicate basenames, and refuses to overwrite existing incoming images.
 
@@ -439,7 +447,7 @@ Workflow files are under `.github/workflows/`.
 | Workflow file | Current schedule/trigger | Important settings |
 |---|---|---|
 | `science-channel-daily-planner.yml` | Daily at 01:15 UTC; manual dispatch | 60-minute timeout, main branch, Gemini and optional Telegram secrets. |
-| `telegram-image-receiver.yml` | Every 5 minutes; manual dispatch | 8-minute timeout, main branch, Telegram bot secrets. |
+| `telegram-image-receiver.yml` | Cloudflare webhook repository_dispatch; manual maintenance dispatch | 8-minute timeout, main branch, Telegram bot secrets. |
 | `telegram-zip-import.yml` | Manual dispatch only | Requires `episode_path` and `zip_path`; uses GH_PAT. |
 | `free-science-visuals.yml` | Push of incoming files/READY.txt on main; manual dispatch | 90-minute timeout; final MP4 artifact retention is 2 days. |
 | `ai-video-test.yml` | Daily at 05:30 UTC; manual dispatch | Separate root pipeline; artifact retention is 7 days. |
@@ -506,11 +514,11 @@ Telegram is the transport layer between the episode package and the render workf
 | Send finished episode | Render workflow, after MP4 artifact upload | Sends the final MP4 to the configured chat |
 | Cleanup source images | Render workflow, only after successful Telegram send | Deletes incoming images/ZIP and READY marker from main |
 
-The receiver and the ZIP importer are two different upload routes. Choose one route for an episode; do not upload the same 48 images through both routes.
+The Worker webhook forwards direct Telegram uploads to the receiver; the ZIP importer remains a separate repository-staging upload route. Choose one route for an episode; do not upload the same 48 images through both routes.
 
 ## 1A. How the existing bot is implemented (code-level map)
 
-This repository does not run a separate always-on Telegram server. The Science Channel bot is a Python **long-polling/polling receiver executed by GitHub Actions**.
+This repository does not run a separate always-on Telegram server. The Science Channel bot uses a Cloudflare Worker Telegram webhook that forwards image-upload updates to a Python receiver executed by GitHub Actions.
 
 ```text
 Telegram Bot API
@@ -546,7 +554,7 @@ Telegram Bot API
 
 ### Workflow internals
 
-`.github/workflows/telegram-image-receiver.yml` schedules the script every five minutes (UTC) and also supports manual runs. It checks out `main`, installs Python 3.11 and `requests`, maps the two Telegram secrets into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
+`.github/workflows/telegram-image-receiver.yml` is triggered by the Cloudflare Worker through the `telegram_image_upload` repository_dispatch event and also supports manual maintenance runs. It checks out `main`, installs Python 3.11 and `requests`, maps the Telegram secrets and forwarded update JSON into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
 
 ### How the outgoing messages are sent
 
@@ -724,7 +732,7 @@ Changing 48 to another count is a coordinated project change: update settings, p
 
 | Problem | Check |
 |---|---|
-| No bot response | Check whether the receiver workflow has run; it only polls every five minutes. Inspect the Action log and secrets. |
+| No bot response | Check whether the receiver workflow has run; it only is triggered by the Cloudflare Worker webhook. Inspect the Action log and secrets. |
 | Bot ignores messages | Confirm the message comes from the exact configured chat ID. |
 | Group uploads ignored | Use a private chat or adjust group privacy settings and bot membership. |
 | Episode not found | Verify the exact date/episode path and that `episode.json` is already on main. |
@@ -739,6 +747,6 @@ Changing 48 to another count is a coordinated project change: update settings, p
 - Keep bot tokens and PATs in GitHub Secrets only.
 - Treat bot tokens as passwords; rotate them if exposed.
 - The receiver accepts uploads only from the configured chat ID.
-- Do not reset Telegram polling state without understanding its update offset.
+- Do not reset Telegram receiver state without understanding its update offset.
 - Science Channel planner, receiver, ZIP importer, renderer and cleanup target `main` only.
 - Do not redirect this workflow set to `adaptive-cinematic-effects`.
