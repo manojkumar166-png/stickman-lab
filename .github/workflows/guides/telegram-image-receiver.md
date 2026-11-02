@@ -27,7 +27,7 @@ The Cloudflare Worker also needs its own Telegram/GitHub configuration; those Wo
 ## Important operating rules
 
 - The receiver is webhook/inbox driven. Do **not** add Telegram `getUpdates` polling or call `deleteWebhook`; that competes with or removes the Cloudflare Worker webhook.
-- The selected episode is stored in `science-channel/telegram-bot-state.json`. The receiver expects the episode package to already exist on `main`.
+- The selected episode is stored in `science-channel/telegram-bot-state.json`. The receiver expects the episode package to already exist on `main`. Use the exact episode folder name, including its topic slug, in `/episode YYYY-MM-DD/episode-NNN-topic-slug`; the short `episode-NNN` form is accepted only when that exact folder exists.
 - Incoming scene images are stored under the selected episode's `images/incoming/`.
 - The current pipeline is built around 48 scene slots. Individual uploads are assigned to the next missing slot based on arrival order; filenames/captions do not set the scene number.
 - The Cloudflare Worker queues authorized Telegram photos, JPG/PNG/WebP image documents and ZIP documents as durable JSON files in `.github/telegram-inbox/`. It uses the Telegram update ID as the filename so webhook retries do not queue the same update twice.
