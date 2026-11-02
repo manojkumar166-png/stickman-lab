@@ -1,5 +1,8 @@
-import os, json, random, time, requests
+import os, json, random, time, re
+from difflib import SequenceMatcher
 from pathlib import Path
+
+import requests
 
 MODEL_FALLBACKS = [
     "gemini-3.5-flash-lite",
@@ -8,11 +11,28 @@ MODEL_FALLBACKS = [
     "gemini-3.8-flash",
 ]
 
+# Broad categories are deliberately mixed so consecutive videos explore
+# different areas of science while keeping the simple question-led style.
+TOPIC_CATEGORIES = [
+    "space and astronomy",
+    "Earth, oceans and weather",
+    "animals and nature",
+    "plants and ecosystems",
+    "human body and senses",
+    "brain, memory and behavior",
+    "physics, forces and motion",
+    "light, sound and color",
+    "chemistry and everyday materials",
+    "technology and engineering",
+    "time, energy and the universe",
+]
+
+
 def _call_gemini(api_key, model, prompt, attempts=3):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.8},
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9},
     }
     last_err = None
     for attempt in range(attempts):
@@ -34,36 +54,99 @@ def _call_gemini(api_key, model, prompt, attempts=3):
     raise RuntimeError(f"Gemini API gave up on {model} after {attempts} tries: {last_err}")
 
 
+def _normalise_topic(value):
+    value = re.sub(r"[^a-z0-9 ]+", " ", str(value).lower())
+    return " ".join(value.split())
+
+
+def _is_repeat(candidate, history):
+    candidate_norm = _normalise_topic(candidate)
+    if not candidate_norm:
+        return True
+    candidate_words = set(candidate_norm.split())
+    for previous in history:
+        previous_norm = _normalise_topic(previous)
+        if not previous_norm:
+            continue
+        if candidate_norm == previous_norm:
+            return True
+        if SequenceMatcher(None, candidate_norm, previous_norm).ratio() >= 0.88:
+            return True
+        previous_words = set(previous_norm.split())
+        union = candidate_words | previous_words
+        if union and len(candidate_words & previous_words) / len(union) >= 0.78:
+            return True
+    return False
+
+
+def _read_history(path):
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [str(item).strip() for item in data if str(item).strip()]
+        print("Topic history has an unexpected format; starting with an empty history.")
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Could not safely read topic history at {path}: {exc}") from exc
+    return []
+
+
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("Set GEMINI_API_KEY.")
 
-    topics = [x.strip() for x in (root / "topics.txt").read_text(encoding="utf-8").splitlines() if x.strip()]
+    topics_path = root / "topics.txt"
+    if not topics_path.is_file():
+        raise RuntimeError(f"Topic reference file is missing: {topics_path}")
+    topics = [
+        line.strip() for line in topics_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not topics:
+        raise RuntimeError("topics.txt has no usable example topics.")
+
     history_path = root / config.get("topic_history_file", "topic_history.json")
-    history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
-    
-    available = [t for t in topics if t not in history]
-    
-    if available:
-        topic = random.choice(available)
-        print(f"Selected topic from topics.txt: {topic}")
-        prompt_topic_instruction = f"Topic: {topic}"
-    else:
-        print("topics.txt is empty or fully used. Asking Gemini to invent a matching topic...")
-        # We pass the ENTIRE topics.txt file so Gemini knows the exact style.
-        example_topics = "\n".join(f"- {t}" for t in topics)
-        prompt_topic_instruction = f"""
-The user has exhausted their manual list of topics. Please invent ONE brand new science topic.
-You MUST match the exact style, tone, and format of these existing example topics:
-{example_topics}
+    history = _read_history(history_path)
+    # Seed examples are style references, not a fixed queue. Never deliberately
+    # reuse one if it already appears in the published topic history.
+    examples = "\n".join(f"- {topic}" for topic in topics)
+    recent_history = history[-150:]
+    models = []
+    preferred = config.get("gemini_model", "").strip()
+    if preferred:
+        models.append(preferred)
+    for model in MODEL_FALLBACKS:
+        if model not in models:
+            models.append(model)
 
-IMPORTANT: The new topic must be a fascinating science question, just like the examples. Do NOT use any of these recent topics: {history[-50:]}.
-"""
+    data = None
+    used_model = None
+    story = None
+    last_duplicate = None
 
-    prompt = f"""
+    # Each retry selects a fresh category and asks Gemini for a different
+    # question. This avoids a fixed topic rotation and rejects repeated titles.
+    for generation_attempt in range(5):
+        category = random.choice(TOPIC_CATEGORIES)
+        print(f"Random science category ({generation_attempt + 1}/5): {category}")
+        prompt = f"""
 Create an original, factually careful educational science explainer for a colorful stickman cartoon video.
-{prompt_topic_instruction}
+
+TOPIC STYLE REFERENCE — read these examples from the repository's topics.txt:
+{examples}
+
+Choose ONE fresh, specific science question in this randomly selected category: {category}.
+Use topics.txt only as a guide to its simple, curiosity-driven question style and broad variety.
+Do not simply copy a seed topic or make a minor wording change to one.
+Generate a different subject/question each time, drawing from the selected category.
+Do NOT repeat or closely rephrase any previously used topic in this history:
+{json.dumps(recent_history, ensure_ascii=False)}
+
+The title must be a concise natural question in the same approachable style as the examples.
+Return the selected topic in the JSON "topic" field and make the entire explainer answer that exact question.
+
 Target narration duration: about {config.get('target_minutes', 8)} minutes, approximately 1200-1350 spoken words.
 Return ONLY valid JSON with this schema:
 {{
@@ -82,54 +165,66 @@ Return ONLY valid JSON with this schema:
 Create exactly {config.get('scene_count', 48)} scenes. The total narration should be close to 8 minutes at 125-145 words per minute. Begin with a surprising hook, build curiosity, explain the science accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
 """
 
-    preferred = config.get("gemini_model", "").strip()
-    models = []
-    if preferred:
-        models.append(preferred)
-    for m in MODEL_FALLBACKS:
-        if m not in models:
-            models.append(m)
+        data = None
+        for model in models:
+            print(f"Trying Gemini model: {model}")
+            try:
+                data = _call_gemini(api_key, model, prompt)
+                used_model = model
+                break
+            except RuntimeError as exc:
+                print(f"  {model} failed: {str(exc)[:200]}")
+        if data is None:
+            raise RuntimeError("All Gemini models failed. Check network/quota and retry later.")
 
-    data = None
-    used_model = None
-    for model in models:
-        print(f"Trying Gemini model: {model}")
         try:
-            data = _call_gemini(api_key, model, prompt)
-            used_model = model
-            break
-        except RuntimeError as e:
-            print(f"  {model} failed: {str(e)[:200]}")
+            raw = data["candidates"][0]["content"]["parts"][0]["text"]
+            candidate_story = json.loads(raw)
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Could not parse AI story response: {exc}; response was {str(data)[:1200]}") from exc
+
+        candidate_topic = str(candidate_story.get("topic", "")).strip()
+        if _is_repeat(candidate_topic, history):
+            last_duplicate = candidate_topic or "(empty title)"
+            print(f"Gemini returned a repeated/too-similar topic: {last_duplicate!r}; choosing another category.")
+            recent_history = history[-150:] + ([last_duplicate] if last_duplicate else [])
             continue
-    if data is None:
-        raise RuntimeError("All Gemini models failed. Check network/quota and retry later.")
+        story = candidate_story
+        break
 
-    print(f"Story generated with {used_model}")
+    if story is None:
+        raise RuntimeError(
+            "Gemini could not produce a sufficiently new topic after 5 category attempts. "
+            f"Last rejected topic: {last_duplicate!r}. No history was changed; rerun to try again."
+        )
 
-    try:
-        raw = data["candidates"][0]["content"]["parts"][0]["text"]
-        story = json.loads(raw)
-    except Exception as e:
-        raise RuntimeError(f"Could not parse AI story response: {e}; response was {str(data)[:1200]}")
-
+    print(f"Story generated with {used_model}: {story['topic']}")
     scenes = story.get("scenes", [])
     if not isinstance(scenes, list) or len(scenes) < 8:
         raise RuntimeError("AI returned too few scenes; rerun.")
 
-    for s in scenes:
-        for key in ("title", "narration", "visual", "background", "action"):
-            if not isinstance(s.get(key), str) or not s[key].strip():
-                s[key] = {
-                    "title": "Science discovery",
-                    "narration": "Let's explore this idea step by step.",
-                    "visual": "A stickman points at a simple illustration",
-                    "background": "lab",
-                    "action": "point",
-                }[key]
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            raise RuntimeError("AI returned a malformed scene; rerun.")
+        defaults = {
+            "title": "Science discovery",
+            "narration": "Let's explore this idea step by step.",
+            "visual": "A stickman points at a simple illustration",
+            "background": "lab",
+            "action": "point",
+        }
+        for key, fallback in defaults.items():
+            if not isinstance(scene.get(key), str) or not scene[key].strip():
+                scene[key] = fallback
 
-    # Save the generated topic or the original one
-    final_topic = story.get("topic", topic)
+    final_topic = str(story.get("topic", "")).strip()
+    if not final_topic or _is_repeat(final_topic, history):
+        raise RuntimeError("Generated topic is empty or duplicates history; refusing to save it.")
+
+    # Save only after the story has passed duplicate and scene validation.
     history.append(final_topic)
-    history_path.write_text(json.dumps(history[-100:], indent=2), encoding="utf-8")
-    
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = history_path.with_suffix(history_path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(history[-200:], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp_path.replace(history_path)
     return story
