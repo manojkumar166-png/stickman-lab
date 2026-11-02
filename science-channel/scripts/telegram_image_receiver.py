@@ -195,6 +195,7 @@ def main():
     # Telegram updates are durably queued by the Cloudflare Worker as JSON
     # files. Never call deleteWebhook or getUpdates here: the Worker owns delivery.
     changed = state_changed
+    completed_episodes = []
     for update in updates:
         state["offset"] = update["update_id"] + 1
         msg = update.get("message", {})
@@ -318,12 +319,22 @@ def main():
         missing = [n for n in range(1, 49) if n not in present]
         if not missing:
             (episode / "READY.txt").write_text("All 48 scene images received through Telegram.\n", encoding="utf-8")
+            episode_path = str(episode)
+            if episode_path not in completed_episodes:
+                completed_episodes.append(episode_path)
             send(f"All 48 images are present for {episode.parent.name}/{episode.name}. ZIP order was normalized automatically using scene numbers when available, otherwise natural filename order. READY.txt created; uploads will be committed to main.")
         else:
             send(f"Saved image. {len(present)}/48 received. Next missing: scene-{missing[0]:02d}.")
 
     if changed or updates:
         save_state(state)
+
+    output_path = os.getenv("GITHUB_OUTPUT")
+    if output_path and completed_episodes:
+        with open(output_path, "a", encoding="utf-8") as output:
+            output.write("completed_episodes<<EPISODES_EOF\\n")
+            output.write("\\n".join(completed_episodes) + "\\n")
+            output.write("EPISODES_EOF\\n")
 
     # The inbox files are the durable delivery queue. Remove them only after
     # every queued update has been handled and the receiver state is saved;
