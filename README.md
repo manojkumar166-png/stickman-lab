@@ -43,7 +43,7 @@ The schedule is in UTC. GitHub Actions scheduled runs can start later than the e
 
 File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram-image-receiver.yml)
 
-- **Automatic intake:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and /episode selections to this workflow through GitHub repository_dispatch.
+- **Automatic intake:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and /episode selections to this workflow by saving each update in a durable GitHub inbox.
 - **Manual start:** Actions → Telegram Image Receiver → Run workflow is available for maintenance, but normal Telegram intake is webhook-driven.
 - **Branch:** checks out and commits only to main.
 - **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
@@ -155,7 +155,7 @@ Detailed image preparation, ZIP sizing, file editing, scene validation and troub
 
 The Worker source used by the Telegram control centre is [`cloudflare-worker.js`](cloudflare-worker.js). Deploy this source to the existing Worker after changes, keeping its current environment variables and secrets. The Worker handles normal Telegram commands and forwards image/ZIP uploads plus `/episode` selection messages to the Telegram Image Receiver workflow.
 
-After deploying the updated source, open `https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup` once to register the Telegram webhook. Do not start a second Telegram polling process or re-enable `getUpdates`/ `deleteWebhook` in GitHub Actions while this webhook is active. The Worker's `GITHUB_TOKEN` must be permitted to create repository dispatch events and dispatch the repository workflows.
+After deploying the updated source, open `https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup` once to register the Telegram webhook. Do not start a second Telegram polling process or re-enable `getUpdates`/ `deleteWebhook` in GitHub Actions while this webhook is active. The Worker's `GITHUB_TOKEN` must be permitted to create repository contents write access and dispatch the repository workflows.
 
 ## GitHub repository configuration
 
