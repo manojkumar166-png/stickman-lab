@@ -99,7 +99,7 @@ File: [.github/workflows/ai-video-test.yml](.github/workflows/ai-video-test.yml)
 - **Entry point:** main_ai.py.
 - **What it does:** generates a story using the root-level generator, creates AI scene artwork through the Cloudflare Workers AI integration, generates narration with Edge TTS, and renders an MP4 with FFmpeg.
 - **Telegram and artifact:** sends the experiment video to Telegram and uploads the video plus story JSON as an Actions artifact retained for 7 days.
-- **Topic history:** commits the root topic_history.json back to main after generation.
+- **Topic history:** publishes `used_story_topics.json` from an isolated worktree with fetch/retry and duplicate-safe merging. This bookkeeping step is non-blocking so a push race cannot skip subtitle generation or delivery; check its warning if history sync fails.
 - **Keep it separate:** this is not the 48-image Science Channel episode pipeline. It uses the root config.json, root scripts/ folder and root topic history. It does not use science-channel/settings.json or Science Channel episode folders.
 
 ---
