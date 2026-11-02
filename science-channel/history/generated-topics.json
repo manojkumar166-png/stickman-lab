@@ -19,7 +19,8 @@
     "Why do stars twinkle?",
     "Why does onions make us cry?",
     "Why does time seem to speed up as we get older?",
-    "Why do deserts sing?"
+    "Why do deserts sing?",
+    "Why do rivers meander?"
   ],
   "topic_details": [
     {
@@ -105,6 +106,11 @@
     {
       "title": "Why do deserts sing?",
       "angle": "Exploring the acoustic physics behind booming sand dunes and how shifting grains create mysterious, deep-toned musical frequencies in the desert wind.",
+      "pillar": "Earth's geology and natural processes"
+    },
+    {
+      "title": "Why do rivers meander?",
+      "angle": "Explore the physical fluid dynamics and geological feedback loops that force flowing water to carve sweeping, snake-like curves across the landscape.",
       "pillar": "Earth's geology and natural processes"
     }
   ]
