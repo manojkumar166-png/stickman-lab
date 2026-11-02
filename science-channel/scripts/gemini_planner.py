@@ -288,6 +288,17 @@ def is_duplicate_topic(candidate):
         for old in used_topics if isinstance(old, str) and old.strip()
     )
 
+def is_seed_reuse(candidate):
+    """Reject selecting or lightly rewording a topics.txt style example."""
+    key = topic_key(candidate)
+    if not key:
+        return True
+    for seed in topic_seed_lines:
+        seed_key = topic_key(seed)
+        if key == seed_key or difflib.SequenceMatcher(None, key, seed_key).ratio() >= 0.82:
+            return True
+    return False
+
 def has_same_underlying_subject(candidate_title, candidate_angle, candidate_pillar):
     # A second Gemini review compares meaning, not just title wording.
     # Fail closed: if the reviewer cannot return a clear decision, stop rather
@@ -384,11 +395,13 @@ Previously generated topics (never repeat or closely duplicate): """ + json.dump
 "\nThe only permitted category for this episode is: " + selected_pillar, validate_topic, "Topic generation", 0.45)
     candidate = topic_data.get("title", "").strip()
     candidate_angle = topic_data.get("angle", "").strip()
-    if candidate and not is_duplicate_topic(candidate):
+    if candidate and not is_seed_reuse(candidate) and not is_duplicate_topic(candidate):
         if has_same_underlying_subject(candidate, candidate_angle, selected_pillar):
             continue
         topic = {"title": candidate, "angle": candidate_angle}
         break
+    if candidate and is_seed_reuse(candidate):
+        print("Rejected topic because it selected or too closely reworded a topics.txt style example: " + candidate)
 if topic is None:
     raise RuntimeError("Gemini did not provide a new unused topic after 5 attempts; no episode was created.")
 
