@@ -113,7 +113,7 @@ jobs:
 
           echo "::warning::Video rendering will continue, but topic history could not be published after five attempts."
           exit 0
-      - name: Generate subtitles and name final video
+      - name: Generate karaoke subtitles and name final video
         id: final_video
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
@@ -121,14 +121,11 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, re, shutil, sys
+          import json, os, re, subprocess
           from pathlib import Path
 
           root = Path("ai-story-video-output")
-          packages = sorted(
-              (p for p in root.iterdir() if p.is_dir()),
-              key=lambda p: p.name,
-          )
+          packages = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)
           if not packages:
               raise SystemExit("No output package was created.")
 
@@ -138,8 +135,8 @@ jobs:
           if not title:
               raise SystemExit("Story title is missing.")
 
-          safe_title = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
-          safe_title = re.sub(r"\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
+          safe_title = re.sub(r'[<>:"/\\|?*\\r\\n]', "", title)
+          safe_title = re.sub(r"\\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
           if not safe_title or safe_title in {".", ".."}:
               raise SystemExit("Could not make a safe filename from the story title.")
 
@@ -147,58 +144,49 @@ jobs:
           if not video.is_file() or video.stat().st_size < 100000:
               raise SystemExit("Final video is missing or too small.")
 
-          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
-          from karaoke_subtitles import generate_karaoke_srt
+          work = package / "subtitle-work"
+          work.mkdir(exist_ok=True)
+          audio = work / "narration-for-whisper.mp3"
+          captions = work / "karaoke-captions.ass"
+          subprocess.run([
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
+          ], check=True)
 
-          subtitle_file = package / "subtitles.srt"
-          words = generate_karaoke_srt(str(video), str(subtitle_file))
-          if not subtitle_file.is_file() or subtitle_file.stat().st_size == 0:
-              raise SystemExit("Subtitle generation did not produce a valid SRT file.")
-          print(f"Generated a separate SRT subtitle file for {words} timed words.")
+          import sys
+          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
+          from karaoke_subtitles import generate_karaoke_ass
+          config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
+          words = generate_karaoke_ass(
+              str(audio), str(captions), int(config["width"]), int(config["height"])
+          )
+          if not captions.is_file() or captions.stat().st_size == 0:
+              raise SystemExit("Karaoke subtitle generation did not produce an ASS file.")
 
           final_video = root / f"{safe_title}.mp4"
-          final_subtitles = root / f"{safe_title}.srt"
-          shutil.copy2(video, final_video)
-          shutil.copy2(subtitle_file, final_subtitles)
+          subprocess.run([
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(video),
+              "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
+              "-map", "0:v:0", "-map", "0:a:0",
+              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+              "-c:a", "aac", "-b:a", "192k", "-shortest",
+              "-movflags", "+faststart", str(final_video)
+          ], check=True)
+          if not final_video.is_file() or final_video.stat().st_size < 100000:
+              raise SystemExit("Final subtitled video is missing or too small.")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"video={final_video.as_posix()}\n")
-              output.write(f"subtitles={final_subtitles.as_posix()}\n")
-              output.write(f"filename={final_video.name}\n")
-              display_title = " ".join(title.split())
-              output.write(f"title={display_title}\n")
-
-          print(f"Final video ready: {final_video}")
-          print(f"Separate subtitles ready: {final_subtitles}")
+              output.write(f"video={final_video.as_posix()}\\n")
+              output.write(f"filename={final_video.name}\\n")
+              output.write(f"title={' '.join(title.split())}\\n")
+          print(f"Burned karaoke captions for {words} timed words into {final_video}.")
           PY
-      - name: Resolve artifact
-        id: artifact
-        env:
-          FINAL_VIDEO: ${{ steps.final_video.outputs.video }}
-          FINAL_SUBTITLES: ${{ steps.final_video.outputs.subtitles }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          video = Path(os.environ["FINAL_VIDEO"])
-          subtitles = Path(os.environ["FINAL_SUBTITLES"])
-          for artifact in (video, subtitles):
-              if not artifact.is_file() or artifact.stat().st_size == 0:
-                  raise SystemExit(f"Required output file is missing or empty: {artifact}")
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"name={video.stem}\n")
-              f.write(f"files={video.as_posix()}\n{subtitles.as_posix()}\n")
-              f.write(f"video={video.as_posix()}\n")
-              f.write(f"subtitles={subtitles.as_posix()}\n")
-          PY
-
-      - name: Upload final video and subtitles
+      - name: Upload final video
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: ${{ steps.artifact.outputs.files }}
+          name: ${{ steps.final_video.outputs.filename }}
+          path: ${{ steps.final_video.outputs.video }}
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
