@@ -363,14 +363,7 @@ def render_character_frame(width, height, frame=0, fps=24, action="explain", emo
     else:
         draw.arc((cx-head*.22, mouth_y-head*.05, cx+head*.22, mouth_y+head*.22), 5, 175, fill="#8B4140", width=3*scale)
 
-    draw.rounded_rectangle((20*scale, 14*scale, w-20*scale, 66*scale), radius=10*scale, fill="#245AA5")
-    draw.text((34*scale, 23*scale), str(title or "Science Discovery")[:58], font=font(18*scale, True), fill=WHITE)
-
-    words = str(narration or "").split()
-    subtitle = " ".join(words[:12])
-    if len(words) > 12: subtitle += "..."
-    draw.rounded_rectangle((16*scale, h-70*scale, w-16*scale, h-12*scale), radius=8*scale, fill="#111923")
-    draw.text((27*scale, h-55*scale), subtitle, font=font(12*scale), fill=WHITE)
+    # No title bars or subtitles: keep the entire frame as clean artwork.
 
     if emotion in ("surprised", "amazed", "excited"):
         sx, sy = cx+head*1.2, cy-head*1.35
