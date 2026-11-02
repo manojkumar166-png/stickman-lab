@@ -14,7 +14,7 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | What you want to do | GitHub Actions workflow | How it starts |
 |---|---|---|
 | Create a new Science Channel episode and its 48 image prompts | **Science Channel — Daily Gemini Planner** | Daily schedule or manual |
-| Send 48 scene images to the bot, one by one or as one ZIP | **Telegram Image Receiver** | Polls Telegram every 5 minutes; can also be run manually |
+| Send 48 scene images to the bot, one by one or as one ZIP | **Telegram Image Receiver** | Cloudflare Worker webhook forwards uploads; can also be run manually |
 | Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
 | Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
@@ -48,11 +48,11 @@ File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram
 - **Branch:** checks out and commits only to main.
 - **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
 - **Accepted uploads:** send 48 individual image files/photos, or send one ZIP containing exactly 48 supported images. Supported receiver formats are JPG/JPEG, PNG and WebP. The bot numbers individual images into the next available scene slot; a ZIP is sorted and expanded into scene files.
-- **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files and bot polling state to main. That commit triggers the renderer.
+- **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files and receiver state to main. That commit triggers the renderer.
 - **Telegram commands:** /start and /help show instructions; /episode YYYY-MM-DD/episode-NNN selects an existing main-branch episode.
-- **Important:** send uploads to the configured bot chat. The bot only accepts messages from the configured TELEGRAM_CHAT_ID. A ZIP must contain exactly 48 images and cannot be mixed with already-uploaded scene images.
+- **Important:** send uploads to the configured bot chat. The receiver only accepts messages from the configured TELEGRAM_CHAT_ID. A ZIP must contain exactly 48 images and cannot be mixed with already-uploaded scene images.
 
-This is the easiest route when you want to send images directly from Telegram. The receiver is a polling workflow, not a continuously running server; it checks for messages when the scheduled or manually started Action runs.
+This is the easiest route when you want to send images directly from Telegram. The receiver does not poll Telegram. The Cloudflare Worker owns the Telegram webhook and forwards upload updates to this workflow; this prevents webhook/polling conflicts.
 
 ### 3. Telegram ZIP Import (repository staging route)
 
@@ -224,7 +224,7 @@ Make changes on **main** unless you are deliberately working on a separate exper
 
 **Change the legacy AI experiment voice or video dimensions:** edit `config.json`. The current legacy experiment configuration is 47 scenes, 8 target minutes, 1280×720, 24 FPS, and a 7-day artifact retention value. This does not alter Science Channel's 48-scene, 1920×1080, 30 FPS settings.
 
-**Change the daily schedule:** edit the relevant workflow's `on.schedule.cron` value. GitHub cron uses UTC, not local time. For example, `15 1 * * *` means 01:15 UTC every day (06:45 IST). Keep the Telegram receiver's five-minute polling schedule unless you intentionally accept slower image intake.
+**Change the daily schedule:** edit the relevant workflow's `on.schedule.cron` value. GitHub cron uses UTC, not local time. For example, `15 1 * * *` means 01:15 UTC every day (06:45 IST). The Telegram receiver is webhook-triggered through the Cloudflare Worker; do not add a getUpdates polling schedule while the webhook is active.
 
 ### More detailed customization instructions
 
@@ -267,10 +267,10 @@ Shared Science Channel/legacy secret names:
 - `TELEGRAM_CHAT_ID` — numeric private-chat or group ID used as the destination and incoming-chat allowlist.
 - `GH_PAT` — additional GitHub token required only by the staged ZIP import workflow so it can push extracted images.
 
-The Telegram Image Receiver polls every five minutes; it is not a continuously running server. It accepts JPG/JPEG, PNG and WebP, supports 48 individual images or one 48-image ZIP, and writes a READY marker when all 48 scene slots exist. The staged ZIP importer has separate validation and size limits. The renderer sends the MP4 and cleans source images only after successful Telegram delivery.
+The Telegram Image Receiver is triggered by Cloudflare Worker webhook events; it does not poll Telegram. It accepts JPG/JPEG, PNG and WebP, supports 48 individual images or one 48-image ZIP, and writes a READY marker when all 48 scene slots exist. The staged ZIP importer has separate validation and size limits. The renderer sends the MP4 and cleans source images only after successful Telegram delivery.
 
 Read the detailed manuals:
-- [Science Channel — how the Telegram bot is implemented, Python receiver functions, polling workflow and how to modify it](science-channel/README.md#1a-how-the-existing-bot-is-implemented-code-level-map)
+- [Science Channel — how the Telegram bot is implemented, Python receiver functions, webhook-triggered receiver workflow and how to modify it](science-channel/README.md#1a-how-the-existing-bot-is-implemented-code-level-map)
 - [Science Channel — complete Telegram setup, commands, image uploads, ZIP import, video delivery and cleanup](science-channel/README.md#-telegram-operations--detailed-science-channel-manual)
 - [AI Video Experiment — Telegram bot implementation, outgoing senders and exact modification map](AI_README.md#-how-the-telegram-bot-is-actually-implemented-in-this-repository)
 - [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
