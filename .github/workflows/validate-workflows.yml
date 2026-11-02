@@ -5,9 +5,17 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/**"
+      - "cloudflare-worker.js"
+      - "science-channel/scripts/**"
+      - "scripts/**"
+      - "main_ai.py"
   pull_request:
     paths:
       - ".github/workflows/**"
+      - "cloudflare-worker.js"
+      - "science-channel/scripts/**"
+      - "scripts/**"
+      - "main_ai.py"
   workflow_dispatch:
 
 permissions:
@@ -40,3 +48,5 @@ jobs:
             science-channel/scripts \
             scripts \
             main_ai.py
+      - name: Check Cloudflare Worker JavaScript syntax
+        run: node --check cloudflare-worker.js
