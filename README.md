@@ -155,7 +155,7 @@ Detailed image preparation, ZIP sizing, file editing, scene validation and troub
 
 The Worker source used by the Telegram control centre is [`cloudflare-worker.js`](cloudflare-worker.js). Deploy this source to the existing Worker after changes, keeping its current environment variables and secrets. The Worker handles normal Telegram commands and forwards image/ZIP uploads plus `/episode` selection messages to the Telegram Image Receiver workflow.
 
-After deploying the updated source, open `https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup` once to register the Telegram webhook. Do not start a second Telegram polling process or re-enable `getUpdates`/ `deleteWebhook` in GitHub Actions while this webhook is active. The Worker's `GITHUB_TOKEN` must be permitted to create repository contents write access and dispatch the repository workflows.
+After deploying the updated source, open `https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup` once to register the Telegram webhook. Do not start a second Telegram polling process or re-enable `getUpdates`/ `deleteWebhook` in GitHub Actions while this webhook is active. The Worker's `GITHUB_TOKEN` needs repository Contents read/write permission so it can save each update under `.github/telegram-inbox/`. The resulting push starts the receiver workflow.
 
 ## GitHub repository configuration
 
