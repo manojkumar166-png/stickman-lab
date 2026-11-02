@@ -158,6 +158,7 @@ def generate_all(scenes,folder):
         n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
         for name,fn,retries in providers:
             for attempt in range(retries):
+                print(f"Scene {n}/{len(scenes)}: trying {name} (attempt {attempt+1}/{retries})",flush=True)
                 try:
                     target.write_bytes(valid_png(fn(s["image_prompt"])))
                     print(f"Image {n}/{len(scenes)} generated with {name}",flush=True)
@@ -169,6 +170,7 @@ def generate_all(scenes,folder):
             if completed: break
         if not completed: failures.append({"scene":n,"errors":errors})
     if failures: raise RuntimeError("Missing scene images; video render cancelled: "+json.dumps(failures))
+    print(f"Validated all {len(scenes)} scene images.",flush=True)
 
 async def speak(text,path,voice):
     last=None
@@ -190,7 +192,9 @@ def render(scenes,package,voice):
     aud=package/"audio"; seg=package/"segments"; aud.mkdir(); seg.mkdir(); parts=[]
     for s in scenes:
         n=s["scene_number"]; audio=aud/f"scene-{n:02d}.mp3"; video=seg/f"segment-{n:02d}.mp4"
+        print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
         asyncio.run(speak(s["narration"],audio,voice))
+        print(f"FFmpeg: rendering scene segment {n}/{len(scenes)}",flush=True)
         command(["ffmpeg","-y","-loop","1","-i",str(package/"images"/f"scene-{n:02d}.png"),"-i",str(audio),
           "-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
           "-r","25","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-b:a","128k",
