@@ -217,7 +217,7 @@ def main():
             continue
         text = (msg.get("text") or "").strip()
         if text.startswith("/start") or text.startswith("/help"):
-            send("This bot only handles episodes committed on the main branch. Send 48 images one by one or one ZIP containing exactly 48 images. Use /episode YYYY-MM-DD/episode-001 to select another existing main-branch episode.")
+            send("This bot only handles episodes committed on the main branch. Send 48 images one by one or one ZIP containing exactly 48 images. Use /episode YYYY-MM-DD/episode-001-topic-slug to select another existing main-branch episode.")
             continue
         if text.startswith("/episode"):
             value = text.split(maxsplit=1)[1] if len(text.split(maxsplit=1)) == 2 else ""
