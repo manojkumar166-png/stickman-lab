@@ -54,6 +54,7 @@ jobs:
             git rebase origin/main
             if git push origin HEAD:refs/heads/main; then
               echo "Telegram uploads committed to main."
+              git fetch origin main
               EPISODE_PATH="$(python -c 'import json; print(json.load(open("science-channel/telegram-bot-state.json", encoding="utf-8")).get("episode_path", ""))')"
               if [[ "$EPISODE_PATH" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && git cat-file -e "origin/main:$EPISODE_PATH/READY.txt" 2>/dev/null; then
                 echo "episode_path=$EPISODE_PATH" >> "$GITHUB_OUTPUT"
