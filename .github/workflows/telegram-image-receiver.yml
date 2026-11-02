@@ -58,21 +58,20 @@ jobs:
             if git push origin HEAD:refs/heads/main; then
               echo "Telegram uploads committed to main."
               git fetch origin main
-              : > /tmp/completed-episodes.txt
-              while IFS= read -r EPISODE_PATH; do
-                [ -n "$EPISODE_PATH" ] || continue
+              mapfile -t COMPLETED < <(printf '%s\\n' "$COMPLETED_EPISODES" | sed '/^$/d')
+              if [ "${#COMPLETED[@]}" -gt 1 ]; then
+                echo "This receiver batch completed multiple episodes. To avoid GitHub concurrency replacing a pending render, run the renderer manually for each:"
+                printf ' - %s\\n' "${COMPLETED[@]}"
+                exit 1
+              fi
+              if [ "${#COMPLETED[@]}" -eq 1 ]; then
+                EPISODE_PATH="${COMPLETED[0]}"
                 if [[ "$EPISODE_PATH" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && git cat-file -e "origin/main:$EPISODE_PATH/READY.txt" 2>/dev/null; then
-                  printf '%s\n' "$EPISODE_PATH" >> /tmp/completed-episodes.txt
+                  echo "episode_path=$EPISODE_PATH" >> "$GITHUB_OUTPUT"
                 else
-                  echo "Ignoring invalid or uncommitted completed episode path: $EPISODE_PATH"
+                  echo "Completed episode path was invalid or READY.txt was not committed: $EPISODE_PATH"
+                  exit 1
                 fi
-              done <<< "$COMPLETED_EPISODES"
-              if [ -s /tmp/completed-episodes.txt ]; then
-                {
-                  echo "episode_paths<<EPISODES_EOF"
-                  cat /tmp/completed-episodes.txt
-                  echo "EPISODES_EOF"
-                } >> "$GITHUB_OUTPUT"
               else
                 echo "No newly completed READY episode was published; renderer dispatch is not needed."
               fi
@@ -83,18 +82,15 @@ jobs:
           done
           echo "Could not publish received images to main after 5 attempts."
           exit 1
-      - name: Start renderer for each newly completed Telegram episode
-        if: steps.publish.outputs.episode_paths != ''
+      - name: Start renderer for the newly completed Telegram episode
+        if: steps.publish.outputs.episode_path != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          EPISODE_PATHS: ${{ steps.publish.outputs.episode_paths }}
+          EPISODE_PATH: ${{ steps.publish.outputs.episode_path }}
         run: |
           set -euo pipefail
-          while IFS= read -r EPISODE_PATH; do
-            [ -n "$EPISODE_PATH" ] || continue
-            gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"
-            echo "Dispatched the renderer for $EPISODE_PATH."
-          done <<< "$EPISODE_PATHS"
+          gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"
+          echo "Dispatched the renderer for $EPISODE_PATH."
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
