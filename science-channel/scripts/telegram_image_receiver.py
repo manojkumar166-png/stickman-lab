@@ -16,9 +16,26 @@ ROOT = Path("science-channel/daily-episodes")
 EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3})$")
 
 def api(method, **kwargs):
-    response = requests.post(f"{API}/{method}", timeout=60, **kwargs)
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = requests.post(f"{API}/{method}", timeout=60, **kwargs)
+        response.raise_for_status()
+        data = response.json()
+    except requests.HTTPError as exc:
+        response = exc.response
+        try:
+            details = response.json().get("description", response.text[:500])
+        except (ValueError, AttributeError):
+            details = response.text[:500] if response is not None else str(exc)
+        if response is not None and response.status_code == 409 and method == "getUpdates":
+            raise RuntimeError(
+                "Telegram getUpdates returned 409 Conflict. This bot token is being used "
+                "by another long-polling process, or a webhook is configured. The receiver "
+                "removes any webhook before polling; if this persists, stop every other "
+                "script/workflow polling this bot token. Telegram detail: " + str(details)
+            ) from exc
+        raise RuntimeError(f"Telegram {method} HTTP error: {details}") from exc
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Telegram {method} network error: {exc}") from exc
     if not data.get("ok"):
         raise RuntimeError(f"Telegram {method} failed: {data}")
     return data["result"]
@@ -107,6 +124,10 @@ def main():
         state["episode_path"] = str(latest)
         send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
 
+    # This receiver uses polling, not webhooks. Remove a stale webhook without
+    # dropping queued messages; another active getUpdates client must be stopped
+    # separately because Telegram permits only one polling consumer per bot token.
+    api("deleteWebhook", data={"drop_pending_updates": "false"})
     updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
     changed = False
     for update in updates:
