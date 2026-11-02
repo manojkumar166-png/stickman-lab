@@ -7,6 +7,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 | Actions display name | Workflow file | What it does | Detailed guide |
 |---|---|---|---|
 | AI Story & Science Video Creator | [ai-story-science-video.yml](ai-story-science-video.yml) | One-click Gemini-generated topic, 48 scene images using free anonymous providers, narration, subtitles and final MP4. No manual inputs. | [AI Story & Science Video Creator guide](../../ai-story-science-video/README.md) |
+| AI Story Image Fallback Test | [ai-story-image-fallback-test.yml](ai-story-image-fallback-test.yml) | Manually tests AI Horde → Vexa HD/FLUX → Pollinations and uploads the first valid PNG. | [Image fallback test guide](guides/ai-story-image-fallback-test.md) |
 | AI Video Experiment | [ai-video-test.yml](ai-video-test.yml) | Separate legacy Gemini + Cloudflare Workers AI image generator, narration and final video. | [AI Video Experiment guide](../../ai-video-experiment/README.md) |
 | Science Channel — Daily Gemini Planner | [science-channel-daily-planner.yml](science-channel-daily-planner.yml) | Creates a new Science Channel episode package with 48 scenes and image prompts. | [Daily Planner guide](guides/science-channel-daily-planner.md) |
 | Telegram Image Receiver | [telegram-image-receiver.yml](telegram-image-receiver.yml) | Receives images/ZIPs forwarded by the Cloudflare Telegram webhook and fills an episode's incoming image slots. | [Telegram Image Receiver guide](guides/telegram-image-receiver.md) |
@@ -36,6 +37,7 @@ Every workflow has a linked detailed guide. The Science Channel overview remains
 ## Individual workflow guides
 
 - [AI Story & Science Video Creator](../../ai-story-science-video/README.md)
+- [AI Story image fallback test](guides/ai-story-image-fallback-test.md)
 - [AI Video Experiment](../../ai-video-experiment/README.md)
 - [Daily Gemini Planner](guides/science-channel-daily-planner.md)
 - [Telegram Image Receiver](guides/telegram-image-receiver.md)
