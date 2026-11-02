@@ -115,8 +115,8 @@ jobs:
           slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80].strip("-")
           if not slug:
               raise SystemExit("Could not create a valid artifact name from the episode title")
-          filename = re.sub(r'[<>:"/\\|?*\\r\\n]', "", title).strip().rstrip(".")
-          filename = re.sub(r"\\s+", " ", filename)[:120].strip().rstrip(".")
+          filename = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
+          filename = re.sub(r"\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
           if not filename or filename in {".", ".."}:
               raise SystemExit("Could not create a valid MP4 filename from the episode title")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
