@@ -37,12 +37,12 @@ This audit is used by the independent **Free Image Generator** workflow. A provi
 - `CF_API_TOKEN`
 - `OVH_AI_ENDPOINTS_ACCESS_TOKEN`
 
-Set them in **Repository → Settings → Secrets and variables → Actions**. Never put API keys in repository files.
+Set the three keys in **Repository → Settings → Secrets and variables → Actions**. Set the repository variable `CF_WORKERS_FREE_PLAN_CONFIRMED=true` only if your Cloudflare account is on the Workers Free plan. The Cloudflare adapter stays disabled unless this explicit guard is set. On a Workers Paid plan, do not set it. Never put API keys in repository files.
 
 ## Primary sources
 
 - Cloudflare Workers AI pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
-- Cloudflare FLUX.1 schnell model and API schema: https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/
+- Cloudflare FLUX.1 schnell model and API schema (prompt and steps; image dimensions are normalized after generation): https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/
 - OVHcloud free SDXL catalog, API examples, and rate limits: https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/stable-diffusion-xl/
 - OVHcloud AI Endpoints capabilities and limits: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-capabilities
 - OVHcloud API key setup requirements: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-getting-started
