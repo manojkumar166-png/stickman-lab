@@ -64,6 +64,11 @@ jobs:
                 fi
                 if [ -z "$P" ] || [[ "$candidate" > "$P" ]]; then P="$candidate"; fi
               done < <(find science-channel/daily-episodes -type f \( -name READY.txt -o \( -path '*/images/incoming/*' ! -name '.gitkeep' \) \) | sort)
+              if [ -z "$P" ]; then
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "No episode has incoming images or READY.txt; nothing to render. Exiting successfully."
+                exit 0
+              fi
             fi
           else
             # Ignore deletion-only cleanup commits: they must not trigger an empty render.
