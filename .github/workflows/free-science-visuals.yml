@@ -85,17 +85,20 @@ jobs:
             fi
             P="${EPISODES[0]}"
           fi
-          case "$P" in science-channel/daily-episodes/*) ;; *) echo "Invalid episode path: $P"; exit 1;; esac
-          case "$P" in *".."*) echo "Invalid episode path: traversal is not allowed."; exit 1;; esac
+          if [[ ! "$P" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "Invalid episode path: $P"
+            exit 1
+          fi
           test -f "$P/episode.json" || { echo "episode.json not found in $P"; exit 1; }
           echo "path=$P" >> "$GITHUB_OUTPUT"
       - name: Validate, narrate and render
         if: steps.episode.outputs.skip != 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
         run: |
           set -euo pipefail
-          python -u science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
+          python -u science-channel/scripts/render_episode.py "$EPISODE_PATH"
       - name: Resolve topic-based artifact name
         if: steps.episode.outputs.skip != 'true'
         id: artifact
@@ -112,8 +115,9 @@ jobs:
           slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80].strip("-")
           if not slug:
               raise SystemExit("Could not create a valid artifact name from the episode title")
-          filename = re.sub(r'[<>:"/\\|?*]', "", title).strip().rstrip(".")
-          if not filename:
+          filename = re.sub(r'[<>:"/\\|?*\\r\\n]', "", title).strip().rstrip(".")
+          filename = re.sub(r"\\s+", " ", filename)[:120].strip().rstrip(".")
+          if not filename or filename in {".", ".."}:
               raise SystemExit("Could not create a valid MP4 filename from the episode title")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"filename={filename}.mp4\n")
@@ -145,7 +149,7 @@ jobs:
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: ${{ steps.episode.outputs.path }}/output/*.mp4
+          files: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
       - name: Remove uploaded ZIP, scene images and READY marker from main
         if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome == 'success'
