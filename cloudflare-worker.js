@@ -58,7 +58,7 @@ export default {
         if (update.callback_query) {
           await handleCallback(update.callback_query, env);
         } else if (update.message) {
-          await handleMessage(update.message, env);
+          await handleMessage(update.message, env, update);
         }
 
         return new Response("OK");
@@ -218,18 +218,99 @@ async function registerWebhook(env) {
   };
 }
 
+/* ---------------- TELEGRAM MEDIA QUEUE ---------------- */
+
+async function queueTelegramUpdate(update, env) {
+  const updateId = Number(update?.update_id);
+  if (!Number.isSafeInteger(updateId) || updateId < 0) {
+    throw new Error("Invalid Telegram update_id.");
+  }
+
+  const path = `.github/telegram-inbox/${updateId}.json`;
+  const apiPath = repoPath(`/contents/${path}`);
+
+  // Telegram may retry a webhook after a network timeout. Treat an already
+  // queued update as success instead of creating duplicate image commits.
+  try {
+    const existing = await gh(env, apiPath + `?ref=${BRANCH}`);
+    if (existing?.sha) return path;
+  } catch (error) {
+    if (!String(error.message).includes("GitHub API 404")) throw error;
+  }
+
+  const encoded = bytesToBase64(new TextEncoder().encode(JSON.stringify(update)));
+  try {
+    await gh(env, apiPath, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: `Queue Telegram media update ${updateId}`,
+        content: encoded,
+        branch: BRANCH
+      })
+    });
+  } catch (error) {
+    // Resolve a possible duplicate race by checking whether the same update
+    // was committed by another webhook retry.
+    if (String(error.message).includes("GitHub API 422")) {
+      const existing = await gh(env, apiPath + `?ref=${BRANCH}`);
+      if (existing?.sha) return path;
+    }
+    throw error;
+  }
+
+  return path;
+}
+
 /* ---------------- MESSAGE HANDLER ---------------- */
 
-async function handleMessage(message, env) {
+async function handleMessage(message, env, update) {
   const chatId = message.chat.id;
   const userId = message.from?.id;
 
   if (!isAuthorized(userId, env)) return;
 
+  const document = message.document || {};
+  const documentName = String(document.file_name || "").toLowerCase();
+  const documentMime = String(document.mime_type || "").toLowerCase();
+  const isZip = documentName.endsWith(".zip") ||
+    ["application/zip", "application/x-zip-compressed"].includes(documentMime);
+  const documentExtension = documentName.includes(".")
+    ? documentName.split(".").pop()
+    : "";
+  const isImageDocument = documentMime.startsWith("image/") &&
+    ["jpg", "jpeg", "png", "webp"].includes(documentExtension);
+  const isPhoto = Array.isArray(message.photo) && message.photo.length > 0;
+
+  if (isPhoto || isZip || isImageDocument) {
+    try {
+      if (!update || !Number.isSafeInteger(Number(update.update_id))) {
+        throw new Error("Telegram update ID is missing; the upload cannot be queued safely.");
+      }
+      await queueTelegramUpdate(update, env);
+      await sendTelegramMessage(
+        chatId,
+        isZip
+          ? "📦 ZIP received and queued. I’ll validate its 48 images and prepare the episode."
+          : "🖼 Image received and queued. I’ll add it to the selected episode.",
+        env,
+        { reply_markup: mainMenuKeyboard() }
+      );
+    } catch (error) {
+      console.error("Could not queue Telegram media update:", error);
+      await sendTelegramMessage(
+        chatId,
+        "I couldn't safely queue that upload. Please retry in a moment or use the browser ZIP upload link.",
+        env,
+        { reply_markup: mainMenuKeyboard() }
+      );
+    }
+    return;
+  }
+
   if (message.document) {
     await sendTelegramMessage(
       chatId,
-      "Please use the browser ZIP upload link. Select an episode using Daily Episodes or Upload Images.",
+      "Unsupported document. Send a JPG, PNG, WebP image, or a ZIP containing exactly 48 images.",
       env,
       { reply_markup: mainMenuKeyboard() }
     );
