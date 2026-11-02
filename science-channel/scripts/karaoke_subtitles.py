@@ -68,3 +68,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     with open(output_path, "w", encoding="utf-8") as target:
         target.write(header + "\n".join(events) + "\n")
     return len(words)
+
+def srt_time(seconds):
+    milliseconds = max(0, round(float(seconds) * 1000))
+    hours, remainder = divmod(milliseconds, 3600000)
+    minutes, remainder = divmod(remainder, 60000)
+    secs, ms = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+def generate_karaoke_srt(audio_path, output_path):
+    """Generate a portable SRT file with phrase-level synchronized captions."""
+    model = WhisperModel("small", device="cpu", compute_type="int8")
+    segments, _ = model.transcribe(
+        str(audio_path), word_timestamps=True, vad_filter=True, beam_size=5
+    )
+    words = []
+    for segment in segments:
+        for item in (segment.words or []):
+            token = clean_word(item.word)
+            if token and item.start is not None and item.end is not None:
+                words.append({
+                    "word": token,
+                    "start": float(item.start),
+                    "end": float(item.end),
+                })
+    if not words:
+        raise RuntimeError("Whisper returned no word timestamps; cannot create synchronized subtitles.")
+
+    entries = []
+    for group in make_groups(words, max_words=9):
+        start = group[0]["start"]
+        end = max(group[-1]["end"], start + 0.12)
+        text = " ".join(item["word"] for item in group)
+        entries.append(f"{len(entries) + 1}\n{srt_time(start)} --> {srt_time(end)}\n{text}\n")
+    Path(output_path).write_text("\n".join(entries), encoding="utf-8")
+    return len(words)
+
