@@ -29,3 +29,14 @@ jobs:
         uses: reviewdog/action-actionlint@v1
         with:
           actionlint_flags: "-color"
+      - name: Check Python syntax for workflow entry points
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile workflow support scripts
+        run: |
+          set -euo pipefail
+          python -m compileall -q \
+            science-channel/scripts \
+            scripts \
+            main_ai.py
