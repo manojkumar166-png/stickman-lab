@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -13,6 +14,7 @@ STAGING_ROOT = Path("science-channel/telegram-uploads")
 ALLOWED = {".png", ".jpg", ".jpeg", ".webp"}
 MAX_ZIP_BYTES = 25 * 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_IMAGE_BYTES = 250 * 1024 * 1024
 
 
 def fail(message):
@@ -79,28 +81,54 @@ def main():
     try:
         with zipfile.ZipFile(archive_path) as archive:
             image_entries = []
+            total_uncompressed = 0
             for info in archive.infolist():
                 if info.is_dir():
                     continue
                 member = PurePosixPath(info.filename)
                 mode = (info.external_attr >> 16) & 0o170000
-                if member.is_absolute() or ".." in member.parts or mode == 0o120000:
+                if member.is_absolute() or ".." in member.parts or "\\" in info.filename or mode == 0o120000:
                     fail("ZIP contains an unsafe path or symbolic link.")
                 if Path(member.name).suffix.lower() in ALLOWED:
-                    if info.file_size > MAX_IMAGE_BYTES:
-                        fail(f"Image exceeds 20 MB: {member.name}")
+                    if info.file_size <= 0 or info.file_size > MAX_IMAGE_BYTES:
+                        fail(f"Image has an invalid or excessive size: {member.name}")
+                    total_uncompressed += info.file_size
+                    if total_uncompressed > MAX_TOTAL_IMAGE_BYTES:
+                        fail("ZIP expands beyond the 250 MiB total image limit.")
                     image_entries.append(info)
             if len(image_entries) != 48:
                 fail(f"ZIP must contain exactly 48 supported images; found {len(image_entries)}.")
             names = [Path(item.filename).name.casefold() for item in image_entries]
             if len(set(names)) != 48:
                 fail("ZIP contains duplicate image filenames.")
-            for index, info in order_image_entries(image_entries):
-                suffix = Path(info.filename).suffix.lower()
-                target = incoming / f"scene-{index:02d}{suffix}"
-                target.write_bytes(archive.read(info))
+
+            # Extract into a temporary directory first. A corrupt member or CRC
+            # failure must never leave a half-imported episode in images/incoming.
+            with tempfile.TemporaryDirectory(prefix=".zip-import-", dir=incoming) as temp_name:
+                temp_dir = Path(temp_name)
+                staged = []
+                for index, info in order_image_entries(image_entries):
+                    suffix = Path(info.filename).suffix.lower()
+                    target = temp_dir / f"scene-{index:02d}{suffix}"
+                    written = 0
+                    with archive.open(info) as source, target.open("wb") as destination:
+                        while True:
+                            chunk = source.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            written += len(chunk)
+                            if written > MAX_IMAGE_BYTES or written > info.file_size:
+                                fail(f"Image expanded beyond its declared size or 20 MB: {info.filename}")
+                            destination.write(chunk)
+                    if written != info.file_size:
+                        fail(f"Image size mismatch while extracting: {info.filename}")
+                    staged.append((target, incoming / target.name))
+                for source, destination in staged:
+                    source.replace(destination)
     except zipfile.BadZipFile:
         fail("The uploaded document is not a valid ZIP archive.")
+    except (RuntimeError, OSError, EOFError) as exc:
+        fail(f"Could not safely extract the ZIP archive: {exc}")
 
     (episode / "READY.txt").write_text(
         "All 48 scene images imported from Telegram.\n", encoding="utf-8"
