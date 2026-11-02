@@ -11,6 +11,7 @@ KEY=os.getenv("GEMINI_API_KEY","").strip()
 MODEL=os.getenv("GEMINI_MODEL","gemini-3.8-flash").strip()
 FALLBACK=[x.strip() for x in os.getenv("GEMINI_FALLBACK_MODELS","gemini-3.5-flash-lite").split(",") if x.strip()]
 TIMEOUT=(20,180)
+_OVH_LAST_CALL=0.0
 
 def parse_json(raw):
     fence=chr(96)*3
@@ -87,6 +88,10 @@ def valid_png(raw):
         im=im.convert("RGB"); b=io.BytesIO(); im.save(b,"PNG",optimize=True); return b.getvalue()
 
 def ovh(prompt):
+    global _OVH_LAST_CALL
+    wait=max(0.0,35.0-(time.monotonic()-_OVH_LAST_CALL))
+    if wait: time.sleep(wait)
+    _OVH_LAST_CALL=time.monotonic()
     r=requests.post("https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image",
       headers={"accept":"application/octet-stream","Content-Type":"application/json"},
       json={"prompt":prompt,"negative_prompt":"text, watermark, logo, blurry, low quality"},timeout=TIMEOUT)
@@ -97,6 +102,49 @@ def ovh(prompt):
         return valid_png(base64.b64decode(encoded))
     return valid_png(r.content)
 
+def ai_horde(prompt):
+    base="https://aihorde.net/api/v2"
+    headers={"apikey":"0000000000","Client-Agent":"stickman-lab:1.0:github-actions"}
+    payload={"prompt":prompt+"###text, watermark, logo, blurry, low quality",
+      "params":{"width":1024,"height":576,"steps":20,"n":1},
+      "nsfw":False,"censor_nsfw":True,"trusted_workers":False}
+    r=requests.post(base+"/generate/async",headers=headers,json=payload,timeout=60)
+    r.raise_for_status(); job=r.json().get("id")
+    if not job: raise RuntimeError("AI Horde returned no job ID")
+    deadline=time.monotonic()+600
+    while time.monotonic()<deadline:
+        time.sleep(5)
+        check=requests.get(base+f"/generate/check/{job}",headers=headers,timeout=45)
+        check.raise_for_status(); state=check.json()
+        if state.get("faulted"): raise RuntimeError("AI Horde generation faulted")
+        if state.get("done"): break
+    else: raise TimeoutError("AI Horde queue timed out after 10 minutes")
+    result=requests.get(base+f"/generate/status/{job}",headers=headers,timeout=60)
+    result.raise_for_status(); generations=result.json().get("generations") or []
+    if not generations: raise RuntimeError("AI Horde completed without an image")
+    img=generations[0].get("img")
+    if not img: raise RuntimeError("AI Horde response contained no image")
+    if img.startswith("data:") and "," in img:
+        return valid_png(base64.b64decode(img.split(",",1)[1]))
+    if img.startswith("http://") or img.startswith("https://"):
+        download=requests.get(img,timeout=TIMEOUT); download.raise_for_status(); return valid_png(download.content)
+    try: return valid_png(base64.b64decode(img,validate=True))
+    except Exception as e: raise RuntimeError(f"Unrecognized AI Horde image payload: {e}")
+
+def vexa(prompt):
+    errors=[]
+    for model in ("hd","flux"):
+        try:
+            r=requests.post("https://vexa-ai.pages.dev/image",
+                json={"prompt":prompt[:1000],"model":model,"preference":"quality"},timeout=TIMEOUT)
+            r.raise_for_status(); data=r.json()
+            if not data.get("success") or not data.get("proxy_url"):
+                raise RuntimeError(data.get("error") or "Vexa returned no proxy URL")
+            image=requests.get(data["proxy_url"],timeout=TIMEOUT); image.raise_for_status()
+            return valid_png(image.content)
+        except Exception as e: errors.append(f"{model}: {e}")
+    raise RuntimeError("Vexa routes failed: "+" | ".join(errors))
+
 def pollinations(prompt):
     url="https://image.pollinations.ai/prompt/"+requests.utils.quote(prompt,safe="")
     r=requests.get(url,params={"width":1280,"height":720,"nologo":"true"},headers={"Accept":"image/*"},timeout=TIMEOUT)
@@ -104,15 +152,22 @@ def pollinations(prompt):
 
 def generate_all(scenes,folder):
     folder.mkdir(parents=True,exist_ok=True); failures=[]
+    providers=(("OVHcloud anonymous",ovh,2),("AI Horde anonymous",ai_horde,1),
+               ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
-        n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]
-        for name,fn in (("OVHcloud anonymous",ovh),("Pollinations anonymous",pollinations)):
-            try:
-                target.write_bytes(valid_png(fn(s["image_prompt"])))
-                print(f"Image {n}/{len(scenes)} generated with {name}",flush=True); break
-            except Exception as e:
-                errors.append(f"{name}: {e}"); print(f"Scene {n}: {name} failed: {e}",file=sys.stderr,flush=True)
-        else: failures.append({"scene":n,"errors":errors})
+        n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
+        for name,fn,retries in providers:
+            for attempt in range(retries):
+                try:
+                    target.write_bytes(valid_png(fn(s["image_prompt"])))
+                    print(f"Image {n}/{len(scenes)} generated with {name}",flush=True)
+                    completed=True; break
+                except Exception as e:
+                    errors.append(f"{name} attempt {attempt+1}: {e}")
+                    print(f"Scene {n}: {name} failed: {e}",file=sys.stderr,flush=True)
+                    if attempt+1<retries: time.sleep(min(90,30*(attempt+1)))
+            if completed: break
+        if not completed: failures.append({"scene":n,"errors":errors})
     if failures: raise RuntimeError("Missing scene images; video render cancelled: "+json.dumps(failures))
 
 async def speak(text,path,voice):
