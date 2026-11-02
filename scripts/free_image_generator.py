@@ -78,9 +78,6 @@ def validate_image(data: bytes) -> bytes:
 def ovhcloud(prompt: str) -> bytes:
     url = "https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image"
     headers = {"accept": "application/octet-stream", "Content-Type": "application/json"}
-    token = os.getenv("OVH_AI_ENDPOINTS_ACCESS_TOKEN", "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     response = request_with_retries("ovhcloud-sdxl", "POST", url, headers=headers,
         json_body={"prompt": prompt, "negative_prompt": "blurry, low quality, watermark, text, logo"})
     if response.headers.get("Content-Type", "").startswith("application/json"):
@@ -114,34 +111,6 @@ def zhipu(prompt: str) -> bytes:
     return validate_image(downloaded.content)
 
 
-def stability(prompt: str) -> bytes:
-    token = os.getenv("STABILITY_API_KEY", "").strip()
-    if not token:
-        raise RuntimeError("Stability AI skipped: STABILITY_API_KEY is not configured.")
-    url = "https://api.stability.ai/v2beta/stable-image/generate/core"
-    last_error = None
-    for attempt in range(1, 4):
-        response = None
-        try:
-            response = requests.post(url,
-                headers={"Authorization": f"Bearer {token}", "Accept": "image/*"},
-                files={"prompt": (None, prompt), "output_format": (None, "png"), "aspect_ratio": (None, "16:9")},
-                timeout=TIMEOUT)
-            if response.status_code == 200:
-                return validate_image(response.content)
-            if 400 <= response.status_code < 500 and response.status_code not in (408, 409, 425, 429):
-                raise RuntimeError(f"Stability AI permanent HTTP {response.status_code}: {response.text[:800]}")
-            last_error = RuntimeError(f"Stability AI HTTP {response.status_code}: {response.text[:800]}")
-        except requests.RequestException as exc:
-            last_error = exc
-        if attempt < 3:
-            delay = retry_delay(response, attempt)
-            log({"provider": "stability-ai-core", "status": "retry", "attempt": attempt,
-                 "next_attempt_in_seconds": delay, "error": str(last_error)[:800]})
-            time.sleep(delay)
-    raise RuntimeError(f"Stability AI exhausted 3 attempts: {last_error}")
-
-
 def pollinations(prompt: str) -> bytes:
     encoded = requests.utils.quote(prompt, safe="")
     response = requests.get(f"https://image.pollinations.ai/prompt/{encoded}",
@@ -154,7 +123,6 @@ def pollinations(prompt: str) -> bytes:
 PROVIDERS = [
     ("ovhcloud-sdxl", ovhcloud),
     ("zhipu-cogview-3-flash", zhipu),
-    ("stability-ai-core", stability),
     ("pollinations-free-classic", pollinations),
 ]
 
