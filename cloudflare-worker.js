@@ -240,7 +240,9 @@ function shouldForwardToImageReceiver(message, env) {
     filename.endsWith(".zip") ||
     mime === "application/zip" ||
     mime === "application/x-zip-compressed" ||
-    (mime.startsWith("image/") && /\.(jpg|jpeg|png|webp)$/i.test(filename));
+    (mime.startsWith("image/") &&
+      (["image/jpeg", "image/png", "image/webp"].includes(mime) ||
+       /\.(jpg|jpeg|png|webp)$/i.test(filename)));
 
   return isEpisodeSelection || isPhoto || isSupportedDocument;
 }
