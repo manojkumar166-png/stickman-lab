@@ -47,7 +47,8 @@ jobs:
           python -m pip install --retries 5 --timeout 60 requests Pillow
       - name: Generate with free providers and automatic fallback
         env:
-          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}\n          IMAGE_PROMPT: ${{ inputs.prompt }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          IMAGE_PROMPT: ${{ inputs.prompt }}
           IMAGE_WIDTH: ${{ inputs.width }}
           IMAGE_HEIGHT: ${{ inputs.height }}
           EVENT_NAME: ${{ github.event_name }}
