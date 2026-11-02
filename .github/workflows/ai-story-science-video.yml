@@ -136,9 +136,9 @@ jobs:
           video.replace(destination)
           # Keep package internals for workflow processing, but deliver only the final MP4.
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"video={destination.as_posix()}\\n")
-              output.write(f"filename={final_name}\\n")
-              output.write(f"title<<TITLE_EOF\\n{title}\\nTITLE_EOF\\n")
+              output.write(f"video={destination.as_posix()}\n")
+              output.write(f"filename={final_name}\n")
+              output.write(f"title<<TITLE_EOF\n{title}\nTITLE_EOF\n")
           print(f"Final video ready: {destination}")
           PY
       - name: Resolve artifact
