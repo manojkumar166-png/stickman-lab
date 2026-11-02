@@ -10,10 +10,10 @@ This workflow processes Telegram updates staged by the repository's Cloudflare W
 1. Checks out `main` with full history and installs Python 3.11 plus `requests`.
 2. Runs `science-channel/scripts/telegram_image_receiver.py` with the bot token and configured chat ID.
 3. The receiver reads queued update JSON from `.github/telegram-inbox/`, validates the source chat and selected episode, downloads supported images/documents, and updates the episode's incoming image folder and `science-channel/telegram-bot-state.json`.
-4. The workflow stages episode changes, receiver state and inbox changes, commits them, then fetches/rebases/pushes to `main` with up to three attempts.
-5. The resulting incoming-image/READY-marker push can trigger **Free Science Visuals — Render Ready Episode**.
+4. The receiver saves its state and removes processed inbox JSON only after the updates have been handled. The workflow stages episode changes, receiver state and inbox deletions, commits them, then fetches/rebases/pushes to `main` with up to five attempts.
+5. If the selected episode now has `READY.txt`, the workflow explicitly dispatches **Free Science Visuals — Render Ready Episode** for that exact episode. This explicit dispatch is required because a push made with the workflow's `GITHUB_TOKEN` does not automatically start another workflow.
 
-The job timeout is 15 minutes. It shares `stickman-lab-main-writer` concurrency with other main-branch writers.
+The job timeout is 15 minutes. It shares `stickman-lab-main-writer` concurrency with other main-branch writers. It needs `contents: write` to publish received files and `actions: write` to dispatch the renderer.
 
 ## Required configuration
 
@@ -30,7 +30,10 @@ The Cloudflare Worker also needs its own Telegram/GitHub configuration; those Wo
 - The selected episode is stored in `science-channel/telegram-bot-state.json`. The receiver expects the episode package to already exist on `main`.
 - Incoming scene images are stored under the selected episode's `images/incoming/`.
 - The current pipeline is built around 48 scene slots. Individual uploads are assigned to the next missing slot based on arrival order; filenames/captions do not set the scene number.
-- The receiver supports individual image uploads and ZIP intake according to the validation rules in the receiver script. Check that script before changing accepted formats, size limits or numbering.
+- The Cloudflare Worker queues authorized Telegram photos, JPG/PNG/WebP image documents and ZIP documents as durable JSON files in `.github/telegram-inbox/`. It uses the Telegram update ID as the filename so webhook retries do not queue the same update twice.
+- Send 48 individual images, or one ZIP containing exactly 48 supported images. ZIP uploads are checked for unsafe paths, duplicate names, per-image size and total expanded size. The original ZIP is saved as `images/incoming/source-upload.zip` alongside the extracted scene images.
+- The renderer ignores `source-upload.zip` as a second input archive. It remains available until Telegram confirms successful video delivery; the renderer then removes it together with the uploaded scene images. If rendering or delivery fails, the archive and images remain for recovery.
+- Check the receiver script before changing accepted formats, size limits or numbering.
 
 ## How to change it
 
@@ -48,7 +51,7 @@ Do not change only the workflow's path filter if the Worker or Python receiver s
 
 ## Troubleshooting
 
-- **No workflow run after Telegram upload:** check that the Worker committed a JSON file under `.github/telegram-inbox/` on the watched branch.
+- **No workflow run after Telegram upload:** check that the Worker has a valid `GITHUB_TOKEN` with repository contents write access and committed a JSON file under `.github/telegram-inbox/` on `main`.
 - **Bot does not accept an upload:** verify the sender chat ID matches `TELEGRAM_CHAT_ID`, the token is valid, and the Worker forwarded the update.
 - **Episode not found:** verify the exact episode folder and `episode.json` are already on `main`; select the intended episode using the bot's supported command flow.
 - **Images appear in the wrong slots:** slots are assigned by arrival order. Confirm the upload sequence and receiver state before attempting a correction.
