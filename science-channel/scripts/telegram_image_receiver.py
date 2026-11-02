@@ -180,21 +180,14 @@ def main():
         state_changed = True
         send(f"Automatically selected newest MAIN-branch episode: {latest.parent.name}/{latest.name}. Send 48 images in order or one ZIP containing exactly 48 images. ZIPs are automatically sorted by scene number when filenames identify scenes; otherwise filenames are natural-sorted.")
 
-    # This receiver uses polling, not webhooks. Remove a stale webhook without
-    # dropping queued messages; another active getUpdates client must be stopped
-    # separately because Telegram permits only one polling consumer per bot token.
-    api("deleteWebhook", data={"drop_pending_updates": "false"})
-    try:
-        updates = api("getUpdates", params={"offset": state.get("offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
-    except RuntimeError as exc:
-        # A 409 means another consumer currently owns polling for this token.
-        # Preserve the offset and exit successfully so scheduled runs keep retrying
-        # without marking every five-minute poll as a failed workflow.
-        if "getUpdates returned 409 Conflict" in str(exc):
-            print(f"WARNING: {exc}")
-            print("No update offset was advanced; the next scheduled run will retry.")
-            return
-        raise
+    # Telegram updates arrive through the Cloudflare Worker webhook.
+    # Never call deleteWebhook or getUpdates here: the Worker owns delivery.
+    raw_update = os.environ.get("TELEGRAM_UPDATE_JSON", "").strip()
+    if not raw_update:
+        print("No Telegram webhook update was supplied; nothing to process.")
+        return
+    update = json.loads(raw_update)
+    updates = [update]
     changed = state_changed
     for update in updates:
         state["offset"] = update["update_id"] + 1
