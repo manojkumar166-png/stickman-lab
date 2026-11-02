@@ -64,9 +64,9 @@ jobs:
       - name: Upload AI Video
         uses: actions/upload-artifact@v4
         with:
-          name: ai-experiment-video
+          name: ai-topic-video
           path: |
-            output/ai-experiment-*.mp4
+            output/*.mp4
             output/story-*.json
           if-no-files-found: error
           retention-days: 7
