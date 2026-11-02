@@ -1,7 +1,8 @@
 name: Telegram Image Receiver
 on:
-  repository_dispatch:
-    types: [telegram_image_upload]
+  push:
+    paths:
+      - ".github/telegram-inbox/**"
   workflow_dispatch:
 permissions:
   contents: write
@@ -31,7 +32,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_UPDATE_JSON: ${{ github.event_name == 'repository_dispatch' && toJSON(github.event.client_payload.update) || '' }}
         run: python -u science-channel/scripts/telegram_image_receiver.py
       - name: Commit received images and receiver state to main
         shell: bash
@@ -40,6 +40,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add science-channel/daily-episodes/ science-channel/telegram-bot-state.json
+          git add -A .github/telegram-inbox/
           if git diff --cached --quiet; then
             echo "No new Telegram files or state changes."
             exit 0
