@@ -58,10 +58,10 @@ jobs:
             if git push origin HEAD:refs/heads/main; then
               echo "Telegram uploads committed to main."
               git fetch origin main
-              mapfile -t COMPLETED < <(printf '%s\\n' "$COMPLETED_EPISODES" | sed '/^$/d')
+              mapfile -t COMPLETED < <(printf '%s\n' "$COMPLETED_EPISODES" | sed '/^$/d')
               if [ "${#COMPLETED[@]}" -gt 1 ]; then
                 echo "This receiver batch completed multiple episodes. To avoid GitHub concurrency replacing a pending render, run the renderer manually for each:"
-                printf ' - %s\\n' "${COMPLETED[@]}"
+                printf ' - %s\n' "${COMPLETED[@]}"
                 exit 1
               fi
               if [ "${#COMPLETED[@]}" -eq 1 ]; then
