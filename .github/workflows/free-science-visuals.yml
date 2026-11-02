@@ -16,7 +16,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: science-channel-render-main
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 jobs:
   render:
