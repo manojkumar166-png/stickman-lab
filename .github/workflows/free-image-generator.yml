@@ -47,9 +47,7 @@ jobs:
           python -m pip install --retries 5 --timeout 60 requests Pillow
       - name: Generate with free providers and automatic fallback
         env:
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}\n          CF_WORKERS_FREE_PLAN_CONFIRMED: ${{ vars.CF_WORKERS_FREE_PLAN_CONFIRMED }}
-          OVH_AI_ENDPOINTS_ACCESS_TOKEN: ${{ secrets.OVH_AI_ENDPOINTS_ACCESS_TOKEN }}
+          OVH_AI_ENDPOINTS_ACCESS_TOKEN: ${{ secrets.OVH_AI_ENDPOINTS_ACCESS_TOKEN }}\n          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}\n          STABILITY_API_KEY: ${{ secrets.STABILITY_API_KEY }}
           IMAGE_PROMPT: ${{ inputs.prompt }}
           IMAGE_WIDTH: ${{ inputs.width }}
           IMAGE_HEIGHT: ${{ inputs.height }}
