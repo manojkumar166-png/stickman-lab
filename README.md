@@ -151,6 +151,12 @@ Detailed image preparation, ZIP sizing, file editing, scene validation and troub
 - **GitHub Actions:** .github/workflows/ contains the five workflows described above.
 - **AI_README.md:** additional notes for the separate Cloudflare AI Video Experiment.
 
+## Cloudflare Worker deployment
+
+The Worker source used by the Telegram control centre is [`cloudflare-worker.js`](cloudflare-worker.js). Deploy this source to the existing Worker after changes, keeping its current environment variables and secrets. The Worker handles normal Telegram commands and forwards image/ZIP uploads plus `/episode` selection messages to the Telegram Image Receiver workflow.
+
+After deploying the updated source, open `https://frosty-disk-7c9e.pallipattumanoj.workers.dev/setup` once to register the Telegram webhook. Do not start a second Telegram polling process or re-enable `getUpdates`/ `deleteWebhook` in GitHub Actions while this webhook is active. The Worker's `GITHUB_TOKEN` must be permitted to create repository dispatch events and dispatch the repository workflows.
+
 ## GitHub repository configuration
 
 Open **Settings → Secrets and variables → Actions** to configure the following repository secrets:
