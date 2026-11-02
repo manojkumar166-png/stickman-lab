@@ -43,8 +43,8 @@ The schedule is in UTC. GitHub Actions scheduled runs can start later than the e
 
 File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram-image-receiver.yml)
 
-- **Automatic polling:** every 5 minutes (cron: */5 * * * *).
-- **Manual start:** Actions → Telegram Image Receiver → Run workflow. This performs a poll immediately.
+- **Automatic intake:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and /episode selections to this workflow through GitHub repository_dispatch.
+- **Manual start:** Actions → Telegram Image Receiver → Run workflow is available for maintenance, but normal Telegram intake is webhook-driven.
 - **Branch:** checks out and commits only to main.
 - **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
 - **Accepted uploads:** send 48 individual image files/photos, or send one ZIP containing exactly 48 supported images. Supported receiver formats are JPG/JPEG, PNG and WebP. The bot numbers individual images into the next available scene slot; a ZIP is sorted and expanded into scene files.
