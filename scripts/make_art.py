@@ -1,6 +1,5 @@
 import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, requests
 from PIL import Image, ImageDraw, ImageFont
-from scripts.make_art_python import make_scene_art as make_scene_art_python
 
 STYLE = ("high-quality Pixar-inspired 3D animated feature-film style, polished stylized 3D rendering, "
          "appealing expressive 3D characters when relevant, detailed dimensional environments, "
