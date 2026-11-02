@@ -7,7 +7,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 | Actions display name | Workflow file | What it does | Detailed guide |
 |---|---|---|---|
 | AI Story & Science Video Creator | [ai-story-science-video.yml](ai-story-science-video.yml) | One-click Gemini-generated topic, 48 scene images using free anonymous providers, narration, subtitles and final MP4. No manual inputs. | [AI Story & Science Video Creator guide](../../ai-story-science-video/README.md) |
-| AI Video Experiment | [ai-video-test.yml](ai-video-test.yml) | Separate legacy Gemini + Cloudflare Workers AI image generator, narration and final video. | [AI Video Experiment guide](../../AI_README.md) |
+| AI Video Experiment | [ai-video-test.yml](ai-video-test.yml) | Separate legacy Gemini + Cloudflare Workers AI image generator, narration and final video. | [AI Video Experiment guide](../../ai-video-experiment/README.md) |
 | Science Channel — Daily Gemini Planner | [science-channel-daily-planner.yml](science-channel-daily-planner.yml) | Creates a new Science Channel episode package with 48 scenes and image prompts. | [Science Channel guide](../../science-channel/README.md) |
 | Telegram Image Receiver | [telegram-image-receiver.yml](telegram-image-receiver.yml) | Receives images/ZIPs forwarded by the Cloudflare Telegram webhook and fills an episode's incoming image slots. | [Science Channel guide](../../science-channel/README.md) |
 | Telegram ZIP Import | [telegram-zip-import.yml](telegram-zip-import.yml) | Imports a ZIP staged in the repository into a selected Science Channel episode. | [Science Channel guide](../../science-channel/README.md) |
