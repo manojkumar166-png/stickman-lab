@@ -18,7 +18,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 
 - **Science Channel pipeline:** the planner, Telegram receiver, ZIP importer and renderer work together, so their shared instructions are in [science-channel/README.md](../../science-channel/README.md).
 - **AI Story & Science Video Creator:** its standalone guide is [ai-story-science-video/README.md](../../ai-story-science-video/README.md).
-- **AI Video Experiment:** its standalone guide is [AI_README.md](../../AI_README.md).
+- **AI Video Experiment:** its standalone guide is [ai-video-experiment/README.md](../../ai-video-experiment/README.md).
 - **Repository overview and customization map:** [root README.md](../../README.md).
 
 There is not one README per YAML file today. Related workflows share a pipeline guide to avoid duplicating setup and operational instructions.
