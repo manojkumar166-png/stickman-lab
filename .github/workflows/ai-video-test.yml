@@ -77,7 +77,7 @@ jobs:
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: output/ai-experiment-*.mp4
+          files: output/*.mp4
           message: "🎨 New AI Science Video: ${{ steps.get_topic.outputs.topic }}"
 
       - name: Commit topic history safely to main
