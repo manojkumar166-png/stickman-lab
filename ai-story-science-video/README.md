@@ -9,7 +9,7 @@ A standalone workflow that turns Gemini's story plan into a narrated MP4.
 ## Pipeline
 1. Gemini creates a complete ordered script and scene plan.
 2. Each scene receives a detailed image prompt.
-3. Every scene image is generated using anonymous OVHcloud SDXL, with anonymous Pollinations as fallback.
+3. Each scene tries several routes in order: anonymous OVHcloud SDXL (rate-limited to about one request every 35 seconds), anonymous AI Horde volunteer workers, Vexa's anonymous DeepAI/Flux image endpoint, then direct Pollinations. OVHcloud receives a retry; the remaining providers are fallbacks.
 4. All images are validated. If any scene image is missing or invalid, rendering stops.
 5. Edge TTS creates narration for each scene.
 6. FFmpeg combines each scene image and its narration, then joins all segments into one MP4.
@@ -23,9 +23,11 @@ Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No
 
 ## No-card safeguards
 - OVHcloud is called anonymously; no OVH API token is read.
-- Pollinations is called anonymously.
+- AI Horde uses its public anonymous key; anonymous jobs have the lowest queue priority and can take longer.
+- Vexa is a community-hosted multi-provider gateway; its availability and upstream providers can change.
+- Pollinations is called anonymously as the final fallback.
 - No credit purchases, auto-recharge or paid image-provider fallback is implemented.
-- Anonymous provider access can throttle or become unavailable; no unlimited free service is guaranteed.
+- Anonymous provider access can throttle, queue for a long time, change terms, or become unavailable; no unlimited free service is guaranteed. Vexa's Flux route may itself use Pollinations upstream, so it is not fully independent of Pollinations.
 - Gemini and GitHub Actions have separate account quotas and terms. Do not enable billing if you want a strict no-card setup.
 
 ## Output package
