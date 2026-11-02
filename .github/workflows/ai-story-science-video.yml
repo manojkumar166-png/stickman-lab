@@ -153,8 +153,8 @@ jobs:
           if not video.is_file():
               raise SystemExit(f"Final video not found: {video}")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-              f.write(f"name={video.stem}\\n")
-              f.write(f"video={video.as_posix()}\\n")
+              f.write(f"name={video.stem}\n")
+              f.write(f"video={video.as_posix()}\n")
           PY
 
       - name: Upload final video only
