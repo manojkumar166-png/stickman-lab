@@ -20,7 +20,8 @@
     "Why does onions make us cry?",
     "Why does time seem to speed up as we get older?",
     "Why do deserts sing?",
-    "Why do rivers meander?"
+    "Why do rivers meander?",
+    "Why do songs get stuck in your head?"
   ],
   "topic_details": [
     {
@@ -112,6 +113,11 @@
       "title": "Why do rivers meander?",
       "angle": "Explore the physical fluid dynamics and geological feedback loops that force flowing water to carve sweeping, snake-like curves across the landscape.",
       "pillar": "Earth's geology and natural processes"
+    },
+    {
+      "title": "Why do songs get stuck in your head?",
+      "angle": "Explore the neural loops and memory mechanisms that cause certain catchy tunes to replay endlessly in our minds.",
+      "pillar": "Brain, memory and senses"
     }
   ]
 }
