@@ -135,8 +135,8 @@ jobs:
           if not title:
               raise SystemExit("Story title is missing.")
 
-          safe_title = re.sub(r'[<>:"/\\|?*\\r\\n]', "", title)
-          safe_title = re.sub(r"\\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
+          safe_title = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
+          safe_title = re.sub(r"\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
           if not safe_title or safe_title in {".", ".."}:
               raise SystemExit("Could not make a safe filename from the story title.")
 
@@ -177,9 +177,9 @@ jobs:
               raise SystemExit("Final subtitled video is missing or too small.")
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"video={final_video.as_posix()}\\n")
-              output.write(f"filename={final_video.name}\\n")
-              output.write(f"title={' '.join(title.split())}\\n")
+              output.write(f"video={final_video.as_posix()}\n")
+              output.write(f"filename={final_video.name}\n")
+              output.write(f"title={' '.join(title.split())}\n")
           print(f"Burned karaoke captions for {words} timed words into {final_video}.")
           PY
       - name: Upload final video
