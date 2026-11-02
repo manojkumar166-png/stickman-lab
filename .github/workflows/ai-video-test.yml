@@ -107,8 +107,8 @@ jobs:
               topic = str(json.load(handle).get("topic", "")).strip()
           if not topic:
               raise SystemExit("Generated story has no topic.")
-          filename = re.sub(r'[<>:"/\\|?*\\r\\n\\x00-\\x1f]', "", topic)
-          filename = re.sub(r"\\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
+          filename = re.sub(r'[<>:"/\\|?*\r\n]', "", topic)
+          filename = re.sub(r"\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
           if not filename or filename in {".", ".."}:
               raise SystemExit("Could not make a safe MP4 filename from the topic.")
           filename += ".mp4"
