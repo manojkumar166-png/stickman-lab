@@ -62,7 +62,7 @@ jobs:
               while IFS= read -r EPISODE_PATH; do
                 [ -n "$EPISODE_PATH" ] || continue
                 if [[ "$EPISODE_PATH" =~ ^science-channel/daily-episodes/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] && git cat-file -e "origin/main:$EPISODE_PATH/READY.txt" 2>/dev/null; then
-                  printf '%s\\n' "$EPISODE_PATH" >> /tmp/completed-episodes.txt
+                  printf '%s\n' "$EPISODE_PATH" >> /tmp/completed-episodes.txt
                 else
                   echo "Ignoring invalid or uncommitted completed episode path: $EPISODE_PATH"
                 fi
