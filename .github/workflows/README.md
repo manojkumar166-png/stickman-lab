@@ -12,7 +12,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 | Telegram Image Receiver | [telegram-image-receiver.yml](telegram-image-receiver.yml) | Receives images/ZIPs forwarded by the Cloudflare Telegram webhook and fills an episode's incoming image slots. | [Telegram Image Receiver guide](guides/telegram-image-receiver.md) |
 | Telegram ZIP Import | [telegram-zip-import.yml](telegram-zip-import.yml) | Imports a ZIP staged in the repository into a selected Science Channel episode. | [Telegram ZIP Import guide](guides/telegram-zip-import.md) |
 | Free Science Visuals — Render Ready Episode | [free-science-visuals.yml](free-science-visuals.yml) | Validates 48 episode images, renders the narrated video with karaoke captions, sends Telegram video and cleans uploads after successful delivery. | [Renderer guide](guides/free-science-visuals.md) |
-| Validate Workflows | [validate-workflows.yml](validate-workflows.yml) | Runs repository workflow configuration checks. | [Validation guide](guides/validate-workflows.md) |
+| Validate Workflows | [validate-workflows.yml](validate-workflows.yml) | Runs actionlint, Python syntax compilation and Cloudflare Worker JavaScript syntax checks. | [Validation guide](guides/validate-workflows.md) |
 
 ## Which README should I read?
 
@@ -30,7 +30,7 @@ Every workflow has a linked detailed guide. The Science Channel overview remains
 3. Check whether another workflow relies on the same folder, artifact, READY marker, Telegram bot, concurrency group or topic-history file.
 4. Preserve existing fallback, upload, delivery and cleanup behaviour unless the change specifically requires modifying it.
 5. Commit to `main` only when the change is intended for the live pipeline; otherwise use a branch and review the diff.
-6. Run the affected workflow from Actions and inspect its logs and artifacts. A successful commit does not prove an end-to-end workflow run succeeded.
+6. Let the validation workflow pass after code/workflow changes. Then run the affected production workflow from Actions and inspect its logs and artifacts. Static validation does not prove that external APIs, Telegram delivery or a full video render succeeded.
 
 ## Individual workflow guides
 
