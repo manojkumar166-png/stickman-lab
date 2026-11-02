@@ -50,29 +50,69 @@ jobs:
           # One-click default: Gemini invents a fresh topic and creates 48 scenes.
           python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
       - name: Save used topic history
+        continue-on-error: true
         shell: bash
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add used_story_topics.json
-          if git diff --cached --quiet; then
-            echo "No new topic history to save."
-            exit 0
-          fi
-          git commit -m "Record completed story topic"
+
+          # Publish topic history from an isolated worktree so a concurrent
+          # main-branch update cannot disrupt the rendered video workspace.
+          STORY_FILE="$(find ai-story-video-output -mindepth 2 -maxdepth 2 -name story.json -type f | sort | tail -n 1)"
+          test -n "$STORY_FILE" && test -s "$STORY_FILE"
+          SYNC_DIR="$RUNNER_TEMP/story-history-sync"
+          git worktree add --detach "$SYNC_DIR" origin/main
+
           for attempt in 1 2 3 4 5; do
-            git fetch origin main
-            git rebase origin/main
-            if git push origin HEAD:refs/heads/main; then
-              echo "Topic history published to main."
+            git -C "$SYNC_DIR" fetch origin main
+            git -C "$SYNC_DIR" checkout --detach origin/main
+
+            python - "$GITHUB_WORKSPACE/$STORY_FILE" "$SYNC_DIR/used_story_topics.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          story = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          history_path = Path(sys.argv[2])
+          history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
+          if not isinstance(history, list):
+              raise SystemExit("used_story_topics.json must contain a JSON list.")
+
+          entry = {
+              "title": str(story.get("title", "")).strip(),
+              "topic": str(story.get("topic", "")).strip(),
+              "description": str(story.get("description", "")).strip(),
+          }
+          if not all(entry.values()):
+              raise SystemExit("Generated story is missing topic-history fields.")
+
+          def key(item):
+              return " ".join(str(item.get("topic", "")).casefold().split())
+
+          existing = {key(item) for item in history if isinstance(item, dict)}
+          if key(entry) not in existing:
+              history.append(entry)
+          history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+          PY
+
+            git -C "$SYNC_DIR" add used_story_topics.json
+            if git -C "$SYNC_DIR" diff --cached --quiet; then
+              echo "Topic is already present in the latest main-branch history."
               exit 0
             fi
-            echo "Topic history push attempt $attempt failed."
-            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+            git -C "$SYNC_DIR" commit -m "Record completed story topic [skip ci]"
+            if git -C "$SYNC_DIR" push origin HEAD:refs/heads/main; then
+              echo "Topic history safely published to main."
+              exit 0
+            fi
+            echo "Topic-history push attempt $attempt lost a main-branch race; retrying from latest main."
+            sleep "$((attempt * 3))"
           done
-          echo "Could not publish topic history after 5 attempts."
-          exit 1
+
+          echo "::warning::Video rendering will continue, but topic history could not be published after five attempts."
+          exit 0
       - name: Generate and burn karaoke subtitles; name final video
         id: final_video
         env:
