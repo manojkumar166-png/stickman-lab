@@ -64,7 +64,7 @@ def plan_story(topic,count):
                     if line.strip() and not line.lstrip().startswith("#")]
     if not topic_examples:
         raise ValueError("topics.txt is empty; add topic examples before running.")
-    topic_library="\\n".join("- "+item for item in topic_examples)
+    topic_library="\n".join("- "+item for item in topic_examples)
     direction="You are the creative director and writer. Decide whether the best video is a scientifically responsible science documentary or an original animated story. Choose the format yourself based on the newly invented topic and audience appeal. For science, explain mechanisms accurately and avoid fabricated facts. For animation, create memorable original characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain character appearance and setting continuity. All visuals must be polished cinematic 3D CGI with convincing depth, detailed materials and cinematic lighting. Do not imitate any specific studio, film, franchise, copyrighted character or named artist."
     user_hint=topic.strip() or "No additional user hint."
     prompt=f"""Act as a professional topic researcher, screenwriter, documentary writer and storyboard artist.
