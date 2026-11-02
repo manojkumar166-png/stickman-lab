@@ -3,7 +3,11 @@
 A standalone workflow following the AI Video Experiment's end-to-end pattern—Gemini story, per-scene artwork, Edge TTS narration, FFmpeg rendering and artifact upload—but using free anonymous image providers instead of Cloudflare. Supports 6–48 scenes, including 48-image long-form videos.
 
 ## Gemini-led creation
-There is no manual science/animated mode selector. Optionally supply a topic or leave it blank. Gemini invents a topic when blank and decides whether the strongest treatment is a science documentary or an original animated story. It then creates the script, continuity bible and scene-by-scene visual prompts.
+There is no manual science/animated mode selector. Optionally supply a topic or leave it blank. Gemini first reads the root-level topics.txt inspiration library, studies its broad subject areas and curiosity-driven style, then invents a genuinely new topic—not an exact match, paraphrase or near-duplicate. An optional topic input is treated only as an extra interest hint. Gemini then decides whether the new idea works best as a science documentary or an original animated story. It then creates the script, continuity bible and scene-by-scene visual prompts.
+
+## Topic inspiration file
+
+Edit the repository-root topics.txt to control the subject areas and curiosity-driven style that inspire new ideas. Gemini reads every non-empty, non-comment line on each run. It must create a distinct topic rather than copy or lightly rephrase an entry. Keep this file populated; the workflow stops with a clear error if it is missing or empty.
 
 ## Pipeline
 1. Gemini creates a complete ordered script and scene plan.
@@ -15,7 +19,7 @@ There is no manual science/animated mode selector. Optionally supply a topic or 
 7. The MP4, story JSON, readable script and images are uploaded as a 7-day artifact.
 
 ## Run
-Open Actions, select AI Story & Science Video Creator, and choose Run workflow. Optionally enter a topic (or leave it blank for Gemini to invent one), choose 6/8/10/12/16/48 scenes and a voice. Gemini chooses whether to make a science documentary or an animated story.
+Open Actions, select AI Story & Science Video Creator, and choose Run workflow. Optionally enter an interest hint (or leave it blank), choose 6/8/10/12/16/48 scenes and a voice. Gemini reads topics.txt, invents a distinct new topic in a similar spirit, then chooses science documentary or animated story.
 
 ## Required secret
 Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No Zhipu, Stability, OVH token, Cloudflare or payment secret is used.
