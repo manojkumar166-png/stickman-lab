@@ -196,8 +196,17 @@ def main():
     # files. Never call deleteWebhook or getUpdates here: the Worker owns delivery.
     changed = state_changed
     completed_episodes = []
+    processed_ids = {
+        int(value) for value in state.get("processed_update_ids", [])
+        if str(value).isdigit()
+    }
     for update in updates:
-        state["offset"] = update["update_id"] + 1
+        update_id = int(update["update_id"])
+        if update_id in processed_ids:
+            print(f"Skipping already-processed Telegram update {update_id}.", flush=True)
+            continue
+        state["offset"] = max(int(state.get("offset", 0)), update_id + 1)
+        processed_ids.add(update_id)
         msg = update.get("message", {})
         chat = str((msg.get("chat") or {}).get("id", ""))
         if chat != CHAT_ID:
@@ -327,6 +336,9 @@ def main():
             send(f"Saved image. {len(present)}/48 received. Next missing: scene-{missing[0]:02d}.")
 
     if changed or updates:
+        # Keep a bounded idempotency window so webhook retries after inbox
+        # deletion cannot add the same media to a later scene slot.
+        state["processed_update_ids"] = sorted(processed_ids)[-1000:]
         save_state(state)
 
     output_path = os.getenv("GITHUB_OUTPUT")
