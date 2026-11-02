@@ -23,15 +23,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: main
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - name: Cache Whisper model
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/huggingface
           key: whisper-small-${{ runner.os }}-v1
@@ -134,7 +134,7 @@ jobs:
           mv "$EPISODE_PATH/output/final-video.mp4" "$EPISODE_PATH/output/$VIDEO_FILENAME"
       - name: Upload final MP4 only
         if: steps.episode.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
