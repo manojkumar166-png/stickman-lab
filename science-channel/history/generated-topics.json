@@ -21,7 +21,8 @@
     "Why does time seem to speed up as we get older?",
     "Why do deserts sing?",
     "Why do rivers meander?",
-    "Why do songs get stuck in your head?"
+    "Why do songs get stuck in your head?",
+    "Why does soap make bubbles?"
   ],
   "topic_details": [
     {
@@ -118,6 +119,11 @@
       "title": "Why do songs get stuck in your head?",
       "angle": "Explore the neural loops and memory mechanisms that cause certain catchy tunes to replay endlessly in our minds.",
       "pillar": "Brain, memory and senses"
+    },
+    {
+      "title": "Why does soap make bubbles?",
+      "angle": "Explore the unique molecular structure of surfactants that allows water to stretch into thin, shimmering films filled with air.",
+      "pillar": "Chemistry and materials around us"
     }
   ]
 }
