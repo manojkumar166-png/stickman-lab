@@ -108,8 +108,8 @@ jobs:
           candidates[0].replace(Path("output") / filename)
           delimiter = "TOPIC_EOF"
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"topic<<{delimiter}\\n{topic}\\n{delimiter}\\n")
-              output.write(f"filename={filename}\\n")
+              output.write(f"topic<<{delimiter}\n{topic}\n{delimiter}\n")
+              output.write(f"filename={filename}\n")
           PY
 
       - name: Upload AI Video
