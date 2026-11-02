@@ -26,7 +26,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: ai-story-science-video
   cancel-in-progress: false
@@ -67,6 +67,19 @@ jobs:
         run: |
           set -euo pipefail
           python -u scripts/ai_story_video.py --topic "$TOPIC" --scenes "$SCENES" --voice "$VOICE"
+      - name: Save used topic history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add used_story_topics.json
+          if git diff --cached --quiet; then
+            echo "No new topic history to save."
+          else
+            git commit -m "Record completed story topic"
+            git push origin HEAD:main
+          fi
       - name: Resolve artifact
         id: artifact
         shell: bash
