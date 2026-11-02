@@ -46,7 +46,7 @@ export default {
 
       if (url.pathname === "/" && request.method === "POST") {
         if (
-          env.TELEGRAM_WEBHOOK_SECRET &&
+          !env.TELEGRAM_WEBHOOK_SECRET ||
           request.headers.get("X-Telegram-Bot-Api-Secret-Token") !==
             env.TELEGRAM_WEBHOOK_SECRET
         ) {
