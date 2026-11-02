@@ -44,6 +44,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
           python -m pip install --retries 5 --timeout 60 faster-whisper
+      - name: Remove stale same-day generated files
+        shell: bash
+        run: |
+          set -euo pipefail
+          TODAY="$(date -u +%F)"
+          mkdir -p output
+          # A second manual/scheduled run on the same UTC day must not mistake
+          # an earlier MP4 for the current run's output.
+          rm -f "output/story-$TODAY.json" "output/narration-$TODAY.mp3"
+          find output -maxdepth 1 -type f -name "*-$TODAY.mp4" -delete
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -97,7 +107,8 @@ jobs:
               topic = str(json.load(handle).get("topic", "")).strip()
           if not topic:
               raise SystemExit("Generated story has no topic.")
-          filename = re.sub(r'[<>:"/\\|?*]', "", topic).strip().rstrip(".")
+          filename = re.sub(r'[<>:"/\\|?*\\r\\n\\x00-\\x1f]', "", topic)
+          filename = re.sub(r"\\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
           if not filename or filename in {".", ".."}:
               raise SystemExit("Could not make a safe MP4 filename from the topic.")
           filename += ".mp4"
