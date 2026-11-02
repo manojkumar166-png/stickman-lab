@@ -145,7 +145,7 @@ jobs:
         if: steps.episode.outputs.skip != 'true'
         id: telegram
         continue-on-error: true
-        uses: PonomarevDA/telegram-upload@v1
+        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
