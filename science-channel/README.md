@@ -87,7 +87,7 @@ To tune the writing style, edit the examples in `science-channel/topics.txt`; to
 
 File: `.github/workflows/telegram-image-receiver.yml`
 
-- **Trigger:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and `/episode` selections through `repository_dispatch`. Manual workflow dispatch remains available for maintenance.
+- **Trigger:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and `/episode` selections when the Worker commits a queued JSON update under `.github/telegram-inbox/`. Manual workflow dispatch remains available for maintenance.
 - **Branch:** checks out and commits only to `main`; it does not read or write `adaptive-cinematic-effects`.
 - **Episode selection:** automatically selects the newest episode package on `main`. Send `/episode YYYY-MM-DD/episode-001` to choose another existing episode.
 - **Uploads:** accepts individual JPG/JPEG, PNG or WebP images, or one ZIP containing exactly 48 supported images. Individual images are placed into the next missing scene number. A ZIP is expanded into 48 numbered scene files.
@@ -447,7 +447,7 @@ Workflow files are under `.github/workflows/`.
 | Workflow file | Current schedule/trigger | Important settings |
 |---|---|---|
 | `science-channel-daily-planner.yml` | Daily at 01:15 UTC; manual dispatch | 60-minute timeout, main branch, Gemini and optional Telegram secrets. |
-| `telegram-image-receiver.yml` | Cloudflare webhook repository_dispatch; manual maintenance dispatch | 8-minute timeout, main branch, Telegram bot secrets. |
+| `telegram-image-receiver.yml` | Cloudflare inbox push; manual maintenance dispatch | 8-minute timeout, main branch, Telegram bot secrets. |
 | `telegram-zip-import.yml` | Manual dispatch only | Requires `episode_path` and `zip_path`; uses GH_PAT. |
 | `free-science-visuals.yml` | Push of incoming files/READY.txt on main; manual dispatch | 90-minute timeout; final MP4 artifact retention is 2 days. |
 | `ai-video-test.yml` | Daily at 05:30 UTC; manual dispatch | Separate root pipeline; artifact retention is 7 days. |
@@ -555,7 +555,7 @@ Telegram Bot API
 
 ### Workflow internals
 
-`.github/workflows/telegram-image-receiver.yml` is triggered by the Cloudflare Worker through the `telegram_image_upload` repository_dispatch event and also supports manual maintenance runs. It checks out `main`, installs Python 3.11 and `requests`, maps the Telegram secrets and forwarded update JSON into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
+`.github/workflows/telegram-image-receiver.yml` is triggered by the Cloudflare Worker when the Worker commits a queued update under `.github/telegram-inbox/` and also supports manual maintenance runs. It checks out `main`, installs Python 3.11 and `requests`, maps the Telegram secrets and forwarded update JSON into environment variables, runs the receiver, then commits changed episode files and `science-channel/telegram-bot-state.json` to `main`. It shares the `science-channel-main-writer` concurrency group with the planner so the two main-branch writers do not race each other.
 
 ### How the outgoing messages are sent
 
@@ -607,9 +607,9 @@ Workflow: [telegram-image-receiver.yml](../.github/workflows/telegram-image-rece
 - State file: `science-channel/telegram-bot-state.json`.
 - Receiver script: `science-channel/scripts/telegram_image_receiver.py`.
 
-The Cloudflare Worker is the always-available Telegram webhook. GitHub Actions starts the receiver when the Worker forwards a relevant update; the receiver downloads and processes that specific Telegram message. The receiver must never call `getUpdates` or `deleteWebhook`, because that would compete with or remove the Worker webhook.
+The Cloudflare Worker is the always-available Telegram webhook. It stores each relevant update as a uniquely named JSON file in `.github/telegram-inbox/`; GitHub Actions processes all queued updates in update-ID order. The inbox is durable, so rapid uploads are not lost when GitHub coalesces pending workflow runs. The receiver must never call `getUpdates` or `deleteWebhook`, because that would compete with or remove the Worker webhook.
 
-The state file stores the selected episode path. Telegram update delivery and duplicate webhook retries are handled at the Worker/GitHub event layer; do not delete or reset the selected episode without intending to change the current upload destination.
+The state file stores the selected episode path. Telegram update delivery and duplicate webhook retries are handled by the Worker's durable inbox; do not delete or reset the selected episode without intending to change the current upload destination.
 
 ### Commands
 
