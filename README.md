@@ -20,7 +20,7 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
 | Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Check workflow YAML files for common configuration errors | **Validate Workflows** | Repository workflow trigger |
 
-There are **seven active workflow files** in .github/workflows (including the workflow validator). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
+There are **seven active workflow files** in `.github/workflows/` (including the workflow validator). Each active workflow now has a dedicated detailed guide linked from [`.github/workflows/README.md`](.github/workflows/README.md). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
 
@@ -150,7 +150,7 @@ Detailed image preparation, ZIP sizing, file editing, scene validation and troub
 - **Root scripts/:** story generation, image generation, voice generation, visual rendering and FFmpeg assembly for the root generator.
 - **Science Channel:** science-channel/settings.json, topics.txt, history/, scripts/ and daily-episodes/ contain the episode-based pipeline.
 - **GitHub Actions:** .github/workflows/ contains the five workflows described above.
-- **AI_README.md:** additional notes for the separate Cloudflare AI Video Experiment.
+- **ai-video-experiment/README.md:** additional notes for the separate Cloudflare AI Video Experiment.
 
 ## Cloudflare Worker deployment
 
@@ -235,7 +235,7 @@ Make changes on **main** unless you are deliberately working on a separate exper
 
 ### More detailed customization instructions
 
-The [Science Channel operating guide](science-channel/README.md#customize-the-science-channel) explains every Science Channel setting, prompt, upload rule and render option. The [AI Video Experiment guide](AI_README.md) explains the separate root-level generator and how to customize its art, voice, topics and model.
+The [Science Channel operating guide](science-channel/README.md#customize-the-science-channel) explains every Science Channel setting, prompt, upload rule and render option. The [AI Video Experiment guide](ai-video-experiment/README.md) explains the separate root-level generator and how to customize its art, voice, topics and model.
 
 
 
@@ -257,7 +257,7 @@ Cloudflare **Workers AI** is currently used by the **root AI Video Experiment on
 - Current image request: 1024 × 576, multipart form data, bearer-token authentication, 120-second request timeout and 6-second delay between scene requests.
 - Failure behavior: failed individual scenes reuse a successful generated image; if all Cloudflare image requests fail, the root generator uses locally drawn stickman artwork.
 
-The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` builds and sends Workers AI requests, how the GitHub workflow supplies credentials, and exactly where to change the model, prompt, dimensions, timeout, pacing and fallback. Start with [How this repository implemented Cloudflare and how to modify it](AI_README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
+The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` builds and sends Workers AI requests, how the GitHub workflow supplies credentials, and exactly where to change the model, prompt, dimensions, timeout, pacing and fallback. Start with [How this repository implemented Cloudflare and how to modify it](ai-video-experiment/README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
 
 ## 📲 Telegram
 
@@ -279,8 +279,8 @@ The Telegram Image Receiver is triggered by Cloudflare Worker webhook events; it
 Read the detailed manuals:
 - [Science Channel — how the Telegram bot is implemented, Python receiver functions, webhook-triggered receiver workflow and how to modify it](science-channel/README.md#1a-how-the-existing-bot-is-implemented-code-level-map)
 - [Science Channel — complete Telegram setup, commands, image uploads, ZIP import, video delivery and cleanup](science-channel/README.md#-telegram-operations--detailed-science-channel-manual)
-- [AI Video Experiment — Telegram bot implementation, outgoing senders and exact modification map](AI_README.md#-how-the-telegram-bot-is-actually-implemented-in-this-repository)
-- [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order and troubleshooting](AI_README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
+- [AI Video Experiment — Telegram bot implementation, outgoing senders and exact modification map](ai-video-experiment/README.md#-how-the-telegram-bot-is-actually-implemented-in-this-repository)
+- [AI Video Experiment — Telegram bot setup, secrets, Bot API behavior, delivery order and troubleshooting](ai-video-experiment/README.md#-telegram--complete-bot-setup-upload-delivery-and-modification-guide)
 
 **Security:** Never commit Cloudflare tokens, Telegram bot tokens, Gemini keys or GitHub PATs. Store them in repository Settings → Secrets and variables → Actions → Secrets. Keep the Science Channel workflows on `main`.
 
@@ -401,14 +401,376 @@ This is a separate generator from the Science Channel episode pipeline and the l
 
 **Important:** this workflow is deliberately configured for one-click 48-scene runs. Editing the scene count or voice requires a commit to the workflow file; you do not enter those values on the Actions screen. Free image providers have rate limits and queues, so 48 images can take a long time and are not guaranteed to complete on every run.
 
-## Do workflows have separate README files?
+## Documentation map
 
-Not every workflow currently has its own README file. The repository uses **feature/pipeline guides** that explain related workflows together:
+Every active workflow has a dedicated guide. Start with [the workflow index](.github/workflows/README.md), which links to all seven workflow guides.
 
-- [Root README — workflow map and project overview](README.md)
-- [Science Channel guide](science-channel/README.md) — covers the planner, Telegram image receiver, ZIP importer and Science Channel renderer together.
-- [AI Story & Science Video Creator guide](ai-story-science-video/README.md) — dedicated guide for the standalone free-provider 48-scene generator.
-- [AI Video Experiment guide](AI_README.md) — dedicated guide for the legacy Cloudflare-based experiment.
-- [Workflow directory](.github/workflows/) — actual YAML files and run configuration.
+- [Science Channel operating guide](science-channel/README.md) — shared episode format, planner, image preparation, Telegram operations and renderer behavior.
+- [AI Story & Science Video Creator](ai-story-science-video/README.md) — standalone free-provider 48-scene generator.
+- [AI Video Experiment](ai-video-experiment/README.md) — separate Gemini + Cloudflare Workers AI experiment.
+- [Individual workflow guides](.github/workflows/guides/) — triggers, execution, configuration, outputs, troubleshooting and rollback for the Science Channel planner, Telegram receiver, ZIP importer, renderer and workflow validator.
 
-This is intentional: workflows that form one pipeline share a guide instead of duplicating the same instructions in several files. The workflow index at [`.github/workflows/README.md`](.github/workflows/README.md) lists each workflow and points to its relevant guide.
+The root README is the repository map and operational handbook. The linked guides provide implementation-level details for each component.
+
+
+---
+
+# Complete operations handbook
+
+This section expands the quick-start map above into a practical reference for operating the repository, understanding how the automation connects, making safe changes and recovering from failures. The workflow YAML and Python scripts remain the source of truth; if a setting in this document ever differs from the current code, inspect the linked implementation before making a production change.
+
+## 1. Architecture at a glance
+
+There are three distinct video-generation paths. They share some infrastructure (GitHub Actions, Telegram delivery and FFmpeg) but do not share all configuration or source files.
+
+| Pipeline | Planning/story source | Artwork source | Rendering | Main configuration |
+|---|---|---|---|---|
+| Science Channel | Daily Gemini Planner creates an episode package | Human-prepared images uploaded by Telegram, ZIP importer or repository commit | Science Channel renderer | `science-channel/settings.json`, episode package |
+| AI Story & Science Video Creator | Gemini creates a story and scene plan during the run | Anonymous/free image-provider fallback chain in the generator | Dedicated Python/FFmpeg workflow; karaoke helper reused | Root `topics.txt`, workflow command, Actions variables |
+| AI Video Experiment | Root AI generator creates the story | Cloudflare Workers AI integration in the root generator | Root generator and FFmpeg | Root `config.json`, Cloudflare/Gemini secrets |
+
+Do not assume that a setting in one pipeline affects another. In particular:
+
+- `science-channel/settings.json` belongs to the episode-based Science Channel pipeline.
+- Root `config.json` belongs to the legacy/root generator used by AI Video Experiment and local experiments.
+- Root `topics.txt` and `used_story_topics.json` are separate from `science-channel/topics.txt` and `science-channel/history/generated-topics.json`.
+- AI Story & Science Video Creator is a separate standalone generator; it has its own used-topic history file, `used_story_topics.json`.
+
+## 2. Workflow inventory and operational matrix
+
+All seven active workflows are listed in [`.github/workflows/README.md`](.github/workflows/README.md). This table summarizes their operational role.
+
+| Workflow | Trigger | Main output or side effect | Main branch behavior |
+|---|---|---|---|
+| Science Channel — Daily Gemini Planner | Daily schedule and manual dispatch | Creates one episode package and reserves its topic in history; optionally sends prompts to Telegram | Commits episode and history to `main` |
+| Telegram Image Receiver | Worker-forwarded inbox push and manual maintenance dispatch | Saves received scene images and receiver state; may create `READY.txt` | Commits intake changes to `main` |
+| Telegram ZIP Import | Manual dispatch with episode and ZIP paths | Extracts staged ZIP, creates READY marker and removes staged ZIP | Commits import and staging deletion to `main` |
+| Free Science Visuals — Render Ready Episode | Incoming-image/READY push or manual dispatch | Renders final MP4, uploads artifact, attempts Telegram delivery; cleans source uploads only after successful send | Cleanup commit to `main` |
+| AI Video Experiment | Daily schedule and manual dispatch | Generates the experiment video, updates topic history, sends the final video | Topic history is committed to `main` |
+| AI Story & Science Video Creator | Manual dispatch, no inputs | Generates standalone 48-scene story video and sends final MP4 | Updates its used-topic history on `main` |
+| Validate Workflows | Workflow-file push/PR and manual dispatch | Runs actionlint checks; no media output | Read-only validation |
+
+### Schedule reference
+
+The scheduled workflow times are expressed in UTC. India Standard Time is UTC+05:30.
+
+| Workflow | Cron in YAML | India Standard Time |
+|---|---:|---:|
+| Science Channel Daily Planner | `15 1 * * *` | 06:45 daily |
+| AI Video Experiment | `30 5 * * *` | 11:00 daily |
+
+GitHub may delay scheduled starts during periods of load. A cron time is the earliest scheduled start target, not a guarantee that a job begins at that exact minute. The other workflows are event-driven or manually dispatched.
+
+## 3. First-time setup checklist
+
+Complete these steps before relying on the automated pipeline.
+
+### GitHub repository
+
+1. Open the repository's **Settings → Secrets and variables → Actions**.
+2. Add only the secrets required by the workflows you intend to run (see the credential table below).
+3. Add optional repository variables for model overrides if you want to override defaults.
+4. Confirm GitHub Actions is enabled for the repository and that the workflows are visible under the Actions tab.
+5. Confirm the automation tokens have the minimum permissions required by their specific workflow.
+6. Keep Science Channel planner, receiver, importer, renderer and cleanup operations on `main`.
+
+### Telegram
+
+1. Create or select the bot using Telegram's official **@BotFather**.
+2. Configure the correct numeric destination/source chat ID.
+3. Add the token and chat ID as GitHub Actions secrets.
+4. If using the Cloudflare Worker control centre, configure its Cloudflare-side variables/secrets separately.
+5. Deploy the complete `cloudflare-worker.js` source to the existing Worker and register the webhook through its documented setup endpoint.
+6. Send a simple command and verify the Worker replies before attempting a large image upload.
+
+Do not run a separate Telegram `getUpdates` polling process while the Worker webhook is active. The webhook is the intake owner and forwards updates to GitHub.
+
+### Cloudflare Worker
+
+The Telegram control-centre Worker is a separate deployed service. Updating `cloudflare-worker.js` in GitHub does not necessarily deploy it to Cloudflare. After changing the source, deploy it through the Cloudflare dashboard or the repository's configured deployment mechanism, then test its health and webhook setup endpoints. See the [Cloudflare Worker recovery guide above](#-troubleshooting-telegram-bot-stops-replying-cloudflare-worker).
+
+## 4. Secrets and variables reference
+
+Secrets belong in **Settings → Secrets and variables → Actions → Secrets**. Variables belong in the Variables tab. Never commit their values.
+
+| Name | Kind | Used by | Notes |
+|---|---|---|---|
+| `GEMINI_API_KEY` | Secret | Daily Gemini Planner, AI Video Experiment, AI Story workflow | Gemini authentication |
+| `GEMINI_MODEL` | Variable | AI Story & Science Video Creator | Optional model override |
+| `GEMINI_FALLBACK_MODELS` | Variable | AI Story & Science Video Creator | Optional comma-separated model fallback configuration as interpreted by the script |
+| `SCIENCE_GEMINI_MODEL` | Variable | Science Channel Daily Planner | Optional planner model override |
+| `TELEGRAM_BOT_TOKEN` | Secret | Telegram prompt, image, ZIP-import alerts and video delivery | Bot API credential |
+| `TELEGRAM_CHAT_ID` | Secret | Telegram prompt, image, ZIP-import alerts and video delivery | Numeric chat destination/allowlist |
+| `GH_PAT` | Secret | Telegram ZIP Import | Repository contents write access for the import commit |
+| `CF_ACCOUNT_ID` | Secret | AI Video Experiment | Cloudflare account identifier |
+| `CF_API_TOKEN` | Secret | AI Video Experiment | Workers AI API authorization |
+
+The Telegram Image Receiver workflow and the Cloudflare Worker have distinct configuration surfaces. The GitHub workflow secrets do not automatically configure the deployed Worker. The Worker uses its own Cloudflare environment variables/secrets, including the bot token, allowed Telegram user ID, webhook secret, GitHub token and public Worker URL as documented in the Telegram troubleshooting section.
+
+If a secret is rotated, update it in every service that uses it. A successful GitHub workflow configuration does not prove the Cloudflare Worker has received the new value.
+
+## 5. Science Channel episode lifecycle — detailed handoff
+
+The Science Channel pipeline deliberately separates planning from artwork creation and rendering.
+
+```text
+Daily Gemini Planner
+        |
+        v
+Episode package committed to main
+        |
+        v
+Review script.md + scenes.json + image-prompts.md
+        |
+        v
+Create 48 scene images
+        |
+        +---- Telegram Image Receiver
+        |
+        +---- Telegram ZIP Import
+        |
+        +---- Direct repository upload
+        |
+        v
+48 incoming scene images + READY.txt
+        |
+        v
+Free Science Visuals renderer
+        |
+        +---- Validate episode and images
+        +---- Generate narration / align word timestamps
+        +---- Render MP4 with karaoke captions
+        +---- Upload final MP4 artifact
+        +---- Attempt Telegram delivery
+        |
+        v
+If Telegram delivery succeeds:
+remove incoming uploads + READY marker and commit cleanup
+```
+
+### Episode package contract
+
+A typical episode folder is:
+
+```text
+science-channel/daily-episodes/YYYY-MM-DD/episode-NNN-topic/
+├── episode.json
+├── script.md
+├── scenes.json
+├── image-prompts.md
+├── READY.txt                  # created when image set is ready
+├── images/
+│   └── incoming/
+│       ├── .gitkeep
+│       └── scene image files or one ZIP
+└── output/
+    ├── final topic-named MP4
+    └── work/                  # temporary render assets
+```
+
+The exact output files can vary as the renderer progresses. The required input files and validation rules are defined in `science-channel/scripts/render_episode.py`.
+
+### Scene numbering rules
+
+The current Science Channel pipeline is designed for 48 scenes. Keep these aligned:
+
+- Episode metadata's scene count.
+- The ordered records in `scenes.json`.
+- The `## Scene N` sections in `script.md`.
+- The image prompts and uploaded image count.
+- Telegram receiver slot numbering and READY marker logic.
+- ZIP importer validation.
+- Renderer validation and settings defaults.
+
+Changing only one of these is not a supported way to change episode length. Treat a scene-count change as a coordinated project change and test it with a non-production episode first.
+
+### Upload route selection
+
+Use exactly one route for a given episode's image set:
+
+- **Direct Telegram uploads:** the Cloudflare Worker forwards Telegram updates to the receiver. Individual images are assigned to the next missing slot by arrival order; send them in the intended order.
+- **Telegram ZIP upload:** send one ZIP to the bot if the receiver's ZIP validation requirements are met. Do not combine it with individual uploads already in the episode.
+- **Repository ZIP staging:** put the ZIP in `science-channel/telegram-uploads/`, then manually run Telegram ZIP Import with the exact episode and ZIP paths.
+- **Direct repository images:** commit the image files into that episode's `images/incoming/` folder. Include the READY marker or manually run the renderer with the exact episode path.
+
+Do not mix a ZIP with individual image files in the same incoming directory. The importer and renderer intentionally validate the image set before rendering.
+
+### Renderer cleanup is destructive
+
+The renderer uploads the final MP4 artifact before attempting Telegram delivery. It removes incoming source files and `READY.txt` only when Telegram delivery reports success. If delivery fails, the source images/ZIP remain available for another attempt.
+
+Before changing this behavior, consider whether the committed incoming files are the only retained copy of the source artwork. If cleanup already happened, reverting the cleanup commit restores the files to Git history; it does not recall a video already delivered to Telegram.
+
+## 6. Customization guide — choose the correct file
+
+| Desired change | File or setting | Scope |
+|---|---|---|
+| Science narration voice or speech rate | `science-channel/settings.json` | Science Channel renderer |
+| Science output resolution/FPS | `science-channel/settings.json` | Science Channel renderer |
+| Science Gemini model | `SCIENCE_GEMINI_MODEL` variable or Science settings | Science Channel planner |
+| Science topic categories/style/history | `science-channel/topics.txt`, planner script and history | Science Channel planner |
+| Edit one episode's script/title/scenes/prompts | Files inside that episode folder | One episode only |
+| Science karaoke caption style | `science-channel/scripts/karaoke_subtitles.py` | Science Channel and workflows reusing helper |
+| Science incoming Telegram behavior | `science-channel/scripts/telegram_image_receiver.py` | Telegram receiver |
+| ZIP staging and validation | `science-channel/scripts/import_telegram_zip.py` | Manual ZIP importer |
+| Science render and image validation | `science-channel/scripts/render_episode.py` | Science renderer |
+| Science planner schedule | `science-channel-daily-planner.yml` | Daily trigger |
+| Science renderer trigger/timeout/artifact/cleanup | `free-science-visuals.yml` | Render workflow |
+| AI Story scene count/voice | `ai-story-science-video.yml` command line | Standalone AI Story workflow |
+| AI Story image prompt/provider chain | `scripts/ai_story_video.py` | Standalone AI Story workflow |
+| AI Story model selection | `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS` variables | Standalone AI Story workflow |
+| AI Video Experiment dimensions/voice/length | Root `config.json` | Legacy/root generator |
+| AI Video Experiment story prompt | `scripts/generate_story.py` | Legacy/root generator |
+| AI Video Experiment image model/style | `scripts/make_art.py` | Legacy/root generator |
+| AI Video Experiment schedule | `ai-video-test.yml` | Scheduled experiment |
+| Telegram Worker commands/webhook | `cloudflare-worker.js` plus Cloudflare Worker settings | Deployed Telegram control centre |
+| Workflow syntax validation | `validate-workflows.yml` | Lint/validation only |
+
+### Safe editing sequence
+
+1. Identify which pipeline owns the behavior you want to change.
+2. Read that workflow's guide from [the workflow index](.github/workflows/README.md).
+3. Fetch the current YAML/script/config from `main`; do not base an edit on an old local copy.
+4. Change the smallest number of files that implement the behavior.
+5. Search the repository for the setting, path, filename or function name to find dependent code.
+6. Inspect the complete diff and check for accidental changes to secrets, branches, concurrency groups, topic history or cleanup logic.
+7. Run the workflow validator after YAML changes.
+8. Run the affected workflow manually where safe and inspect the full log, artifact and Telegram result.
+9. Verify any expected commit or cleanup on `main` before considering the change complete.
+
+## 7. Testing and verification
+
+A commit is not proof that a workflow completed successfully. Verify each layer separately.
+
+| Change type | Minimum verification |
+|---|---|
+| Workflow YAML | Validate Workflows passes; inspect trigger, permissions, branch, inputs and expressions |
+| Planner prompt/model | Run planner manually; inspect topic choice, generated package and topic history commit |
+| Telegram receiver | Send a controlled test update; inspect Worker logs, inbox push, receiver run and saved image/state |
+| ZIP importer | Use a test episode and ZIP; inspect validation, extracted scene filenames, READY marker and staged ZIP removal |
+| Renderer | Use a test episode; inspect image validation, narration, captions, MP4 playback and artifact |
+| Telegram delivery | Confirm the bot delivered the correct file to the correct chat |
+| Cloudflare Worker | Deploy the source, test health, register webhook if required and test an authorized command |
+| Cleanup | Confirm cleanup only ran after successful Telegram delivery and inspect the cleanup commit |
+
+For local Python checks, use the repository's Python requirements and FFmpeg dependencies. Keep credentials in environment variables or a local untracked environment file; never commit them. Use a test episode rather than production source images when testing destructive cleanup or scene-count changes.
+
+## 8. Troubleshooting decision tree
+
+### Workflow did not start
+
+- Check whether the event matches the YAML trigger (branch, changed path, schedule or manual dispatch).
+- For a scheduled workflow, check that it is enabled and remember that GitHub can delay scheduled runs.
+- For path-filtered workflows, verify the changed file path exactly matches the configured filter.
+- For Telegram intake, check the Cloudflare Worker inbox commit; the receiver does not poll Telegram.
+
+### Workflow started but failed early
+
+- Read the first failing step, not only the final summary.
+- Check dependency installation, Python version, FFmpeg availability and required input files.
+- Confirm secrets exist under the exact names referenced by the YAML.
+- Check whether a manual workflow input is a complete repository-relative path.
+
+### Workflow completed but expected output is missing
+
+- Confirm the final render/commit step actually ran and was not skipped by a condition.
+- Check the artifact section of that exact Actions run and its retention window.
+- Check Telegram action/API output separately; delivery can fail even when rendering succeeds.
+- For Science Channel, verify the renderer's exact episode path and that one episode was selected.
+
+### Git push or rebase failed
+
+- Inspect branch protection and token permissions.
+- Check whether another main-branch writer committed while the workflow was running.
+- Retry using the workflow's normal retry mechanism or a fresh run after reviewing the repository state.
+- Do not force-push or reset shared `main` to bypass a conflict.
+
+### Telegram bot stopped responding
+
+- Check the deployed Worker source, health endpoint, webhook registration and Cloudflare logs.
+- Verify the allowed Telegram user ID and webhook secret.
+- Confirm the Worker token and GitHub token have the required permissions.
+- Do not enable polling while the webhook is active.
+
+## 9. Rollback and recovery procedures
+
+Prefer a normal revert commit over resetting shared history. Before reverting, inspect exactly which files the commit changed and whether it contains generated content or cleanup deletions.
+
+### Revert a code or workflow change
+
+```bash
+git checkout main
+git pull --ff-only
+git revert <change-commit-sha>
+git push origin main
+```
+
+After the revert, run Validate Workflows and manually test the affected workflow if the change affects runtime behavior.
+
+### Restore Science Channel incoming images after successful cleanup
+
+1. Find the cleanup commit created after Telegram delivery.
+2. Inspect the commit to confirm it deletes only the expected incoming images and READY marker.
+3. Revert that cleanup commit. This restores the incoming files and READY marker in Git.
+4. Check the resulting push carefully: restoring READY/incoming files can trigger another render.
+5. If you do not want another automatic render, coordinate the restoration with the workflow trigger rather than blindly pushing the files.
+
+### Undo an incorrect ZIP import
+
+1. Find the import commit.
+2. Inspect the exact extracted images, READY marker and staged ZIP deletion.
+3. Revert the import commit if restoring the staged ZIP and removing the imported files is the desired result.
+4. Correct the archive or episode, then run the importer again.
+
+### Undo a planner-generated episode
+
+The planner commit includes both the new episode package and the no-repeat topic-history update. Review both before reverting. Reverting the commit restores the previous topic history and removes the new episode package. A Telegram prompt document already sent is not removed by Git rollback.
+
+### Recover a failed render
+
+If Telegram delivery failed, the renderer should leave incoming files and READY marker in place. Inspect the failure, fix the credential or upload issue and rerun the renderer manually with the exact episode path. If delivery succeeded and cleanup already ran, restore source files by reverting the cleanup commit before rerendering.
+
+### Important limits of rollback
+
+- A Git revert cannot recall a Telegram message or video already delivered.
+- A Git revert cannot undo a Cloudflare deployment; redeploy the desired Worker source separately.
+- A Git revert cannot restore an expired GitHub Actions artifact. Download important MP4s before retention expires.
+- A token leak requires revoking/rotating the token at its issuing service and updating the corresponding secret; reverting source code is not enough.
+- Do not use `git reset --hard` or force-push `main` as a routine rollback strategy.
+
+## 10. Repository structure and ownership
+
+| Path | Responsibility |
+|---|---|
+| `.github/workflows/` | Seven workflow definitions and the workflow index |
+| `.github/workflows/guides/` | Detailed guides for the five operational Science Channel/validation workflows |
+| `science-channel/settings.json` | Science Channel render/planning defaults |
+| `science-channel/topics.txt` | Science topic inspiration |
+| `science-channel/history/` | Science topic history |
+| `science-channel/daily-episodes/` | Generated episode packages, incoming images and render output |
+| `science-channel/scripts/gemini_planner.py` | Science episode planning |
+| `science-channel/scripts/telegram_image_receiver.py` | Telegram image intake |
+| `science-channel/scripts/import_telegram_zip.py` | Repository-staged ZIP import |
+| `science-channel/scripts/render_episode.py` | Episode validation, narration and video rendering |
+| `science-channel/scripts/karaoke_subtitles.py` | Word-aligned karaoke captions |
+| `scripts/ai_story_video.py` | Standalone AI Story & Science Video Creator |
+| `scripts/generate_story.py`, `scripts/make_art.py` | Root/legacy AI Video Experiment story and artwork |
+| `main_ai.py` | Root AI Video Experiment entry point |
+| `config.json` | Root/legacy generator configuration |
+| `topics.txt`, `topic_history.json` | Root/legacy experiment topic inputs/history |
+| `used_story_topics.json` | AI Story workflow used-topic history |
+| `cloudflare-worker.js` | Telegram webhook/control-centre source deployed separately to Cloudflare |
+| `ai-video-experiment/README.md` | AI Video Experiment detailed guide |
+| `ai-story-science-video/README.md` | AI Story workflow detailed guide |
+
+## 11. Production safety rules
+
+- Keep API keys, bot tokens and PATs in secrets, never in source or documentation.
+- Keep the Science Channel pipeline on `main`; its writers, receiver, importer, renderer and cleanup logic are designed around that branch.
+- Preserve the shared concurrency group and fetch/rebase/push retry logic for workflows that write to `main`.
+- Preserve topic-history files unless you intentionally want previously used topics to become eligible again.
+- Do not change the 48-scene count in one file only.
+- Do not remove the renderer's Telegram-success condition from source cleanup without intentionally changing the data-retention design.
+- Do not mix the Telegram webhook with a second polling process.
+- Keep an offline copy of final MP4s you need to retain; Actions artifacts expire.
+- Use the workflow-specific guides for exact implementation details and always verify the current YAML/script before editing.
