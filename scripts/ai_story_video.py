@@ -57,17 +57,36 @@ def gemini(prompt):
     raise RuntimeError("All Gemini models failed: "+" | ".join(errors))
 
 def plan_story(topic,count):
-    direction="You are the creative director and writer. Decide whether the best video is a scientifically responsible science documentary or an original animated story. Choose the format yourself based on the topic and audience appeal. If no topic is supplied, invent a fresh compelling idea and choose its format. For science, explain mechanisms accurately and avoid fabricated facts. For animation, create memorable original characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain character appearance and setting continuity. All visuals must be polished cinematic 3D CGI with convincing depth, detailed materials and cinematic lighting. Do not imitate any specific studio, film, franchise, copyrighted character or named artist."
-    subject=topic.strip() or "Invent a fresh and compelling subject yourself."
-    prompt=f"""Act as a professional screenwriter, documentary writer and storyboard artist.
+    topics_file=ROOT/"topics.txt"
+    if not topics_file.is_file():
+        raise FileNotFoundError("Required topic inspiration file is missing: topics.txt")
+    topic_examples=[line.strip() for line in topics_file.read_text(encoding="utf-8-sig").splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")]
+    if not topic_examples:
+        raise ValueError("topics.txt is empty; add topic examples before running.")
+    topic_library="\\n".join("- "+item for item in topic_examples)
+    direction="You are the creative director and writer. Decide whether the best video is a scientifically responsible science documentary or an original animated story. Choose the format yourself based on the newly invented topic and audience appeal. For science, explain mechanisms accurately and avoid fabricated facts. For animation, create memorable original characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain character appearance and setting continuity. All visuals must be polished cinematic 3D CGI with convincing depth, detailed materials and cinematic lighting. Do not imitate any specific studio, film, franchise, copyrighted character or named artist."
+    user_hint=topic.strip() or "No additional user hint."
+    prompt=f"""Act as a professional topic researcher, screenwriter, documentary writer and storyboard artist.
 {direction}
-SUBJECT: {subject}
+TOPIC INSPIRATION LIBRARY (read every example):
+{topic_library}
+
+IMPORTANT TOPIC NOVELTY RULES:
+- Treat topics.txt as a library of subject areas, curiosity styles, question patterns and broad themes—not as a list to copy.
+- Invent ONE genuinely new topic inspired by the interests and style of the library.
+- Do NOT select, repeat, quote, lightly reword, paraphrase, or make a near-duplicate of any listed topic.
+- Explore a different specific phenomenon, question, mechanism, surprising connection or thought experiment within a related broad subject area.
+- The generated title and central question must be clearly distinct from every entry above.
+- If a user hint is supplied, use it only as an additional interest signal; still create a fresh topic and do not copy the hint verbatim.
+USER INTEREST HINT: {user_hint}
+Choose science documentary or original animated story to suit your new topic.
 Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
-{{"mode":"science or animated","title":"title","description":"2 sentence summary","visual_style":"consistent visual treatment",
+{{"mode":"science or animated","title":"a newly invented topic/title, not copied from topics.txt","description":"2 sentence summary","visual_style":"consistent visual treatment",
 "continuity_bible":"recurring character or visual continuity details",
 "scenes":[{{"scene_number":1,"heading":"short heading","narration":"2-4 natural spoken sentences",
 "visual_description":"concrete visible action/composition","image_prompt":"standalone detailed prompt for a polished 3D CGI render; specify camera, composition, lighting, materials, depth and visual style; 16:9; no text, logo or watermark"}}]}}
-Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design."""
+Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design. The title and story must be based on your newly invented topic, not an existing topics.txt entry."""
     data=gemini(prompt); scenes=data.get("scenes")
     if data.get("mode") not in ("science","animated"): raise ValueError("Gemini must classify mode as science or animated")
     if not isinstance(scenes,list) or len(scenes)!=count: raise ValueError(f"Expected {count} scenes")
