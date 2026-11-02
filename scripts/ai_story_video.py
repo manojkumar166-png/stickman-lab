@@ -101,14 +101,21 @@ Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
 "continuity_bible":"recurring character or visual continuity details",
 "scenes":[{{"scene_number":1,"heading":"short heading","narration":"2-4 natural spoken sentences",
 "visual_description":"concrete visible action/composition","image_prompt":"standalone detailed prompt for a polished 3D CGI render; specify camera, composition, lighting, materials, depth and visual style; 16:9; no text, logo or watermark"}}]}}
-Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design. The title and story must be based on a newly invented topic, not an existing topics.txt entry or a previously used core topic."""
+Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. For every scene, ALWAYS include all four non-empty fields: heading, narration, visual_description, and image_prompt. visual_description must be a short plain-language description and must not be omitted. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design. The title and story must be based on a newly invented topic, not an existing topics.txt entry or a previously used core topic."""
     data=gemini(prompt); scenes=data.get("scenes")
     if data.get("mode") not in ("science","animated"): raise ValueError("Gemini must classify mode as science or animated")
     if not isinstance(scenes,list) or len(scenes)!=count: raise ValueError(f"Expected {count} scenes")
     for i,s in enumerate(scenes,1):
         if not isinstance(s,dict) or s.get("scene_number")!=i: raise ValueError(f"Scene {i} out of order")
-        for k in ("heading","narration","visual_description","image_prompt"):
-            if not isinstance(s.get(k),str) or not s[k].strip(): raise ValueError(f"Scene {i}: missing {k}")
+        # Gemini occasionally omits the redundant visual_description field even
+        # when it supplies a complete image_prompt. Recover it deterministically
+        # rather than failing the entire run for missing descriptive metadata.
+        for k in ("heading","narration","image_prompt"):
+            if not isinstance(s.get(k),str) or not s[k].strip():
+                raise ValueError(f"Scene {i}: missing required {k}; planner output cannot be safely recovered")
+        if not isinstance(s.get("visual_description"),str) or not s["visual_description"].strip():
+            s["visual_description"] = s["image_prompt"].strip()
+            print(f"Scene {i}: visual_description was omitted; recovered it from image_prompt.",flush=True)
     for k in ("title","topic","description","visual_style","continuity_bible"):
         if not isinstance(data.get(k),str) or not data[k].strip(): raise ValueError(f"Missing {k}")
     normalize=lambda value: re.sub(r"[^a-z0-9]+"," ",value.casefold()).strip()
