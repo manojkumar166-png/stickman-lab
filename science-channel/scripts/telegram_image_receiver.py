@@ -15,7 +15,7 @@ CHAT_ID = str(os.environ["TELEGRAM_CHAT_ID"])
 API = f"https://api.telegram.org/bot{TOKEN}"
 STATE_PATH = Path("science-channel/telegram-bot-state.json")
 ROOT = Path("science-channel/daily-episodes")
-EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3})$")
+EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3}(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?)$")
 
 def api(method, **kwargs):
     """Call Telegram with bounded retries for transient failures."""
@@ -108,7 +108,11 @@ def save_state(state):
     STATE_PATH.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 def valid_episode(value):
-    match = EPISODE_RE.fullmatch(value.strip())
+    value = str(value or "").strip()
+    prefix = "science-channel/daily-episodes/"
+    if value.startswith(prefix):
+        value = value[len(prefix):]
+    match = EPISODE_RE.fullmatch(value)
     if not match:
         return None
     path = ROOT / match.group(1) / match.group(2)
