@@ -75,40 +75,14 @@ def validate_image(data: bytes) -> bytes:
         return output.getvalue()
 
 
-def cloudflare(prompt: str) -> bytes:
-    account = os.getenv("CF_ACCOUNT_ID", "").strip()
-    token = os.getenv("CF_API_TOKEN", "").strip()
-    if not account or not token:
-        raise RuntimeError("Cloudflare skipped: CF_ACCOUNT_ID or CF_API_TOKEN is not configured.")
-    model = "@cf/black-forest-labs/flux-1-schnell"
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
-    response = request_with_retries(
-        "cloudflare-workers-ai", "POST", url,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json_body={"prompt": prompt, "steps": 4},
-    )
-    content_type = response.headers.get("Content-Type", "")
-    if content_type.startswith("image/"):
-        return validate_image(response.content)
-    payload = response.json()
-    result = payload.get("result") or {}
-    encoded = result.get("image") or payload.get("image")
-    if not encoded:
-        raise ValueError(f"Cloudflare response did not contain image bytes: {str(payload)[:800]}")
-    return validate_image(base64.b64decode(encoded))
-
-
 def ovhcloud(prompt: str) -> bytes:
-    token = os.getenv("OVH_AI_ENDPOINTS_ACCESS_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("OVHcloud skipped: OVH_AI_ENDPOINTS_ACCESS_TOKEN is not configured.")
     url = "https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image"
-    response = request_with_retries(
-        "ovhcloud-sdxl", "POST", url,
-        headers={"Authorization": f"Bearer {token}", "accept": "application/octet-stream",
-                 "Content-Type": "application/json"},
-        json_body={"prompt": prompt, "negative_prompt": "blurry, low quality, watermark, text, logo"},
-    )
+    headers = {"accept": "application/octet-stream", "Content-Type": "application/json"}
+    token = os.getenv("OVH_AI_ENDPOINTS_ACCESS_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    response = request_with_retries("ovhcloud-sdxl", "POST", url, headers=headers,
+        json_body={"prompt": prompt, "negative_prompt": "blurry, low quality, watermark, text, logo"})
     if response.headers.get("Content-Type", "").startswith("application/json"):
         payload = response.json()
         encoded = payload.get("data", [{}])[0].get("b64_json")
@@ -118,9 +92,70 @@ def ovhcloud(prompt: str) -> bytes:
     return validate_image(response.content)
 
 
+def zhipu(prompt: str) -> bytes:
+    token = os.getenv("ZHIPU_API_KEY", "").strip()
+    if not token:
+        raise RuntimeError("Zhipu skipped: ZHIPU_API_KEY is not configured.")
+    response = request_with_retries("zhipu-cogview-3-flash", "POST",
+        "https://open.bigmodel.cn/api/paas/v4/images/generations",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json_body={"model": "cogview-3-flash", "prompt": prompt, "size": "1024x1024"})
+    payload = response.json()
+    items = payload.get("data") or []
+    if not items:
+        raise ValueError(f"Zhipu response contained no image: {str(payload)[:800]}")
+    item = items[0]
+    if item.get("b64_json"):
+        return validate_image(base64.b64decode(item["b64_json"]))
+    if not item.get("url"):
+        raise ValueError(f"Zhipu response contained no image URL: {str(payload)[:800]}")
+    downloaded = requests.get(item["url"], timeout=TIMEOUT)
+    downloaded.raise_for_status()
+    return validate_image(downloaded.content)
+
+
+def stability(prompt: str) -> bytes:
+    token = os.getenv("STABILITY_API_KEY", "").strip()
+    if not token:
+        raise RuntimeError("Stability AI skipped: STABILITY_API_KEY is not configured.")
+    url = "https://api.stability.ai/v2beta/stable-image/generate/core"
+    last_error = None
+    for attempt in range(1, 4):
+        response = None
+        try:
+            response = requests.post(url,
+                headers={"Authorization": f"Bearer {token}", "Accept": "image/*"},
+                data={"prompt": prompt, "output_format": "png", "aspect_ratio": "16:9"},
+                timeout=TIMEOUT)
+            if response.status_code == 200:
+                return validate_image(response.content)
+            if 400 <= response.status_code < 500 and response.status_code not in (408, 409, 425, 429):
+                raise RuntimeError(f"Stability AI permanent HTTP {response.status_code}: {response.text[:800]}")
+            last_error = RuntimeError(f"Stability AI HTTP {response.status_code}: {response.text[:800]}")
+        except requests.RequestException as exc:
+            last_error = exc
+        if attempt < 3:
+            delay = retry_delay(response, attempt)
+            log({"provider": "stability-ai-core", "status": "retry", "attempt": attempt,
+                 "next_attempt_in_seconds": delay, "error": str(last_error)[:800]})
+            time.sleep(delay)
+    raise RuntimeError(f"Stability AI exhausted 3 attempts: {last_error}")
+
+
+def pollinations(prompt: str) -> bytes:
+    encoded = requests.utils.quote(prompt, safe="")
+    response = requests.get(f"https://image.pollinations.ai/prompt/{encoded}",
+        params={"width": 1024, "height": 576, "nologo": "true"},
+        headers={"Accept": "image/*"}, timeout=TIMEOUT)
+    response.raise_for_status()
+    return validate_image(response.content)
+
+
 PROVIDERS = [
-    ("cloudflare-workers-ai", cloudflare),
     ("ovhcloud-sdxl", ovhcloud),
+    ("zhipu-cogview-3-flash", zhipu),
+    ("stability-ai-core", stability),
+    ("pollinations-free-classic", pollinations),
 ]
 
 
