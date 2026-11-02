@@ -1,0 +1,107 @@
+name: AI Story & Science Video Creator
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Choose the video type
+        required: true
+        default: science
+        type: choice
+        options:
+          - science
+          - animated
+      topic:
+        description: Optional topic or story idea (blank lets Gemini invent one)
+        required: false
+        type: string
+      scenes:
+        description: Number of scenes
+        required: true
+        default: "8"
+        type: choice
+        options:
+          - "6"
+          - "8"
+          - "10"
+          - "12"
+          - "16"
+      voice:
+        description: Edge TTS narration voice
+        required: true
+        default: en-US-AndrewMultilingualNeural
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: ai-story-science-video
+  cancel-in-progress: false
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and dependencies
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts
+      - name: Plan, generate scene images, narrate and render
+        env:
+          GEMINI_API_KEY: ${ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${ vars.GEMINI_MODEL }}
+          GEMINI_FALLBACK_MODELS: ${ vars.GEMINI_FALLBACK_MODELS }}
+          MODE: ${ inputs.mode }}
+          TOPIC: ${ inputs.topic }}
+          SCENES: ${ inputs.scenes }}
+          VOICE: ${ inputs.voice }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u scripts/ai_story_video.py --mode "$MODE" --topic "$TOPIC" --scenes "$SCENES" --voice "$VOICE"
+      - name: Resolve artifact
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          root=Path("ai-story-video-output")
+          packages=sorted((p for p in root.iterdir() if p.is_dir()),key=lambda p:p.name)
+          if not packages: raise SystemExit("No output package was created")
+          package=packages[-1]
+          data=json.loads((package/"story.json").read_text(encoding="utf-8"))
+          slug=re.sub(r"[^a-z0-9]+","-",data["title"].lower()).strip("-")[:60].strip("-") or "story-video"
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as f:
+              f.write(f"package={package.as_posix()}\n")
+              f.write(f"name={data['mode']}-{slug}\n")
+          PY
+      - name: Upload finished video, script and scene images
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${ steps.artifact.outputs.name }}
+          path: |
+            ${ steps.artifact.outputs.package }}/final-video.mp4
+            ${ steps.artifact.outputs.package }}/story.json
+            ${ steps.artifact.outputs.package }}/script.md
+            ${ steps.artifact.outputs.package }}/images/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
