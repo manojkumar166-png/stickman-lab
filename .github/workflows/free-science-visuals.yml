@@ -66,10 +66,16 @@ jobs:
               done < <(find science-channel/daily-episodes -type f \( -name READY.txt -o \( -path '*/images/incoming/*' ! -name '.gitkeep' \) \) | sort)
             fi
           else
-            git diff-tree --no-commit-id --name-only -r "${{ github.event.before }}" "${{ github.sha }}" > /tmp/changed.txt
-            mapfile -t EPISODES < <(grep -E '^science-channel/daily-episodes/.+/(images/incoming/|READY\.txt)' /tmp/changed.txt | sed -E 's#/(images/incoming/.*|READY\.txt)$##' | sort -u)
+            # Ignore deletion-only cleanup commits: they must not trigger an empty render.
+            git diff-tree --no-commit-id --name-only --diff-filter=AM -r "${{ github.event.before }}" "${{ github.sha }}" > /tmp/changed.txt
+            mapfile -t EPISODES < <(grep -E '^science-channel/daily-episodes/.+/(images/incoming/|READY\\.txt)' /tmp/changed.txt | sed -E 's#/(images/incoming/.*|READY\\.txt)$##' | sort -u)
+            if [ "${#EPISODES[@]}" -eq 0 ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "No added/modified incoming images or READY marker; skipping cleanup-only push successfully."
+              exit 0
+            fi
             if [ "${#EPISODES[@]}" -ne 1 ]; then
-              echo "This push must update exactly one episode; found ${#EPISODES[@]}. Upload episodes in separate commits."
+              echo "Ambiguous push: expected changes for one episode, found ${#EPISODES[@]}. Use workflow_dispatch for the intended episode."
               exit 1
             fi
             P="${EPISODES[0]}"
@@ -79,12 +85,14 @@ jobs:
           test -f "$P/episode.json" || { echo "episode.json not found in $P"; exit 1; }
           echo "path=$P" >> "$GITHUB_OUTPUT"
       - name: Validate, narrate and render
+        if: steps.episode.outputs.skip != 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
         run: |
           set -euo pipefail
           python -u science-channel/scripts/render_episode.py "${{ steps.episode.outputs.path }}"
       - name: Resolve topic-based artifact name
+        if: steps.episode.outputs.skip != 'true'
         id: artifact
         env:
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
@@ -108,6 +116,7 @@ jobs:
               output.write(f"name=science-channel-{slug}\n")
           PY
       - name: Rename final video to the exact episode topic
+        if: steps.episode.outputs.skip != 'true'
         env:
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
           VIDEO_FILENAME: ${{ steps.artifact.outputs.filename }}
@@ -115,6 +124,7 @@ jobs:
           test -f "$EPISODE_PATH/output/final-video.mp4"
           mv "$EPISODE_PATH/output/final-video.mp4" "$EPISODE_PATH/output/$VIDEO_FILENAME"
       - name: Upload final MP4 only
+        if: steps.episode.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
@@ -123,6 +133,7 @@ jobs:
           compression-level: 0
           retention-days: 2
       - name: Send finished video to Telegram
+        if: steps.episode.outputs.skip != 'true'
         id: telegram
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@v1
@@ -132,6 +143,7 @@ jobs:
           files: ${{ steps.episode.outputs.path }}/output/*.mp4
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
       - name: Remove uploaded ZIP, scene images and READY marker from main
+        if: steps.episode.outputs.skip != 'true'
         if: steps.telegram.outcome == 'success'
         env:
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
