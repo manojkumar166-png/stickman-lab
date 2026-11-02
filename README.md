@@ -3,7 +3,7 @@
 This repository contains **two related but separate video pipelines**:
 
 1. **Science Channel (episode workflow):** Gemini plans a new 48-scene episode, you review the narration and create its 48 images, and GitHub Actions renders the finished 8–10 minute video. Telegram can deliver prompts, receive images, and deliver the final MP4.
-2. **Legacy AI video experiment (single-run workflow):** a separate generator creates a narrated video using Gemini for the story and Cloudflare Workers AI for scene artwork.
+2. **AI Video Experiment:** a separate generator creates a narrated video using Gemini for the story and a resilient image-provider chain (Cloudflare, AI Horde and OVHcloud) for scene artwork.
 
 The Science Channel pipeline is the current episode-based workflow. Its planning, Telegram upload, ZIP import, rendering and cleanup workflows operate on **main only**. Do not use the adaptive-cinematic-effects branch for Science Channel episodes or uploads.
 
@@ -146,7 +146,7 @@ Detailed image preparation, ZIP sizing, file editing, scene validation and troub
 
 ## Repository layout
 
-- **Root generator:** main.py, main_ai.py, main_gemini.py, main_hybrid.py and free_science_video.py are separate local/experimental entry points. The scheduled root AI experiment uses main_ai.py.
+- **Root generator:** `main_ai.py` powers the scheduled AI Video Experiment; `free_science_video.py` remains a separate local Blender-stills experiment.
 - **Root configuration:** config.json controls the legacy generator's scene count, output dimensions, frame rate, Gemini model and voice.
 - **Root scripts/:** story generation, image generation, voice generation, visual rendering and FFmpeg assembly for the root generator.
 - **Science Channel:** science-channel/settings.json, topics.txt, history/, scripts/ and daily-episodes/ contain the episode-based pipeline.
@@ -175,17 +175,9 @@ Open **Settings → Secrets and variables → Actions** to configure the followi
 
 Secrets are sensitive: add them in GitHub repository settings, never in README files, source code, workflow inputs or commits. The root AI experiment also needs the Cloudflare secrets; the Science Channel planner does not.
 
-## Separate local/experimental entry points
+## Local experiment
 
-These Python files are not separate scheduled workflows in the current .github/workflows directory:
-
-- **main.py:** local classic generator using Python-drawn stickman artwork.
-- **main_gemini.py:** local Gemini image-generation variant.
-- **main_hybrid.py:** local hybrid image-generation variant.
-- **free_science_video.py:** local Blender-stills experiment.
-- **main_ai.py:** the entry point used by the scheduled AI Video Experiment workflow.
-
-For local use, install Python 3.11+, install requirements.txt, install FFmpeg/ffprobe, configure the relevant environment variables and run the selected entry point from the repository root. The root config.json is separate from Science Channel settings.
+`free_science_video.py` is a separate local Blender-stills experiment. The scheduled AI Video Experiment runs `main_ai.py` through GitHub Actions.
 
 ## Alternative free LLM providers (Gemini backup)
 
@@ -220,7 +212,7 @@ Make changes on **main** unless you are deliberately working on a separate exper
 | Legacy AI experiment topic ideas | Root `topics.txt` | Separate from `science-channel/topics.txt`. |
 | Legacy AI experiment illustration style | `scripts/make_art.py` | Edit the `STYLE` string. The active Cloudflare model URL is also in this file. |
 | Legacy AI experiment narration and scene-generation instructions | `scripts/generate_story.py` | Edit the prompt and model fallback list. |
-| Legacy AI experiment stickman artwork | `scripts/make_art_python.py` | Palette, character colors and procedural scene drawing. |
+| AI Video Experiment image providers and fallback order | `scripts/make_art.py` | Cloudflare primary, AI Horde backup and OVHcloud final fallback. |
 
 **Important:** Science Channel is a fixed 48-scene pipeline. Do not change `scene_count` or `required_uploaded_images` from 48 in settings alone. The planner, Telegram receiver, ZIP importer, render validation, READY logic and image prompts also assume 48. Changing the count requires a coordinated code/workflow update and testing.
 
