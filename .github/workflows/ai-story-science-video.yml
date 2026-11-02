@@ -194,7 +194,7 @@ jobs:
               f.write(f"subtitles={subtitles.as_posix()}\n")
           PY
 
-      - name: Upload final video only
+      - name: Upload final video and subtitles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.artifact.outputs.name }}
