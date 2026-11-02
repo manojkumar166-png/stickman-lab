@@ -8,8 +8,8 @@ from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"ai-story-video-output"
 KEY=os.getenv("GEMINI_API_KEY","").strip()
-MODEL=os.getenv("GEMINI_MODEL","gemini-2.5-flash").strip()
-FALLBACK=[x.strip() for x in os.getenv("GEMINI_FALLBACK_MODELS","gemini-2.5-flash-lite,gemini-2.0-flash").split(",") if x.strip()]
+MODEL=os.getenv("GEMINI_MODEL","gemini-3.8-flash").strip()
+FALLBACK=[x.strip() for x in os.getenv("GEMINI_FALLBACK_MODELS","gemini-3.5-flash-lite").split(",") if x.strip()]
 TIMEOUT=(20,180)
 
 def parse_json(raw):
