@@ -320,6 +320,27 @@ async function handleMessage(message, env, update) {
   const text = (message.text || "").trim();
   if (!text) return;
 
+  // Episode selection is handled by the same durable receiver queue as media
+  // so selection changes and uploads are processed in their original order.
+  if (/^\/episode(?:@\w+)?(?:\s|$)/i.test(text)) {
+    try {
+      if (!update || !Number.isSafeInteger(Number(update.update_id))) {
+        throw new Error("Telegram update ID is missing.");
+      }
+      await queueTelegramUpdate(update, env);
+      await sendTelegramMessage(
+        chatId,
+        "Episode selection received. I’ll apply it before processing your queued uploads.",
+        env,
+        { reply_markup: mainMenuKeyboard() }
+      );
+    } catch (error) {
+      console.error("Could not queue episode selection:", error);
+      await sendTelegramMessage(chatId, "I couldn't queue that episode selection. Please retry.", env);
+    }
+    return;
+  }
+
   const command = text.split(/\s+/)[0].split("@")[0].toLowerCase();
 
   const menuActions = {
