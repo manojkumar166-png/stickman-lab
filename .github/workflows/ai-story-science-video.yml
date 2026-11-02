@@ -182,8 +182,8 @@ jobs:
             echo "Telegram alert skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured."
             exit 0
           fi
-          MESSAGE="$(printf '%s\\n' '🚨 GitHub Actions workflow failed' "Workflow: $WORKFLOW_NAME" "Job: $JOB_NAME" "Branch: $BRANCH_NAME" "Run: #$RUN_NUMBER" "$RUN_URL")"
-          curl --fail --silent --show-error --connect-timeout 15 --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 \\
-            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \\
+          MESSAGE="$(printf '%s\n' '🚨 GitHub Actions workflow failed' "Workflow: $WORKFLOW_NAME" "Job: $JOB_NAME" "Branch: $BRANCH_NAME" "Run: #$RUN_NUMBER" "$RUN_URL")"
+          curl --fail --silent --show-error --connect-timeout 15 --max-time 30 --retry 3 --retry-all-errors --retry-delay 2 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${MESSAGE}"
 
