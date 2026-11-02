@@ -96,6 +96,10 @@ Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coheren
             if not isinstance(s.get(k),str) or not s[k].strip(): raise ValueError(f"Scene {i}: missing {k}")
     for k in ("title","description","visual_style","continuity_bible"):
         if not isinstance(data.get(k),str) or not data[k].strip(): raise ValueError(f"Missing {k}")
+    normalize=lambda value: re.sub(r"[^a-z0-9]+"," ",value.casefold()).strip()
+    generated_title=normalize(data["title"])
+    if generated_title in {normalize(item) for item in topic_examples}:
+        raise ValueError("Gemini copied a title from topics.txt instead of inventing a new topic.")
     return data
 
 def valid_png(raw):
