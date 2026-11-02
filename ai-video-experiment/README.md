@@ -1,6 +1,6 @@
 # AI Video Experiment — complete technical and customization guide
 
-This guide covers the separate root-level **AI Video Experiment**. It is not the 48-scene Science Channel episode pipeline. The experiment uses Gemini for the story, Cloudflare Workers AI for scene images, Edge TTS for narration and FFmpeg for the MP4.
+This guide covers the separate root-level **AI Video Experiment**. It is not the 48-scene Science Channel episode pipeline. The experiment uses Gemini for the story, then tries Cloudflare Workers AI, AI Horde and OVHcloud in order for scene images, followed by Edge TTS narration and FFmpeg rendering.
 
 For the current episode-based pipeline, see [Science Channel operating guide](science-channel/README.md).
 
@@ -11,7 +11,7 @@ Workflow file: `.github/workflows/ai-video-test.yml`
 - Runs automatically every day at **05:30 UTC (11:00 India Standard Time)**.
 - Can also be started manually from Actions → **AI Video Experiment** → Run workflow.
 - Uses Python 3.11, installs FFmpeg and `requirements.txt`, then runs `python main_ai.py`.
-- Generates a story using Gemini, creates scene illustrations using Cloudflare Workers AI, creates an MP3 narration with Edge TTS, and renders an MP4 with FFmpeg.
+- Generates a story using Gemini, creates scene illustrations using Cloudflare Workers AI with AI Horde and OVHcloud fallbacks, creates an MP3 narration with Edge TTS, and renders an MP4 with FFmpeg.
 - Sends the MP4 to the configured Telegram chat, uploads the MP4 and story JSON as a GitHub Actions artifact retained for **7 days**, then commits `topic_history.json` to main.
 
 **Important order:** Telegram delivery happens before artifact upload in this workflow. Unlike the Science Channel renderer, the Telegram step is not marked continue-on-error. If Telegram delivery fails, later artifact upload and topic-history commit steps may not run. Check the Actions log rather than assuming an artifact exists.
@@ -25,13 +25,12 @@ Workflow file: `.github/workflows/ai-video-test.yml`
 | `topics.txt` | Root pipeline's manual topic seed list. This is separate from `science-channel/topics.txt`. |
 | `topic_history.json` | Previously generated root-pipeline topics, used to avoid exact repeats. |
 | `scripts/generate_story.py` | Gemini story prompt, model fallback list, scene schema and topic-history logic. |
-| `scripts/make_art.py` | Cloudflare model endpoint, image prompt/style, output dimensions and image fallback behavior. |
-| `scripts/make_art_python.py` | Locally drawn stickman illustration fallback and its colors/backgrounds. |
+| `scripts/make_art.py` | Cloudflare primary provider, AI Horde and OVHcloud fallbacks, prompt/style, retries and image validation. |
 | `scripts/make_voice.py` | Edge TTS voice and speech-rate handling. |
 | `scripts/render_video.py` | FFmpeg video assembly, frame rate and encoding. |
 | `.github/workflows/ai-video-test.yml` | Schedule, Actions permissions, secrets, Telegram delivery and artifact retention. |
 
-Other entry points such as `main.py`, `main_gemini.py` and `main_hybrid.py` are separate local/experimental variants; the scheduled workflow specifically runs `main_ai.py`.
+The scheduled workflow runs `main_ai.py`. Obsolete standalone generator variants have been removed to keep the root pipeline focused.
 
 ## 3. Current configuration
 
@@ -101,10 +100,6 @@ In `scripts/make_art.py`, find `CF_URL_CHEAP`. The current endpoint uses:
 
 To use another Cloudflare model, check that model's current Workers AI documentation, accepted input fields and output format. Update the endpoint and, if needed, the request payload/response decoding in `cf_image_cheap()`. Not every image model accepts the same width/height fields or returns the same response format.
 
-### Change the local stickman fallback
-
-Edit `scripts/make_art_python.py`. Its `PALETTES` dictionary defines the scene background colors; `INK`, `SHIRT`, `PANTS`, `SKIN`, `WHITE` and `GOLD` define the main character/art colors. The drawing functions below these constants control scenery and character composition.
-
 ### Change topic seeds and writing style
 
 Add one topic per line to the root `topics.txt`. The generator randomly chooses an unused seed topic (based on exact topic-history matching). When the list is exhausted, Gemini is asked to invent a new topic using the existing examples as style guidance.
@@ -121,7 +116,7 @@ The active image-generation code is in `scripts/make_art.py`.
 - It requests 1024×576 images.
 - It waits 6 seconds between scene requests.
 - If an individual scene request fails but other images succeeded, the code fills that scene with a randomly selected successful image.
-- If every AI image request fails, `main_ai.py` passes no AI image data to the artwork function, which falls back to locally drawn stickman illustrations through `make_art_python.py`.
+- If Cloudflare fails, the pipeline tries AI Horde and then OVHcloud. If all three providers fail for a scene, the run stops with an error; no stickman fallback is used.
 
 This fallback behavior is not a promise that Cloudflare quota is unlimited or that every failed image will be unique. Inspect the generated scene images if image consistency matters. Do not remove the delay without checking the provider's current rate limits.
 
@@ -187,7 +182,7 @@ For Telegram sending, the local script itself does not send the video; Telegram 
 | Gemini model/API error | Check model availability, API quota, key permissions and the model fallback messages in the log. |
 | Cloudflare 401/403 | Check account ID, token permissions, endpoint and current Workers AI access. |
 | Some repeated/mismatched scene images | Individual failed image requests can reuse another successful image; inspect logs and generated artwork. |
-| All Cloudflare requests fail | The pipeline falls back to locally drawn stickman artwork. |
+| All configured image providers fail | The run stops with a clear error; no stickman artwork is substituted. |
 | FFmpeg not found | Confirm the workflow's FFmpeg install step completed; install FFmpeg locally for local runs. |
 | Telegram step fails | Check bot token, chat ID, bot access to the chat and Telegram file-size/service limits. Since Telegram is before artifact upload, this may prevent the artifact step from running. |
 | No artifact | Check whether the workflow reached the artifact upload step and whether the Telegram step succeeded. |
@@ -408,7 +403,7 @@ Current image-generation flow:
 5. The code waits 6 seconds between scene requests to reduce request pressure.
 6. Successful image bytes are collected in memory and passed back to the main pipeline.
 7. Each image is resized to the configured video dimensions. The code draws a blue title strip and a black narration-caption strip over it.
-8. If an individual scene request fails, the code reuses a randomly selected successful AI image for that scene. If every Cloudflare request fails, the pipeline uses the locally drawn stickman artwork from `scripts/make_art_python.py`.
+8. If an individual scene request fails, the code reuses a randomly selected successful AI image for that scene. If Cloudflare fails, AI Horde and OVHcloud are attempted in order. If all providers fail for a scene, generation stops rather than substituting stickman artwork.
 
 **Important:** the current implementation is a single-model Cloudflare integration. Despite older references to multiple/cheap image models, the active code uses only FLUX-2-KLEIN-4B. It does not automatically switch to a second Cloudflare model.
 
@@ -626,7 +621,7 @@ There is no separate Worker URL or custom Worker source in this request path. Th
 | `cf_image_cheap()` | Checks credentials, sends multipart POST with Bearer token, prompt, width 1024, height 576; timeout 120 seconds | Change authentication, request fields, dimensions, timeout or response handling |
 | `generate_all_ai_images()` | Processes scenes sequentially, waits 6 seconds between calls, records failures and reuses a random successful image for failed scenes | Change concurrency, pacing, retry policy and failed-scene behavior |
 | `make_scene_art()` | Opens returned bytes with Pillow, resizes to output size, draws title/caption bars and saves the final scene image | Change image composition and overlays |
-| `scripts/make_art_python.py` | Local illustration fallback | Change the fallback drawing style/colors |
+| 
 
 ## 3. Current API request, in plain language
 
