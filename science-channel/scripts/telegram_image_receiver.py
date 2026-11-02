@@ -175,7 +175,7 @@ def main():
     inbox.mkdir(parents=True, exist_ok=True)
     update_files = sorted(
         inbox.glob("*.json"),
-        key=lambda path: int(path.stem) if path.stem.isdigit() else path.stem,
+        key=lambda path: (0, int(path.stem)) if path.stem.isdigit() else (1, path.stem),
     )
     if not update_files:
         print("No queued Telegram webhook updates; nothing to process.")
@@ -278,6 +278,12 @@ def main():
 
     if changed or updates:
         save_state(state)
+
+    # The inbox files are the durable delivery queue. Remove them only after
+    # every queued update has been handled and the receiver state is saved;
+    # the workflow commits these deletions together with the imported images.
+    for update_file in update_files:
+        update_file.unlink(missing_ok=True)
 
 if __name__ == "__main__":
     main()
