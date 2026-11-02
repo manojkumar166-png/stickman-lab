@@ -57,9 +57,9 @@ def gemini(prompt):
     raise RuntimeError("All Gemini models failed: "+" | ".join(errors))
 
 def plan_story(mode,topic,count):
-    direction=("Write a scientifically responsible, curiosity-driven mini documentary for a general audience. Explain mechanisms accurately, avoid fabricated facts and sensationalism, and end with a memorable takeaway."
+    direction=("Write a scientifically responsible, curiosity-driven mini documentary for a general audience. Explain mechanisms accurately, avoid fabricated facts and sensationalism, and end with a memorable takeaway. Visuals must be polished cinematic 3D CGI scientific visualizations with convincing depth, detailed materials and cinematic lighting."
       if mode=="science" else
-      "Write an original animated short with memorable characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain exact character appearance, clothing, colors and setting continuity. Do not imitate existing franchises or named artists.")
+      "Write an original animated short with memorable characters, a clear goal, obstacles, emotional growth and a satisfying ending. Maintain exact character appearance, clothing, colors and setting continuity. Use a polished 3D family-animation aesthetic with expressive original character designs, detailed materials, cinematic lighting and rich environments. Do not imitate or reproduce any specific studio, film, franchise, copyrighted character or named artist.")
     subject=topic.strip() or "Invent a fresh and compelling subject yourself."
     prompt=f"""Act as a professional screenwriter, documentary writer and storyboard artist.
 MODE: {mode}
@@ -69,8 +69,8 @@ Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
 {{"title":"title","description":"2 sentence summary","visual_style":"consistent visual treatment",
 "continuity_bible":"recurring character or visual continuity details",
 "scenes":[{{"scene_number":1,"heading":"short heading","narration":"2-4 natural spoken sentences",
-"visual_description":"concrete visible action/composition","image_prompt":"standalone detailed image prompt with camera, lighting, style, 16:9, no text/logo/watermark"}}]}}
-Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Science must be factual; animation must be original."""
+"visual_description":"concrete visible action/composition","image_prompt":"standalone detailed prompt for a polished 3D CGI render; specify camera, composition, lighting, materials, depth and visual style; 16:9; no text, logo or watermark"}}]}}
+Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design."""
     data=gemini(prompt); scenes=data.get("scenes")
     if not isinstance(scenes,list) or len(scenes)!=count: raise ValueError(f"Expected {count} scenes")
     for i,s in enumerate(scenes,1):
@@ -210,16 +210,31 @@ def main():
     p.add_argument("--scenes",type=int,default=8)
     p.add_argument("--voice",default="en-US-AndrewMultilingualNeural")
     a=p.parse_args()
-    if not 4<=a.scenes<=16: p.error("Scene count must be 4–16")
+    if not 4<=a.scenes<=48: p.error("Scene count must be 4–48")
+    print("::group::RUN CONFIGURATION",flush=True)
+    print(f"Mode={a.mode} | Scenes={a.scenes} | Voice={a.voice}",flush=True)
+    print("Images: anonymous OVHcloud -> AI Horde -> Vexa -> Pollinations. Cloudflare is not used.",flush=True)
+    print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
+    print("::endgroup::",flush=True)
     OUT.mkdir(exist_ok=True)
     package=OUT/(time.strftime("%Y%m%d-%H%M%S",time.gmtime())+"-"+a.mode); package.mkdir()
+    print("::group::STEP 1/5 - Gemini story planning",flush=True)
     data=plan_story(a.mode,a.topic,a.scenes); data.update({"mode":a.mode,"scene_count":a.scenes,"voice":a.voice})
     (package/"story.json").write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
+    print(f"Story validated: {data['title']} | {len(data['scenes'])} scenes",flush=True)
+    print("::endgroup::",flush=True)
     script="# "+data["title"]+"\n\n"+data["description"]+"\n\n"
     script+="\n\n".join(f"## Scene {s['scene_number']}: {s['heading']}\n\n{s['narration']}\n\n**Visual:** {s['visual_description']}" for s in data["scenes"])
     (package/"script.md").write_text(script,encoding="utf-8")
     (package/"images").mkdir()
+    print("::group::STEP 2/5 - Generate and validate scene images",flush=True)
+    print(f"Generating {len(data['scenes'])} individual images. Cloudflare is not used.",flush=True)
     generate_all(data["scenes"],package/"images")
+    print(f"All {len(data['scenes'])} scene images passed validation.",flush=True)
+    print("::endgroup::",flush=True)
+    print("::group::STEP 3/5 - Edge TTS narration and STEP 4/5 - FFmpeg rendering",flush=True)
     final=render(data["scenes"],package,a.voice)
+    print("::endgroup::",flush=True)
+    print("STEP 5/5 - Package complete; artifact upload is the next GitHub Actions step.",flush=True)
     print("FINAL_VIDEO="+str(final)); print("STORY_PACKAGE="+str(package))
 if __name__=="__main__": main()
