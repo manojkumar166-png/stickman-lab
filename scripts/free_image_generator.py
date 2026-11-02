@@ -125,7 +125,7 @@ def stability(prompt: str) -> bytes:
         try:
             response = requests.post(url,
                 headers={"Authorization": f"Bearer {token}", "Accept": "image/*"},
-                data={"prompt": prompt, "output_format": "png", "aspect_ratio": "16:9"},
+                files={"prompt": (None, prompt), "output_format": (None, "png"), "aspect_ratio": (None, "16:9")},
                 timeout=TIMEOUT)
             if response.status_code == 200:
                 return validate_image(response.content)
