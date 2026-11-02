@@ -64,6 +64,36 @@ def api(method, **kwargs):
             time.sleep(delay)
     raise RuntimeError(f"Telegram {method} failed after 4 attempts: {last_error}") from last_error
 
+
+def download_file(url):
+    """Download Telegram media with retries for temporary network/server errors."""
+    last_error = None
+    for attempt in range(1, 5):
+        try:
+            response = requests.get(url, timeout=(20, 120), stream=True)
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < 4:
+                    try:
+                        delay = max(1, min(60, int(float(response.headers.get("Retry-After", 2 ** attempt)))))
+                    except ValueError:
+                        delay = min(30, 2 ** attempt)
+                    response.close()
+                    print(f"Telegram media download returned HTTP {response.status_code}; retrying in {delay}s.", flush=True)
+                    time.sleep(delay)
+                    continue
+            response.raise_for_status()
+            content = response.content
+            response.close()
+            return content
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == 4:
+                break
+            delay = min(30, 2 ** attempt)
+            print(f"Telegram media download attempt {attempt}/4 failed: {exc}; retrying in {delay}s.", flush=True)
+            time.sleep(delay)
+    raise RuntimeError(f"Telegram media download failed after 4 attempts: {last_error}") from last_error
+
 def send(text):
     api("sendMessage", data={"chat_id": CHAT_ID, "text": text})
 
@@ -200,15 +230,14 @@ def main():
         present = scene_numbers(dest_dir)
         info = api("getFile", data={"file_id": file_id})
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{info['file_path']}"
-        download = requests.get(file_url, timeout=120)
-        download.raise_for_status()
-        if len(download.content) > 50 * 1024 * 1024:
+        download_content = download_file(file_url)
+        if len(download_content) > 50 * 1024 * 1024:
             send("Upload is over 50 MB and was skipped. Please send a smaller file.")
             continue
 
         if ext == "zip":
             try:
-                with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
+                with zipfile.ZipFile(io.BytesIO(download_content)) as archive:
                     entries = [item for item in archive.infolist()
                                if not item.is_dir() and item.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
                     if len(entries) != 48:
@@ -231,14 +260,14 @@ def main():
                 (dest_dir / f"scene-{index:02d}.{suffix}").write_bytes(data)
             changed = True
         else:
-            if len(download.content) > 20 * 1024 * 1024:
+            if len(download_content) > 20 * 1024 * 1024:
                 send("Image is over 20 MB and was skipped. Please reduce its size.")
                 continue
             if len(present) >= 48:
                 send("All 48 scene slots are already filled. No more images were added.")
                 continue
             number = next((n for n in range(1, 49) if n not in present), 0)
-            (dest_dir / f"scene-{number:02d}.{ext}").write_bytes(download.content)
+            (dest_dir / f"scene-{number:02d}.{ext}").write_bytes(download_content)
             changed = True
 
         present = scene_numbers(dest_dir)
