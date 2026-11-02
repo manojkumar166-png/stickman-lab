@@ -64,13 +64,13 @@ jobs:
           python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts
       - name: Plan, generate scene images, narrate and render
         env:
-          GEMINI_API_KEY: ${ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${ vars.GEMINI_MODEL }}
-          GEMINI_FALLBACK_MODELS: ${ vars.GEMINI_FALLBACK_MODELS }}
-          MODE: ${ inputs.mode }}
-          TOPIC: ${ inputs.topic }}
-          SCENES: ${ inputs.scenes }}
-          VOICE: ${ inputs.voice }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS }}
+          MODE: ${{ inputs.mode }}
+          TOPIC: ${{ inputs.topic }}
+          SCENES: ${{ inputs.scenes }}
+          VOICE: ${{ inputs.voice }}
         shell: bash
         run: |
           set -euo pipefail
@@ -96,12 +96,12 @@ jobs:
       - name: Upload finished video, script and scene images
         uses: actions/upload-artifact@v4
         with:
-          name: ${ steps.artifact.outputs.name }}
+          name: ${{ steps.artifact.outputs.name }}
           path: |
-            ${ steps.artifact.outputs.package }}/final-video.mp4
-            ${ steps.artifact.outputs.package }}/story.json
-            ${ steps.artifact.outputs.package }}/script.md
-            ${ steps.artifact.outputs.package }}/images/
+            ${{ steps.artifact.outputs.package }}/final-video.mp4
+            ${{ steps.artifact.outputs.package }}/story.json
+            ${{ steps.artifact.outputs.package }}/script.md
+            ${{ steps.artifact.outputs.package }}/images/
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
