@@ -280,7 +280,7 @@ def main():
     history_file=ROOT/"used_story_topics.json"
     history=json.loads(history_file.read_text(encoding="utf-8")) if history_file.is_file() else []
     history.append({"title":data["title"],"topic":data["topic"],"description":data["description"]})
-    history_file.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    history_file.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print("Recorded this completed topic in used_story_topics.json for future runs.",flush=True)
     print("STEP 5/5 - Package complete; artifact upload is the next GitHub Actions step.",flush=True)
     print("FINAL_VIDEO="+str(final)); print("STORY_PACKAGE="+str(package))
