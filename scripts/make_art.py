@@ -71,42 +71,141 @@ def cf_image_cheap(prompt):
     j = r.json()
     return base64.b64decode(j.get("result", j)["image"])
 
+_OVH_LAST_CALL = 0.0
+
+def valid_png(raw):
+    if not raw:
+        raise ValueError("Image provider returned an empty response")
+    with Image.open(io.BytesIO(raw)) as im:
+        im.verify()
+    with Image.open(io.BytesIO(raw)) as im:
+        converted = im.convert("RGB")
+        output = io.BytesIO()
+        converted.save(output, format="PNG", optimize=True)
+        return output.getvalue()
+
+def ovh_image(prompt):
+    """Anonymous OVHcloud SDXL fallback; limited to roughly 2 requests/minute."""
+    global _OVH_LAST_CALL
+    wait = max(0.0, 31.0 - (time.monotonic() - _OVH_LAST_CALL))
+    if wait:
+        print(f"  Waiting {wait:.1f}s for OVHcloud's anonymous rate limit.", flush=True)
+        time.sleep(wait)
+    _OVH_LAST_CALL = time.monotonic()
+    response = requests.post(
+        "https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image",
+        headers={"accept": "application/octet-stream", "Content-Type": "application/json"},
+        json={
+            "prompt": prompt,
+            "negative_prompt": "text, letters, typography, watermark, logo, signature, border, collage, split screen, duplicate subjects, extra limbs, malformed hands, deformed face, distorted anatomy, blurry, pixelated, low detail, flat lighting, oversaturated, noisy, jpeg artifacts"
+        },
+        timeout=(20, 180)
+    )
+    response.raise_for_status()
+    if "application/json" in response.headers.get("Content-Type", ""):
+        encoded = (response.json().get("data") or [{}])[0].get("b64_json")
+        if not encoded:
+            raise ValueError("OVHcloud returned no image data")
+        return valid_png(base64.b64decode(encoded))
+    return valid_png(response.content)
+
+def ai_horde_image(prompt):
+    """Anonymous AI Horde backup provider; wait up to 10 minutes for a worker."""
+    base = "https://aihorde.net/api/v2"
+    headers = {
+        "apikey": "0000000000",
+        "Client-Agent": "stickman-lab:1.0:https://github.com/manojkumar166-png/stickman-lab"
+    }
+    payload = {
+        "prompt": prompt + "###text, watermark, logo, blurry, low quality",
+        "params": {"width": 1024, "height": 576, "steps": 20, "n": 1},
+        "nsfw": False,
+        "censor_nsfw": True,
+        "trusted_workers": False
+    }
+    response = requests.post(base + "/generate/async", headers=headers, json=payload, timeout=60)
+    response.raise_for_status()
+    job_id = response.json().get("id")
+    if not job_id:
+        raise RuntimeError("AI Horde returned no job ID")
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        time.sleep(5)
+        check = requests.get(base + f"/generate/check/{job_id}", headers=headers, timeout=45)
+        check.raise_for_status()
+        state = check.json()
+        if state.get("faulted"):
+            raise RuntimeError("AI Horde generation faulted")
+        if state.get("done"):
+            break
+    else:
+        raise TimeoutError("AI Horde queue timed out after 10 minutes")
+    result = requests.get(base + f"/generate/status/{job_id}", headers=headers, timeout=60)
+    result.raise_for_status()
+    generations = result.json().get("generations") or []
+    if not generations or not generations[0].get("img"):
+        raise RuntimeError("AI Horde completed without an image")
+    image_data = generations[0]["img"]
+    if image_data.startswith("data:") and "," in image_data:
+        return valid_png(base64.b64decode(image_data.split(",", 1)[1]))
+    if image_data.startswith(("http://", "https://")):
+        download = requests.get(image_data, timeout=(20, 180))
+        download.raise_for_status()
+        return valid_png(download.content)
+    return valid_png(base64.b64decode(image_data, validate=True))
+
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations (Cheap Model ONLY)...")
+    print("Generating AI illustrations: Cloudflare primary -> AI Horde backup -> OVHcloud final fallback.")
+    os.makedirs(out_dir, exist_ok=True)
     results = []
-    
+    failures = []
+
     for i, scene in enumerate(scenes, 1):
-        visual = scene.get("visual", "science illustration")
-        prompt = build_prompt(visual)
-        
-        try:
-            img_data = cf_image_cheap(prompt)
-            results.append((i, img_data))
-            print(f"  Scene {i}/{len(scenes)}: Klein OK")
-        except Exception as e:
-            print(f"  Klein failed at scene {i}: {e}")
+        prompt = build_prompt(scene.get("visual", "science illustration"))
+        providers = (
+            ("Cloudflare FLUX.2 Klein", lambda: valid_png(cf_image_cheap(prompt))),
+            ("AI Horde", lambda: ai_horde_image(prompt)),
+            ("OVHcloud SDXL", lambda: ovh_image(prompt))
+        )
+        image_data = None
+        errors = []
+        for provider_name, generate in providers:
+            attempts = 5 if provider_name.startswith("Cloudflare") else (2 if provider_name.startswith("OVHcloud") else 1)
+            for attempt in range(1, attempts + 1):
+                try:
+                    print(f"  Scene {i}/{len(scenes)}: trying {provider_name} (attempt {attempt}/{attempts})", flush=True)
+                    image_data = generate()
+                    image_path = os.path.join(out_dir, f"scene-{i:03d}.png")
+                    with open(image_path, "wb") as image_file:
+                        image_file.write(image_data)
+                    print(f"  Scene {i}/{len(scenes)}: generated with {provider_name}", flush=True)
+                    break
+                except Exception as error:
+                    errors.append(f"{provider_name} attempt {attempt}: {error}")
+                    print(f"  Scene {i}: {provider_name} failed: {error}", flush=True)
+                    if attempt < attempts:
+                        delay = min(60, 5 * (2 ** (attempt - 1)))
+                        print(f"  Retrying {provider_name} in {delay}s.", flush=True)
+                        time.sleep(delay)
+            if image_data is not None:
+                break
+
+        if image_data is None:
+            failures.append(f"Scene {i}: " + " | ".join(errors))
             results.append((i, None))
-            
-        if i < len(scenes):
-            time.sleep(6)
-            
-    # If any failed, reuse a successful image to fill the gap
-    successful_images = [img for idx, img in results if img is not None]
-    
-    if not successful_images:
-        print("  All images failed. Falling back to stickmen.")
-        return results
-        
-    final_results = []
-    for i, img_data in results:
-        if img_data is not None:
-            final_results.append((i, img_data))
         else:
-            random_img = random.choice(successful_images)
-            final_results.append((i, random_img))
-            print(f"  Scene {i}/{len(scenes)}: Filled with a random AI image")
-            
-    return final_results
+            results.append((i, image_data))
+
+        if i < len(scenes):
+            time.sleep(2)
+
+    if failures:
+        raise RuntimeError(
+            "All configured image providers failed for one or more scenes; "
+            "no stickman fallback is used. " + " || ".join(failures)
+        )
+    print(f"Successfully generated and saved all {len(results)} AI scene images.", flush=True)
+    return results
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
     if ai_image_data:
@@ -118,7 +217,7 @@ def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_dat
             ai_image_data = None
 
     if not ai_image_data:
-        return make_scene_art_python(scene, idx, total, path, width, height)
+        raise RuntimeError(f"Scene {idx}: no valid AI-generated image was supplied; refusing stickman fallback.")
 
     # Clean full-frame artwork: no title/caption bars or text overlays.
     im.save(path, quality=95)
