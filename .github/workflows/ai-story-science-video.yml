@@ -44,6 +44,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/huggingface
+          key: whisper-small-${{ runner.os }}-v1
       - name: Install FFmpeg and dependencies
         run: |
           set -euo pipefail
@@ -52,9 +57,9 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 10))
           done
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts faster-whisper
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -80,33 +85,92 @@ jobs:
             git commit -m "Record completed story topic"
             git push origin HEAD:main
           fi
+      - name: Generate and burn karaoke subtitles; name final video
+        id: final_video
+        env:
+          HF_HOME: ${{ runner.temp }}/huggingface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          root = Path("ai-story-video-output")
+          packages = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)
+          if not packages:
+              raise SystemExit("No output package was created.")
+          package = packages[-1]
+          story = json.loads((package / "story.json").read_text(encoding="utf-8"))
+          title = str(story.get("title", "")).strip()
+          if not title:
+              raise SystemExit("Story title is missing.")
+          safe_title = re.sub(r'[<>:"/\\\\|?*]', "", title).strip().rstrip(".")
+          if not safe_title or safe_title in {".", ".."}:
+              raise SystemExit("Could not make a safe filename from the story title.")
+          final_name = safe_title + ".mp4"
+          video = package / "final-video.mp4"
+          if not video.is_file() or video.stat().st_size < 100000:
+              raise SystemExit("Final video is missing or too small.")
+          captions = package / "karaoke-captions.ass"
+          subtitled = package / "subtitled-final.mp4"
+          import sys
+          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
+          from karaoke_subtitles import generate_karaoke_ass
+          words = generate_karaoke_ass(str(video), str(captions), 1280, 720)
+          print(f"Generated karaoke captions for {words} timed words.")
+          subprocess.run([
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(video),
+              "-vf", f"subtitles={captions.as_posix()}:fontsdir=/usr/share/fonts/truetype/dejavu",
+              "-map", "0:v:0", "-map", "0:a:0",
+              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+              "-c:a", "copy", "-shortest", "-movflags", "+faststart", str(subtitled)
+          ], check=True)
+          if not subtitled.is_file() or subtitled.stat().st_size < 100000:
+              raise SystemExit("Subtitled final video is missing or too small.")
+          subtitled.replace(video)
+          captions.unlink(missing_ok=True)
+          destination = Path("ai-story-video-output") / final_name
+          if destination.exists():
+              destination.unlink()
+          video.replace(destination)
+          # Keep package internals for workflow processing, but deliver only the final MP4.
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"video={destination.as_posix()}\\n")
+              output.write(f"filename={final_name}\\n")
+              output.write(f"title<<TITLE_EOF\\n{title}\\nTITLE_EOF\\n")
+          print(f"Final video ready: {destination}")
+          PY
       - name: Resolve artifact
         id: artifact
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, re
+          import json, os
           from pathlib import Path
-          root=Path("ai-story-video-output")
-          packages=sorted((p for p in root.iterdir() if p.is_dir()),key=lambda p:p.name)
-          if not packages: raise SystemExit("No output package was created")
-          package=packages[-1]
-          data=json.loads((package/"story.json").read_text(encoding="utf-8"))
-          slug=re.sub(r"[^a-z0-9]+","-",data["title"].lower()).strip("-")[:60].strip("-") or "story-video"
-          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as f:
-              f.write(f"package={package.as_posix()}\n")
-              f.write(f"name={data['mode']}-{slug}\n")
+          video = Path("${{ steps.final_video.outputs.video }}")
+          if not video.is_file():
+              raise SystemExit(f"Final video not found: {video}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"name={video.stem}\\n")
+              f.write(f"video={video.as_posix()}\\n")
           PY
-      - name: Upload finished video, script and scene images
+
+      - name: Upload final video only
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.name }}
-          path: |
-            ${{ steps.artifact.outputs.package }}/final-video.mp4
-            ${{ steps.artifact.outputs.package }}/story.json
-            ${{ steps.artifact.outputs.package }}/script.md
-            ${{ steps.artifact.outputs.package }}/images/
+          path: ${{ steps.artifact.outputs.video }}
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+      - name: Send final video to Telegram
+        continue-on-error: true
+        uses: PonomarevDA/telegram-upload@v1
+        with:
+          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          files: ${{ steps.artifact.outputs.video }}
+          message: "🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator\nTitle: ${{ steps.final_video.outputs.title }}"
+
