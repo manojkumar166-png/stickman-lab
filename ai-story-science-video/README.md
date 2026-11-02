@@ -1,9 +1,9 @@
 # AI Story & Science Video Creator
 
-A standalone workflow following the AI Video Experiment's end-to-end pattern—Gemini story, per-scene artwork, Edge TTS narration, FFmpeg rendering and artifact upload—but using free anonymous image providers instead of Cloudflare. Supports 6–48 scenes, including 48-image long-form videos.
+A standalone one-click workflow: Gemini invents a topic, creates a 48-scene plan, free anonymous image providers generate 48 images, Edge TTS creates narration, and FFmpeg renders the final MP4. It does not use Cloudflare for image generation and does not require a paid image API key.
 
 ## Gemini-led creation
-There is no manual science/animated mode selector. Optionally supply a topic or leave it blank. Gemini first reads the root-level topics.txt inspiration library, studies its broad subject areas and curiosity-driven style, then invents a genuinely new topic—not an exact match, paraphrase or near-duplicate. An optional topic input is treated only as an extra interest hint. Gemini then decides whether the new idea works best as a science documentary or an original animated story. It then creates the script, continuity bible and scene-by-scene visual prompts.
+There is no manual science/animated mode selector and no manual topic input in the current workflow. Gemini reads the root-level topics.txt inspiration library, studies its broad subject areas and curiosity-driven style, then invents a genuinely new topic—not an exact match, paraphrase or near-duplicate. Gemini decides whether the idea works best as a science documentary or an original animated story, then creates the script, continuity bible and 48 scene-by-scene visual prompts.
 
 ## Topic inspiration file
 
@@ -12,14 +12,19 @@ Edit the repository-root topics.txt to control the subject areas and curiosity-d
 ## Pipeline
 1. Gemini creates a complete ordered script and scene plan.
 2. Each scene receives a detailed image prompt.
-3. Each scene tries several routes in order: anonymous OVHcloud SDXL (rate-limited to about one request every 35 seconds), anonymous AI Horde volunteer workers, Vexa's anonymous DeepAI/Flux image endpoint, then direct Pollinations. OVHcloud receives a retry; the remaining providers are fallbacks.
+3. Each scene tries several routes in order: anonymous OVHcloud SDXL (spaced about 31 seconds apart to stay below its anonymous rate limit), anonymous AI Horde volunteer workers, Vexa's anonymous DeepAI/Flux image endpoint, then direct Pollinations. OVHcloud receives a retry; the remaining providers are fallbacks.
 4. All images are validated. If any scene image is missing or invalid, rendering stops. The Actions log reports provider attempts and scene-by-scene progress.
 5. Edge TTS creates narration for each scene.
 6. FFmpeg combines each scene image and its narration, then joins all segments into one MP4.
 7. The MP4, story JSON, readable script and images are uploaded as a 7-day artifact.
 
-## Run
-Open Actions, select AI Story & Science Video Creator, and choose Run workflow. Optionally enter an interest hint (or leave it blank), choose 6/8/10/12/16/48 scenes and a voice. Gemini reads topics.txt, invents a distinct new topic in a similar spirit, then chooses science documentary or animated story.
+## Run — one click, 48 scenes
+1. Open the repository's **Actions** tab.
+2. Select **AI Story & Science Video Creator**.
+3. Click **Run workflow**.
+4. Select branch **main** and click **Run workflow** again.
+
+There are no input fields. Every run automatically asks Gemini for a fresh topic, creates 48 scenes/images and uses the default voice `en-US-AndrewMultilingualNeural`.
 
 ## Required secret
 Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No Zhipu, Stability, OVH token, Cloudflare or payment secret is used.
@@ -34,7 +39,7 @@ Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No
 - Gemini and GitHub Actions have separate account quotas and terms. Do not enable billing if you want a strict no-card setup.
 
 ## Output package
-story.json, script.md, images/scene-XX.png, audio/scene-XX.mp3, segments/segment-XX.mp4 and final-video.mp4. The uploaded artifact contains the final MP4, script, plan and scene images.
+During the run, the job creates story.json, script.md, images/scene-XX.png, audio/scene-XX.mp3, segments/segment-XX.mp4 and final-video.mp4. The workflow then burns karaoke subtitles, renames the finished MP4 using the story title, and uploads **only that final MP4** as a 7-day artifact. Telegram delivery also sends only the final MP4.
 
 
 ## Gemini model configuration
@@ -52,3 +57,33 @@ Image prompts request polished cinematic 3D CGI, detailed materials, depth and l
 ## Image provider difference from AI Video Experiment
 
 The legacy AI Video Experiment uses Cloudflare Workers AI. This workflow deliberately does not copy that image backend: it uses anonymous OVHcloud SDXL, AI Horde, Vexa and Pollinations as its fallback chain. The rest of the production pattern is similar: Gemini planning, per-scene artwork, Edge TTS, FFmpeg and downloadable GitHub Actions artifacts.
+
+
+## Change the workflow defaults
+
+The Actions screen intentionally has no inputs. Change settings by editing the files in the repository and committing the change to `main`.
+
+| Setting | File and exact place |
+|---|---|
+| Scene count (currently 48) | `.github/workflows/ai-story-science-video.yml` — change `--scenes 48` in the Python command. The script accepts 4–48. |
+| Narration voice | Same YAML command — change the value after `--voice`. |
+| Fixed topic instead of Gemini choosing | Same YAML command — replace `--topic ""` with `--topic "your topic here"`. Leave it blank for automatic topic selection. |
+| Topic inspiration and subject variety | Root `topics.txt` — add or remove one inspiration per line. |
+| Gemini model and fallback | Repository Settings → Secrets and variables → Actions → Variables: `GEMINI_MODEL` and `GEMINI_FALLBACK_MODELS`. |
+| Cinematic image prompt style/framing | `scripts/ai_story_video.py`, function `generation_prompt()`. |
+| Image providers, order, retries and pacing | Same Python file: `ovh()`, `ai_horde()`, `vexa()`, `pollinations()` and `generate_all()`. |
+| Video encoding | Same Python file, function `render()`. |
+| Karaoke caption design | `science-channel/scripts/karaoke_subtitles.py`. |
+| Artifact and Telegram delivery | `.github/workflows/ai-story-science-video.yml`. |
+
+The exact one-click command is:
+
+```bash
+python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
+```
+
+The workflow index and repository-wide editing guidance are in [`.github/workflows/README.md`](../.github/workflows/README.md) and the [root README](../README.md).
+
+## Runtime expectations
+
+Forty-eight images are generated sequentially. Anonymous image services have queues and rate limits; OVHcloud spacing alone adds roughly 24 minutes across 48 scene requests, before actual image-generation time, provider fallbacks, narration, subtitles and video rendering. This is a no-card design, not an instant-generation guarantee. Reducing the scene count in the workflow command is the most direct way to shorten a run.
