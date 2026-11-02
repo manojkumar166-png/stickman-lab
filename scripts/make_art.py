@@ -33,10 +33,33 @@ def cf_image_cheap(prompt):
         "height": (None, "576")
     }
     
-    r = requests.post(CF_URL_CHEAP, headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
-                      files=form_data, timeout=120)
+    headers = {"Authorization": f"Bearer {CF_API_TOKEN}"}
+    r = None
+    for attempt in range(1, 6):
+        try:
+            r = requests.post(CF_URL_CHEAP, headers=headers, files=form_data, timeout=(20, 180))
+            if r.status_code == 429 or r.status_code >= 500:
+                retry_after = r.headers.get("Retry-After", "")
+                try:
+                    delay = max(1, min(90, int(float(retry_after)))) if retry_after else min(60, 5 * (2 ** (attempt - 1)))
+                except ValueError:
+                    delay = min(60, 5 * (2 ** (attempt - 1)))
+                if attempt < 5:
+                    print(f"Cloudflare image API returned {r.status_code} for this scene; retry {attempt}/5 in {delay}s.", flush=True)
+                    time.sleep(delay)
+                    continue
+            r.raise_for_status()
+            break
+        except requests.RequestException:
+            if attempt == 5:
+                raise
+            delay = min(60, 5 * (2 ** (attempt - 1)))
+            print(f"Cloudflare image request attempt {attempt}/5 failed; retrying in {delay}s.", flush=True)
+            time.sleep(delay)
+    if r is None:
+        raise RuntimeError("Cloudflare image request did not return a response.")
     r.raise_for_status()
-    
+
     if r.headers.get("content-type", "").startswith("image/"):
         return r.content
         
