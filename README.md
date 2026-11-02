@@ -18,7 +18,8 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
 | Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
-| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Check workflow YAML files for common configuration errors | **Validate Workflows** | Repository workflow trigger |
+| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |
+| Check workflow YAML, Python entry points and Cloudflare Worker syntax | **Validate Workflows** | Repository code/workflow changes |
 
 There are **seven active workflow files** in `.github/workflows/` (including the workflow validator). Each active workflow now has a dedicated detailed guide linked from [`.github/workflows/README.md`](.github/workflows/README.md). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
@@ -49,9 +50,9 @@ File: [.github/workflows/telegram-image-receiver.yml](.github/workflows/telegram
 - **Branch:** checks out and commits only to main.
 - **Episode selection:** by default it automatically selects the newest episode package currently present on main. To select a different existing episode, send the bot a command such as /episode 2026-11-01/episode-001. The episode must already exist on main.
 - **Accepted uploads:** send 48 individual image files/photos, or send one ZIP containing exactly 48 supported images. Supported receiver formats are JPG/JPEG, PNG and WebP. The bot numbers individual images into the next available scene slot; a ZIP is sorted and expanded into scene files.
-- **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files and receiver state to main. That commit triggers the renderer.
+- **Completion:** once all 48 scene slots are present, the receiver creates READY.txt. The workflow commits received files, receiver state and processed-inbox deletions to main, then explicitly dispatches the renderer for that exact episode.
 - **Telegram commands:** /start and /help show instructions; /episode YYYY-MM-DD/episode-NNN selects an existing main-branch episode.
-- **Important:** send uploads to the configured bot chat. The receiver only accepts messages from the configured TELEGRAM_CHAT_ID. A ZIP must contain exactly 48 images and cannot be mixed with already-uploaded scene images.
+- **Important:** send uploads to the configured bot chat. The receiver only accepts messages from the configured TELEGRAM_CHAT_ID. A ZIP must contain exactly 48 images and cannot be mixed with already-uploaded scene images. For ZIP uploads, the original archive is retained as images/incoming/source-upload.zip until Telegram confirms delivery; it is then deleted with the extracted images.
 
 This is the easiest route when you want to send images directly from Telegram. The receiver does not poll Telegram. The Cloudflare Worker owns the Telegram webhook and forwards upload updates to this workflow; this prevents webhook/polling conflicts.
 
