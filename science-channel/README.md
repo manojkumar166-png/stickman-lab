@@ -89,7 +89,7 @@ File: `.github/workflows/telegram-image-receiver.yml`
 
 - **Trigger:** the Cloudflare Worker receives Telegram webhook updates and forwards image/ZIP uploads and `/episode` selections when the Worker commits a queued JSON update under `.github/telegram-inbox/`. Manual workflow dispatch remains available for maintenance.
 - **Branch:** checks out and commits only to `main`; it does not read or write `adaptive-cinematic-effects`.
-- **Episode selection:** automatically selects the newest episode package on `main`. Send `/episode YYYY-MM-DD/episode-001` to choose another existing episode.
+- **Episode selection:** automatically selects the newest episode package on `main`. Send `/episode YYYY-MM-DD/episode-001-topic-slug` to choose another existing episode.
 - **Uploads:** accepts individual JPG/JPEG, PNG or WebP images, or one ZIP containing exactly 48 supported images. Individual images are placed into the next missing scene number. A ZIP is expanded into 48 numbered scene files.
 - **Completion:** when all 48 scene slots are present, the bot creates `READY.txt`. The workflow commits the images and receiver state to `main`; the image commit triggers the render workflow.
 - **Chat restriction:** only messages from the configured `TELEGRAM_CHAT_ID` are processed. `/start` and `/help` display bot instructions.
