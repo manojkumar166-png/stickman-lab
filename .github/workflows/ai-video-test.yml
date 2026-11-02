@@ -117,9 +117,9 @@ jobs:
           if len(candidates) != 1:
               raise SystemExit(f"Expected exactly one generated video for {today}; found {len(candidates)}.")
           candidates[0].replace(Path("output") / filename)
-          delimiter = "TOPIC_EOF"
+          display_topic = " ".join(topic.split())
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"topic<<{delimiter}\n{topic}\n{delimiter}\n")
+              output.write(f"topic={display_topic}\n")
               output.write(f"filename={filename}\n")
           PY
 
