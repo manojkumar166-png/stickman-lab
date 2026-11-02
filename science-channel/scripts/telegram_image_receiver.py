@@ -332,9 +332,9 @@ def main():
     output_path = os.getenv("GITHUB_OUTPUT")
     if output_path and completed_episodes:
         with open(output_path, "a", encoding="utf-8") as output:
-            output.write("completed_episodes<<EPISODES_EOF\\n")
-            output.write("\\n".join(completed_episodes) + "\\n")
-            output.write("EPISODES_EOF\\n")
+            output.write("completed_episodes<<EPISODES_EOF\n")
+            output.write("\n".join(completed_episodes) + "\n")
+            output.write("EPISODES_EOF\n")
 
     # The inbox files are the durable delivery queue. Remove them only after
     # every queued update has been handled and the receiver state is saved;
