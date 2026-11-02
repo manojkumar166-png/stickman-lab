@@ -1,26 +1,26 @@
 # Free Image Generator
 
-An independent GitHub Actions workflow for generating images through free-tier image APIs with automatic fallback.
+An independent GitHub Actions workflow for image generation using free API access and automatic fallback. Cloudflare is intentionally excluded because it is already used by the AI Video Experiment.
 
 ## Run it
 
 Open **Actions → Free Image Generator → Run workflow**. Enter a prompt and optional dimensions. A scheduled run also executes daily at 11:30 AM IST with a default science illustration prompt.
 
-## Providers
+## Provider order
 
-1. Cloudflare Workers AI — FLUX.1 schnell (10,000 Neurons/day free allocation).
-2. OVHcloud AI Endpoints — Stable Diffusion XL (catalog-listed Free model).
+1. OVHcloud AI Endpoints — SDXL (catalog-listed Free; anonymous rate-limited access).
+2. Zhipu AI — CogView-3-Flash (listed as free; account concurrency/eligibility applies).
+3. Stability AI — Stable Image Core (25 one-time introductory credits).
+4. Pollinations Free API Classic (anonymous, best-effort, rate-limited).
 
-The generator retries transient failures, skips permanent credential/model errors, validates image bytes, and moves to the next provider. It never calls a paid provider. If both providers fail, the workflow fails and records the reason.
+The generator retries transient failures, skips providers without required keys, validates image bytes, and moves to the next provider. It never calls Cloudflare or a paid-only provider. Stability's initial credits are finite and are not replenished automatically. If every provider fails, the workflow fails and records the reason.
 
-See [API audit](API_AUDIT.md) for current quotas, setup requirements, exclusions, and source links.
+See [API audit](API_AUDIT.md) for quotas, limitations, exclusions, and source links.
 
 ## Required GitHub Actions secrets
 
-- `CF_ACCOUNT_ID`
-- `CF_API_TOKEN`\n- Repository variable `CF_WORKERS_FREE_PLAN_CONFIRMED=true` only if the account is on Workers Free (leave unset on Workers Paid)
-- `OVH_AI_ENDPOINTS_ACCESS_TOKEN`
-
-Add keys under **Settings → Secrets and variables → Actions**. Set the Cloudflare confirmation variable only if your account is on the Workers Free plan. The Cloudflare provider is disabled by default until this is explicitly confirmed. Do not commit keys.
+- `ZHIPU_API_KEY`
+- `STABILITY_API_KEY`
+- `OVH_AI_ENDPOINTS_ACCESS_TOKEN` (optional)
 
 Generated images and the provider log are uploaded as a workflow artifact for 14 days. This workflow does not modify or invoke any existing workflow.
