@@ -88,6 +88,7 @@ jobs:
           echo "Verified $EPISODE_PATH on main."
       - name: Send episode prompts to Telegram only after main commit
         if: success()
+        id: telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -109,6 +110,21 @@ jobs:
             -F "document=@$PROMPT_FILE;filename=image-prompts.md" \
             -F "caption=🖼️ Episode package committed to main: $TITLE | Upload 48 numbered images to $EPISODE_PATH/images/incoming/" \
             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument"
+      - name: Report prompt-delivery status
+        if: steps.telegram.outcome == 'failure'
+        run: echo "::warning::The episode is safely committed to main, but Telegram prompt delivery failed. The prompt file remains available in the episode folder."
+
+      - name: Preserve generated episode package if publication fails
+        if: failure() && steps.generated.outputs.path != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: science-planner-recovery-${{ github.run_id }}
+          path: |
+            ${{ steps.generated.outputs.path }}/
+            science-channel/history/generated-topics.json
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
