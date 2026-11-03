@@ -2,9 +2,12 @@ name: AI Story & Science Video Creator
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "30 5 * * *" # Daily at 11:00 AM IST
 
 permissions:
   contents: write
+  actions: write
 concurrency:
   group: stickman-lab-main-writer
   cancel-in-progress: false
@@ -19,6 +22,17 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Restore saved science-video progress
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ai-story-video-output
+          if git fetch origin ai-story-science-progress; then
+            git archive origin/ai-story-science-progress progress | tar -x -C .
+            if [[ -d progress/ai-story-video-output ]]; then cp -a progress/ai-story-video-output/. ai-story-video-output/; fi
+          else
+            echo "No previous science-video checkpoint."
+          fi
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -198,6 +212,35 @@ jobs:
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.artifact.outputs.video }}
           message: "🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator\nTitle: ${{ steps.final_video.outputs.title }}"
+      - name: Save science-video progress
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          SYNC_DIR="$RUNNER_TEMP/science-progress-worktree"
+          git fetch origin ai-story-science-progress || true
+          if git show-ref --verify --quiet refs/remotes/origin/ai-story-science-progress; then
+            git worktree add -B ai-story-science-progress "$SYNC_DIR" origin/ai-story-science-progress
+          else
+            git worktree add --detach "$SYNC_DIR" HEAD
+            git -C "$SYNC_DIR" switch --orphan ai-story-science-progress
+            git -C "$SYNC_DIR" rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p "$SYNC_DIR/progress/ai-story-video-output"
+          cp -a ai-story-video-output/. "$SYNC_DIR/progress/ai-story-video-output/" 2>/dev/null || true
+          git -C "$SYNC_DIR" add -A progress
+          if ! git -C "$SYNC_DIR" diff --cached --quiet; then
+            git -C "$SYNC_DIR" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Checkpoint science video generation"
+            git -C "$SYNC_DIR" push origin HEAD:refs/heads/ai-story-science-progress
+          fi
+      - name: Retry failed workflow run
+        if: failure() && fromJSON(github.run_attempt) < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run rerun "${GITHUB_RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
