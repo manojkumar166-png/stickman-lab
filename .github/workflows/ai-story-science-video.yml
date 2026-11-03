@@ -199,6 +199,7 @@ jobs:
               output.write(f"video={final_video.as_posix()}\n")
               output.write(f"filename={final_video.name}\n")
               output.write(f"title={' '.join(title.split())}\n")
+              output.write(f"package={package.as_posix()}\\n")
           print(f"Burned karaoke captions for {words} timed words into {final_video}.")
           PY
       - name: Upload final video
@@ -224,6 +225,24 @@ jobs:
         run: |
           echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
           exit 1
+      - name: Mark science story complete after successful delivery
+        env:
+          PACKAGE_PATH: ${{ steps.final_video.outputs.package }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          package = Path(os.environ['PACKAGE_PATH'])
+          story_path = package / 'story.json'
+          story = json.loads(story_path.read_text(encoding='utf-8'))
+          story['completed'] = True
+          temporary = story_path.with_name(story_path.name + '.tmp')
+          temporary.write_text(json.dumps(story, ensure_ascii=False, indent=2) + '\\n', encoding='utf-8')
+          temporary.replace(story_path)
+          print(f'Marked delivered story complete: {story_path}')
+          PY
       - name: Save science-video progress after failure
         if: failure()
         shell: bash
