@@ -199,7 +199,7 @@ jobs:
           story = json.loads(story_path.read_text(encoding="utf-8"))
           story["completed"] = True
           temporary = story_path.with_name(story_path.name + ".tmp")
-          temporary.write_text(json.dumps(story, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+          temporary.write_text(json.dumps(story, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           os.replace(temporary, story_path)
           print(f"Marked delivered story complete: {story_path}")
           PY
