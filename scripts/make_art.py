@@ -55,11 +55,15 @@ def cf_image_cheap(prompt):
             if r.status_code == 429:
                 retry_after = r.headers.get("Retry-After", "")
                 try:
-                    cooldown = max(30, min(300, int(float(retry_after)))) if retry_after else 60
+                    cooldown = max(1, min(900, int(float(retry_after)))) if retry_after else 60
                 except ValueError:
                     cooldown = 60
                 _CLOUDFLARE_COOLDOWN_UNTIL = time.monotonic() + cooldown
-                raise CloudflareRateLimited(f"Cloudflare returned HTTP 429; pausing Cloudflare for {cooldown}s before trying it again.")
+                if attempt < 5:
+                    print(f"Cloudflare returned HTTP 429; waiting {cooldown}s, then retrying Cloudflare for this same scene (attempt {attempt + 1}/5).", flush=True)
+                    time.sleep(cooldown)
+                    continue
+                raise CloudflareRateLimited(f"Cloudflare remained rate-limited after 5 attempts; using fallback for this scene.")
             if r.status_code >= 500:
                 retry_after = r.headers.get("Retry-After", "")
                 try:
