@@ -24,7 +24,8 @@
     "Why do songs get stuck in your head?",
     "Why does soap make bubbles?",
     "Why do pinecones open and close?",
-    "Why do we yawn?"
+    "Why do we yawn?",
+    "Why do clouds float?"
   ],
   "topic_details": [
     {
@@ -136,6 +137,11 @@
       "title": "Why do we yawn?",
       "angle": "Explore the surprising neurology and social mechanics behind contagious yawning, moving beyond simple tiredness to uncover its role in brain cooling and social bonding.",
       "pillar": "Human body and mind"
+    },
+    {
+      "title": "Why do clouds float?",
+      "angle": "An exploration of how rising warm air, tiny aerosol particles, and droplet surface tension allow massive water masses to defy gravity and stay aloft.",
+      "pillar": "Earth, oceans and weather"
     }
   ]
 }
