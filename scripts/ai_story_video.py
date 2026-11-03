@@ -278,6 +278,20 @@ async def speak(text,path,voice):
 def command(args):
     subprocess.run(args,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
 
+def media_has_stream(path,selector,minimum_bytes=1024):
+    path=Path(path)
+    if not path.is_file() or path.stat().st_size<minimum_bytes:
+        return False
+    try:
+        probe=subprocess.run(
+            ["ffprobe","-v","error","-select_streams",selector,
+             "-show_entries","stream=codec_type","-of","csv=p=0",str(path)],
+            capture_output=True,text=True,timeout=30
+        )
+        return probe.returncode==0 and bool(probe.stdout.strip())
+    except (OSError,subprocess.SubprocessError):
+        return False
+
 def render(scenes,package,voice):
     aud=package/"audio"
     seg=package/"segments"
@@ -288,29 +302,34 @@ def render(scenes,package,voice):
         n=s["scene_number"]
         audio=aud/f"scene-{n:02d}.mp3"
         video=seg/f"segment-{n:02d}.mp4"
-        if not audio.is_file() or audio.stat().st_size<=1000:
+        if not media_has_stream(audio,"a:0",1000):
+            audio.unlink(missing_ok=True)
             print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
             asyncio.run(speak(s["narration"],audio,voice))
+            if not media_has_stream(audio,"a:0",1000):
+                raise RuntimeError(f"Scene {n}: Edge TTS audio failed media validation")
         else:
             print(f"Edge TTS: reusing saved audio for scene {n}/{len(scenes)}",flush=True)
-        if not video.is_file() or video.stat().st_size<100000:
+        if not (media_has_stream(video,"v:0",100000) and media_has_stream(video,"a:0",100000)):
+            video.unlink(missing_ok=True)
             print(f"FFmpeg: rendering scene segment {n}/{len(scenes)}",flush=True)
             command(["ffmpeg","-y","-loop","1","-i",str(package/"images"/f"scene-{n:02d}.png"),"-i",str(audio),
               "-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
               "-r","25","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-b:a","128k",
               "-shortest","-movflags","+faststart",str(video)])
-            if not video.is_file() or video.stat().st_size<100000:
-                raise RuntimeError(f"Scene {n}: FFmpeg did not produce a valid video segment")
+            if not (media_has_stream(video,"v:0",100000) and media_has_stream(video,"a:0",100000)):
+                raise RuntimeError(f"Scene {n}: FFmpeg did not produce a valid audio/video segment")
         else:
             print(f"FFmpeg: reusing saved video segment for scene {n}/{len(scenes)}",flush=True)
         parts.append(video)
     concat=package/"concat.txt"
     concat.write_text("".join(f"file '{p.resolve().as_posix()}'\n" for p in parts),encoding="utf-8")
     final=package/"final-video.mp4"
-    if not final.is_file() or final.stat().st_size<100000:
+    if not (media_has_stream(final,"v:0",100000) and media_has_stream(final,"a:0",100000)):
+        final.unlink(missing_ok=True)
         command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
-    if not final.exists() or final.stat().st_size<100000:
-        raise RuntimeError("Final MP4 missing or too small")
+    if not (media_has_stream(final,"v:0",100000) and media_has_stream(final,"a:0",100000)):
+        raise RuntimeError("Final MP4 is missing, incomplete, or has no valid audio/video streams")
     return final
 def main():
     p=argparse.ArgumentParser()
@@ -338,7 +357,9 @@ def main():
             saved_scenes=saved.get("scenes")
             if (not isinstance(saved_scenes,list) or len(saved_scenes)!=a.scenes
                     or any(not isinstance(scene,dict) or scene.get("scene_number")!=i
+                           or not str(scene.get("heading","")).strip()
                            or not str(scene.get("narration","")).strip()
+                           or not str(scene.get("visual_description","")).strip()
                            or not str(scene.get("image_prompt","")).strip()
                            for i,scene in enumerate(saved_scenes,1))):
                 continue
