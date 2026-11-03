@@ -27,9 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ai-story-video-output
-          if git fetch origin ai-story-science-progress; then
+          if git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress; then
             git archive origin/ai-story-science-progress progress | tar -x -C .
-            if [[ -d progress/ai-story-video-output ]]; then cp -a progress/ai-story-video-output/. ai-story-video-output/; fi
+            if [[ -d progress/ai-story-video-output ]]; then
+              cp -a progress/ai-story-video-output/. ai-story-video-output/
+              echo "Restored science-video checkpoint."
+            fi
+            rm -rf progress
           else
             echo "No previous science-video checkpoint."
           fi
@@ -210,29 +214,61 @@ jobs:
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: ${{ steps.artifact.outputs.video }}
+          files: ${{ steps.final_video.outputs.video }}
           message: "🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator\nTitle: ${{ steps.final_video.outputs.title }}"
-      - name: Save science-video progress
-        if: always()
+      - name: Save science-video progress after failure
+        if: failure()
         shell: bash
         run: |
           set -euo pipefail
           SYNC_DIR="$RUNNER_TEMP/science-progress-worktree"
-          git fetch origin ai-story-science-progress || true
-          if git show-ref --verify --quiet refs/remotes/origin/ai-story-science-progress; then
+          if git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress; then
             git worktree add -B ai-story-science-progress "$SYNC_DIR" origin/ai-story-science-progress
           else
             git worktree add --detach "$SYNC_DIR" HEAD
             git -C "$SYNC_DIR" switch --orphan ai-story-science-progress
             git -C "$SYNC_DIR" rm -rf . >/dev/null 2>&1 || true
           fi
+          rm -rf "$SYNC_DIR/progress/ai-story-video-output"
           mkdir -p "$SYNC_DIR/progress/ai-story-video-output"
-          cp -a ai-story-video-output/. "$SYNC_DIR/progress/ai-story-video-output/" 2>/dev/null || true
-          git -C "$SYNC_DIR" add -A progress
-          if ! git -C "$SYNC_DIR" diff --cached --quiet; then
-            git -C "$SYNC_DIR" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Checkpoint science video generation"
-            git -C "$SYNC_DIR" push origin HEAD:refs/heads/ai-story-science-progress
+          if [[ -d ai-story-video-output ]]; then
+            cp -a ai-story-video-output/. "$SYNC_DIR/progress/ai-story-video-output/"
           fi
+          git -C "$SYNC_DIR" add -A progress
+          if git -C "$SYNC_DIR" diff --cached --quiet; then
+            echo "No new science-video progress to checkpoint."
+            exit 0
+          fi
+          git -C "$SYNC_DIR" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Checkpoint science video generation"
+          for attempt in 1 2 3 4 5; do
+            if git -C "$SYNC_DIR" push --force origin HEAD:refs/heads/ai-story-science-progress; then
+              echo "Science-video progress checkpoint saved."
+              exit 0
+            fi
+            echo "Checkpoint push attempt $attempt failed."
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+          done
+          echo "Could not save science-video checkpoint after five attempts."
+          exit 1
+      - name: Clear science-video progress after success
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if git ls-remote --exit-code --heads origin ai-story-science-progress >/dev/null 2>&1; then
+              if git push origin --delete ai-story-science-progress; then
+                echo "Completed science-video checkpoint cleared."
+                exit 0
+              fi
+            else
+              echo "No science-video checkpoint to clear."
+              exit 0
+            fi
+            echo "Checkpoint cleanup attempt $attempt failed."
+            sleep $((attempt * 3))
+          done
+          echo "::warning::The completed science-video checkpoint could not be deleted; it will be safely reused on the next run."
       - name: Retry failed workflow run
         if: failure() && fromJSON(github.run_attempt) < 3
         env:
