@@ -147,7 +147,7 @@ def rewrite_flagged_prompt(original_visual, attempt):
     return text[:1000]
 
 
-async def generate_all_ai_images(scenes, out_dir, width, height):
+async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None):
     print("Generating AI illustrations with Cloudflare FLUX.2 Klein only.", flush=True)
     os.makedirs(out_dir, exist_ok=True)
     results = []
@@ -178,7 +178,16 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
                     print(f"  Scene {i}: Gemini revised flagged prompt ({rewrite_attempt}/3); retrying Cloudflare.", flush=True)
                     image_data = valid_png(cf_image_cheap(revised_prompt))
                     scene["visual"] = revised_visual
+                    if story_path:
+                        import json
+                        from pathlib import Path
+                        story_file = Path(story_path)
+                        saved_story = json.loads(story_file.read_text(encoding="utf-8"))
+                        saved_story["scenes"][i - 1]["visual"] = revised_visual
+                        story_file.write_text(json.dumps(saved_story, ensure_ascii=False, indent=2), encoding="utf-8")
                     break
+                except CloudflareRateLimited:
+                    raise
                 except CloudflarePromptFlagged:
                     print(f"  Scene {i}: revised prompt was still flagged.", flush=True)
                 except Exception as exc:
