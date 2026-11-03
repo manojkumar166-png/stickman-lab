@@ -296,6 +296,7 @@ def main():
 
                     # Stage every extracted image before touching the episode.
                     # A CRC/decompression failure must not leave partial scene files.
+                    installed = []
                     with tempfile.TemporaryDirectory(prefix=".telegram-zip-", dir=dest_dir) as temp_name:
                         temp_dir = Path(temp_name)
                         staged = []
@@ -321,7 +322,12 @@ def main():
                         staged.append((archive_copy, dest_dir / "source-upload.zip"))
                         for source, destination in staged:
                             source.replace(destination)
+                            installed.append(destination)
             except (zipfile.BadZipFile, RuntimeError, OSError, EOFError, ValueError) as exc:
+                # A failed multi-file rename must roll back every file already
+                # installed; otherwise a retried ZIP would be rejected as partial.
+                for installed_path in installed:
+                    installed_path.unlink(missing_ok=True)
                 send(f"ZIP skipped: {exc}. Please send a valid ZIP containing exactly 48 supported images.")
                 continue
             changed = True
