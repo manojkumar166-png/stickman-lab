@@ -16,27 +16,26 @@ def main():
     
     config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     day = date.today().isoformat()
-    # Resume the newest incomplete story first, even when it was started yesterday.
+    # Any story restored from ai-image-progress represents a failed run.
+    # Resume it even if all scene images were already generated (the failure
+    # may have happened during voice, rendering, subtitles, or upload).
     pending_story = None
     for candidate in sorted(OUT.glob("story-*.json"), reverse=True):
         candidate_day = candidate.stem.removeprefix("story-")
-        candidate_scene_dir = OUT / f"scenes-{candidate_day}"
         try:
             candidate_story = json.loads(candidate.read_text(encoding="utf-8"))
-            expected = len(candidate_story.get("scenes", []))
-            completed = sum(1 for p in candidate_scene_dir.glob("scene-*.png") if p.is_file() and p.stat().st_size > 0)
-            if expected and completed < expected:
+            if candidate_story.get("scenes"):
                 pending_story = (candidate, candidate_story, candidate_day)
                 break
         except Exception:
             continue
     if pending_story:
         story_path, story, scene_day = pending_story
-        print(f"Resuming unfinished story from {scene_day}.")
+        print(f"Resuming saved failed-run story from {scene_day}.")
     else:
         story_path = OUT / f"story-{day}.json"
         scene_day = day
-    
+
     if not os.getenv("GEMINI_API_KEY"):
         raise RuntimeError("GEMINI_API_KEY is missing.")
 
