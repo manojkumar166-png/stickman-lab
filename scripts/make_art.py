@@ -58,7 +58,10 @@ def cf_image_cheap(prompt):
             print(f"Cloudflare HTTP {response.status_code}; retrying in {wait}s.", flush=True)
             time.sleep(wait)
             continue
-        response.raise_for_status()
+        if not response.ok:
+            print(f"Cloudflare HTTP {response.status_code}", flush=True)
+            print(f"Cloudflare response: {response.text[:3000]}", flush=True)
+            response.raise_for_status()
         if response.headers.get("content-type", "").startswith("image/"):
             return response.content
         payload = response.json()
