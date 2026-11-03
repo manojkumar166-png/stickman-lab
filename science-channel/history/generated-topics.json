@@ -23,7 +23,8 @@
     "Why do rivers meander?",
     "Why do songs get stuck in your head?",
     "Why does soap make bubbles?",
-    "Why do pinecones open and close?"
+    "Why do pinecones open and close?",
+    "Why do we yawn?"
   ],
   "topic_details": [
     {
@@ -130,6 +131,11 @@
       "title": "Why do pinecones open and close?",
       "angle": "We explore the clever, non-living mechanical engineering inside pinecones that allows them to sense humidity and time their seed release without using a single muscle.",
       "pillar": "Plants and the natural world"
+    },
+    {
+      "title": "Why do we yawn?",
+      "angle": "Explore the surprising neurology and social mechanics behind contagious yawning, moving beyond simple tiredness to uncover its role in brain cooling and social bonding.",
+      "pillar": "Human body and mind"
     }
   ]
 }
