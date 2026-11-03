@@ -125,6 +125,8 @@ def generate_story(root: Path, config: dict) -> dict:
     used_model = None
     story = None
     last_duplicate = None
+    last_scene_count = None
+    desired_scene_count = int(config.get("scene_count", 48))
 
     # Each retry selects a fresh category and asks Gemini for a different
     # question. This avoids a fixed topic rotation and rejects repeated titles.
@@ -183,6 +185,17 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Could not parse AI story response: {exc}; response was {str(data)[:1200]}") from exc
 
+        returned_scenes = candidate_story.get("scenes", [])
+        if not isinstance(returned_scenes, list) or len(returned_scenes) != desired_scene_count:
+            actual_count = len(returned_scenes) if isinstance(returned_scenes, list) else "invalid"
+            last_scene_count = actual_count
+            print(
+                f"Gemini returned {actual_count} scenes; exactly {desired_scene_count} are required. "
+                "Requesting a fresh story.",
+                flush=True,
+            )
+            continue
+
         candidate_topic = str(candidate_story.get("topic", "")).strip()
         if _is_repeat(candidate_topic, history):
             last_duplicate = candidate_topic or "(empty title)"
@@ -193,6 +206,11 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
         break
 
     if story is None:
+        if last_scene_count is not None:
+            raise RuntimeError(
+                f"Gemini did not return exactly {desired_scene_count} scenes after 5 attempts "
+                f"(last response contained {last_scene_count}). No story or topic history was saved; rerun to try again."
+            )
         raise RuntimeError(
             "Gemini could not produce a sufficiently new topic after 5 category attempts. "
             f"Last rejected topic: {last_duplicate!r}. No history was changed; rerun to try again."
