@@ -216,7 +216,7 @@ def generation_prompt(scene):
       "and shadows, coherent environment. Compose as a wide 16:9 movie frame even if the generator returns a square "
       "image; keep faces, key objects and the main action within the central horizontal band, away from top/bottom "
       "edges. One unified scene, intentional camera framing, no text.")
-    return base+"\\n\\n"+quality
+    return base+"\n\n"+quality
 
 
 def generate_all(scenes,folder):
@@ -305,7 +305,7 @@ def render(scenes,package,voice):
             print(f"FFmpeg: reusing saved video segment for scene {n}/{len(scenes)}",flush=True)
         parts.append(video)
     concat=package/"concat.txt"
-    concat.write_text("".join(f"file '{p.resolve().as_posix()}'\\n" for p in parts),encoding="utf-8")
+    concat.write_text("".join(f"file '{p.resolve().as_posix()}'\n" for p in parts),encoding="utf-8")
     final=package/"final-video.mp4"
     if not final.is_file() or final.stat().st_size<100000:
         command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
@@ -367,15 +367,15 @@ def main():
 
     story_file=package/"story.json"
     temporary_story=story_file.with_name(story_file.name+".tmp")
-    temporary_story.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    temporary_story.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     temporary_story.replace(story_file)
     print(f"Story ready: {data['title']} | {len(data['scenes'])} scenes",flush=True)
     print("::endgroup::",flush=True)
 
-    script="# "+data["title"]+"\\n\\n"+data["description"]+"\\n\\n"
-    script+="\\n\\n".join(
-        f"## Scene {scene['scene_number']}: {scene['heading']}\\n\\n"
-        f"{scene['narration']}\\n\\n**Visual:** {scene['visual_description']}"
+    script="# "+data["title"]+"\n\n"+data["description"]+"\n\n"
+    script+="\n\n".join(
+        f"## Scene {scene['scene_number']}: {scene['heading']}\n\n"
+        f"{scene['narration']}\n\n**Visual:** {scene['visual_description']}"
         for scene in data["scenes"]
     )
     (package/"script.md").write_text(script,encoding="utf-8")
@@ -399,7 +399,7 @@ def main():
     if topic_key not in existing:
         history.append({"title":data["title"],"topic":data["topic"],"description":data["description"]})
         temp_history=history_file.with_name(history_file.name+".tmp")
-        temp_history.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+        temp_history.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
         temp_history.replace(history_file)
     print("Recorded completed topic history.",flush=True)
     print("STEP 5/5 - Package complete; artifact upload is the next GitHub Actions step.",flush=True)
