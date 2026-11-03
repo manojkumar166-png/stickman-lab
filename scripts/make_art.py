@@ -24,9 +24,8 @@ def build_prompt(visual):
 CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")
 CF_API_TOKEN = os.getenv("CF_API_TOKEN")
 
-# A Cloudflare 429 is an account-level throttle. Stop using Cloudflare for
-# the remainder of this workflow run and let the fallback providers take over.
-_CLOUDFLARE_RATE_LIMITED = False
+# Temporarily pause Cloudflare after HTTP 429, then automatically try it again.
+_CLOUDFLARE_COOLDOWN_UNTIL = 0.0
 
 class CloudflareRateLimited(RuntimeError):
     pass
@@ -35,9 +34,10 @@ class CloudflareRateLimited(RuntimeError):
 CF_URL_CHEAP = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
 
 def cf_image_cheap(prompt):
-    global _CLOUDFLARE_RATE_LIMITED
-    if _CLOUDFLARE_RATE_LIMITED:
-        raise CloudflareRateLimited("Cloudflare rate limit already reached; using fallback providers.")
+    global _CLOUDFLARE_COOLDOWN_UNTIL
+    if time.monotonic() < _CLOUDFLARE_COOLDOWN_UNTIL:
+        remaining = int(_CLOUDFLARE_COOLDOWN_UNTIL - time.monotonic())
+        raise CloudflareRateLimited(f"Cloudflare is cooling down for about {remaining}s; using fallback for this scene.")
     if not CF_ACCOUNT_ID or not CF_API_TOKEN:
         raise RuntimeError("CF credentials missing")
     
@@ -53,9 +53,13 @@ def cf_image_cheap(prompt):
         try:
             r = requests.post(CF_URL_CHEAP, headers=headers, files=form_data, timeout=(20, 180))
             if r.status_code == 429:
-                _CLOUDFLARE_RATE_LIMITED = True
-                retry_after = r.headers.get("Retry-After", "not provided")
-                raise CloudflareRateLimited(f"Cloudflare returned HTTP 429 (Retry-After: {retry_after}); disabling Cloudflare for this workflow run.")
+                retry_after = r.headers.get("Retry-After", "")
+                try:
+                    cooldown = max(30, min(300, int(float(retry_after)))) if retry_after else 60
+                except ValueError:
+                    cooldown = 60
+                _CLOUDFLARE_COOLDOWN_UNTIL = time.monotonic() + cooldown
+                raise CloudflareRateLimited(f"Cloudflare returned HTTP 429; pausing Cloudflare for {cooldown}s before trying it again.")
             if r.status_code >= 500:
                 retry_after = r.headers.get("Retry-After", "")
                 try:
@@ -168,8 +172,6 @@ def ai_horde_image(prompt):
     return valid_png(base64.b64decode(image_data, validate=True))
 
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    global _CLOUDFLARE_RATE_LIMITED
-    _CLOUDFLARE_RATE_LIMITED = False
     print("Generating AI illustrations: Cloudflare primary -> AI Horde backup -> OVHcloud final fallback.")
     os.makedirs(out_dir, exist_ok=True)
     results = []
@@ -188,9 +190,6 @@ async def generate_all_ai_images(scenes, out_dir, width, height):
             # A 429 is a shared account throttle, not a scene-specific failure.
             # Never repeat the same throttled request for every scene.
             attempts = 1 if provider_name.startswith("Cloudflare") else (2 if provider_name.startswith("OVHcloud") else 1)
-            if provider_name.startswith("Cloudflare") and _CLOUDFLARE_RATE_LIMITED:
-                print(f"  Scene {i}/{len(scenes)}: skipping Cloudflare; rate limit already reached. Falling back.", flush=True)
-                continue
             for attempt in range(1, attempts + 1):
                 try:
                     print(f"  Scene {i}/{len(scenes)}: trying {provider_name} (attempt {attempt}/{attempts})", flush=True)
