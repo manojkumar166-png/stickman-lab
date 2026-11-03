@@ -220,28 +220,47 @@ def generation_prompt(scene):
 
 
 def generate_all(scenes,folder):
-    folder.mkdir(parents=True,exist_ok=True); failures=[]
+    folder.mkdir(parents=True,exist_ok=True)
+    failures=[]
     providers=(("OVHcloud anonymous",ovh,5),("AI Horde anonymous",ai_horde,1),
                ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
-        n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
+        n=s["scene_number"]
+        target=folder/f"scene-{n:02d}.png"
+        if target.is_file():
+            try:
+                target.write_bytes(valid_png(target.read_bytes()))
+                print(f"Scene {n}/{len(scenes)}: valid checkpoint image found; skipping generation.",flush=True)
+                continue
+            except Exception as exc:
+                print(f"Scene {n}: removing invalid checkpoint image: {exc}",flush=True)
+                target.unlink(missing_ok=True)
+        errors=[]
+        completed=False
         prompt=generation_prompt(s)
         for name,fn,retries in providers:
             for attempt in range(retries):
                 print(f"Scene {n}/{len(scenes)}: trying {name} (attempt {attempt+1}/{retries})",flush=True)
                 try:
-                    target.write_bytes(valid_png(fn(prompt)))
+                    image=valid_png(fn(prompt))
+                    temporary=target.with_name(target.name+".tmp")
+                    temporary.write_bytes(image)
+                    temporary.replace(target)
                     print(f"Image {n}/{len(scenes)} generated with {name}",flush=True)
-                    completed=True; break
+                    completed=True
+                    break
                 except Exception as e:
-                    errors.append(f"{name} attempt {attempt+1}: {e}")
+                    errors.append(f"{name} attempt {attempt+1}: {type(e).__name__}: {e}")
                     print(f"Scene {n}: {name} failed: {e}",file=sys.stderr,flush=True)
-                    if attempt+1<retries: time.sleep(min(90,30*(attempt+1)))
-            if completed: break
-        if not completed: failures.append({"scene":n,"errors":errors})
-    if failures: raise RuntimeError("Missing scene images; video render cancelled: "+json.dumps(failures))
+                    if attempt+1<retries:
+                        time.sleep(min(90,30*(attempt+1)))
+            if completed:
+                break
+        if not completed:
+            failures.append({"scene":n,"errors":errors})
+    if failures:
+        raise RuntimeError("Missing scene images; completed images are checkpointed for the next run: "+json.dumps(failures))
     print(f"Validated all {len(scenes)} scene images.",flush=True)
-
 
 async def speak(text,path,voice):
     last=None
@@ -260,73 +279,130 @@ def command(args):
     subprocess.run(args,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
 
 def render(scenes,package,voice):
-    aud=package/"audio"; seg=package/"segments"; aud.mkdir(); seg.mkdir(); parts=[]
+    aud=package/"audio"
+    seg=package/"segments"
+    aud.mkdir(parents=True,exist_ok=True)
+    seg.mkdir(parents=True,exist_ok=True)
+    parts=[]
     for s in scenes:
-        n=s["scene_number"]; audio=aud/f"scene-{n:02d}.mp3"; video=seg/f"segment-{n:02d}.mp4"
-        print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
-        asyncio.run(speak(s["narration"],audio,voice))
-        print(f"FFmpeg: rendering scene segment {n}/{len(scenes)}",flush=True)
-        command(["ffmpeg","-y","-loop","1","-i",str(package/"images"/f"scene-{n:02d}.png"),"-i",str(audio),
-          "-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
-          "-r","25","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-b:a","128k",
-          "-shortest","-movflags","+faststart",str(video)])
-        parts.append(video); print(f"Scene {n}/{len(scenes)} narrated and rendered",flush=True)
+        n=s["scene_number"]
+        audio=aud/f"scene-{n:02d}.mp3"
+        video=seg/f"segment-{n:02d}.mp4"
+        if not audio.is_file() or audio.stat().st_size<=1000:
+            print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
+            asyncio.run(speak(s["narration"],audio,voice))
+        else:
+            print(f"Edge TTS: reusing saved audio for scene {n}/{len(scenes)}",flush=True)
+        if not video.is_file() or video.stat().st_size<100000:
+            print(f"FFmpeg: rendering scene segment {n}/{len(scenes)}",flush=True)
+            command(["ffmpeg","-y","-loop","1","-i",str(package/"images"/f"scene-{n:02d}.png"),"-i",str(audio),
+              "-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
+              "-r","25","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-b:a","128k",
+              "-shortest","-movflags","+faststart",str(video)])
+            if not video.is_file() or video.stat().st_size<100000:
+                raise RuntimeError(f"Scene {n}: FFmpeg did not produce a valid video segment")
+        else:
+            print(f"FFmpeg: reusing saved video segment for scene {n}/{len(scenes)}",flush=True)
+        parts.append(video)
     concat=package/"concat.txt"
-    concat.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts),encoding="utf-8")
+    concat.write_text("".join(f"file '{p.resolve().as_posix()}'\\n" for p in parts),encoding="utf-8")
     final=package/"final-video.mp4"
-    command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
-    if not final.exists() or final.stat().st_size<100000: raise RuntimeError("Final MP4 missing or too small")
+    if not final.is_file() or final.stat().st_size<100000:
+        command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
+    if not final.exists() or final.stat().st_size<100000:
+        raise RuntimeError("Final MP4 missing or too small")
     return final
-
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--topic",default="")
     p.add_argument("--scenes",type=int,default=8)
     p.add_argument("--voice",default="en-US-AndrewMultilingualNeural")
     a=p.parse_args()
-    if not 4<=a.scenes<=48: p.error("Scene count must be 4–48")
+    if not 4<=a.scenes<=48:
+        p.error("Scene count must be 4–48")
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
     print("Images: OVHcloud primary (up to 5 attempts), then AI Horde, Vexa and Pollinations fallbacks.",flush=True)
     print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
     print("::endgroup::",flush=True)
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True,exist_ok=True)
+
     package=None
     data=None
     for candidate in sorted((x for x in OUT.iterdir() if x.is_dir()),key=lambda x:x.name,reverse=True):
-        sf=candidate/"story.json"
-        if sf.is_file() and not (candidate/"final-video.mp4").is_file():
-            try:
-                saved=json.loads(sf.read_text(encoding="utf-8"))
-                if len(saved.get("scenes",[]))==a.scenes:
-                    package=candidate; data=saved
-                    print(f"Resuming {candidate.name}",flush=True); break
-            except Exception: pass
+        story_file=candidate/"story.json"
+        if not story_file.is_file():
+            continue
+        try:
+            saved=json.loads(story_file.read_text(encoding="utf-8"))
+            saved_scenes=saved.get("scenes")
+            if (not isinstance(saved_scenes,list) or len(saved_scenes)!=a.scenes
+                    or any(not isinstance(scene,dict) or scene.get("scene_number")!=i
+                           or not str(scene.get("narration","")).strip()
+                           or not str(scene.get("image_prompt","")).strip()
+                           for i,scene in enumerate(saved_scenes,1))):
+                continue
+            package=candidate
+            data=saved
+            print(f"Resuming saved story package {candidate.name}.",flush=True)
+            break
+        except (OSError,ValueError,TypeError) as exc:
+            print(f"Ignoring invalid story checkpoint {story_file}: {exc}",flush=True)
+
     if package is None:
-        package=OUT/(time.strftime("%Y%m%d-%H%M%S",time.gmtime())+"-gemini"); package.mkdir()
-            print("::group::STEP 1/5 - Gemini story planning",flush=True)
-    data=plan_story(a.topic,a.scenes); data.update({"scene_count":a.scenes,"voice":a.voice})
-    print("Gemini selected format: "+data["mode"],flush=True)
-    (package/"story.json").write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding="utf-8")
-    print(f"Story validated: {data['title']} | {len(data['scenes'])} scenes",flush=True)
+        package=OUT/(time.strftime("%Y%m%d-%H%M%S",time.gmtime())+"-gemini")
+        suffix=1
+        while package.exists():
+            package=OUT/(time.strftime("%Y%m%d-%H%M%S",time.gmtime())+f"-gemini-{suffix}")
+            suffix+=1
+        package.mkdir(parents=True)
+        print("::group::STEP 1/5 - Gemini story planning",flush=True)
+        data=plan_story(a.topic,a.scenes)
+        data.update({"scene_count":a.scenes,"voice":a.voice})
+        print("Gemini selected format: "+data["mode"],flush=True)
+    else:
+        data.setdefault("scene_count",a.scenes)
+        data.setdefault("voice",a.voice)
+        print("Reusing the saved story without asking Gemini to replace it.",flush=True)
+
+    story_file=package/"story.json"
+    temporary_story=story_file.with_name(story_file.name+".tmp")
+    temporary_story.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    temporary_story.replace(story_file)
+    print(f"Story ready: {data['title']} | {len(data['scenes'])} scenes",flush=True)
     print("::endgroup::",flush=True)
-    script="# "+data["title"]+"\n\n"+data["description"]+"\n\n"
-    script+="\n\n".join(f"## Scene {s['scene_number']}: {s['heading']}\n\n{s['narration']}\n\n**Visual:** {s['visual_description']}" for s in data["scenes"])
+
+    script="# "+data["title"]+"\\n\\n"+data["description"]+"\\n\\n"
+    script+="\\n\\n".join(
+        f"## Scene {scene['scene_number']}: {scene['heading']}\\n\\n"
+        f"{scene['narration']}\\n\\n**Visual:** {scene['visual_description']}"
+        for scene in data["scenes"]
+    )
     (package/"script.md").write_text(script,encoding="utf-8")
     (package/"images").mkdir(exist_ok=True)
     print("::group::STEP 2/5 - Generate and validate scene images",flush=True)
-    print(f"Generating {len(data['scenes'])} individual images. Cloudflare only.",flush=True)
     generate_all(data["scenes"],package/"images")
     print(f"All {len(data['scenes'])} scene images passed validation.",flush=True)
     print("::endgroup::",flush=True)
+
     print("::group::STEP 3/5 - Edge TTS narration and STEP 4/5 - FFmpeg rendering",flush=True)
-    final=render(data["scenes"],package,a.voice)
+    final=render(data["scenes"],package,str(data["voice"]))
     print("::endgroup::",flush=True)
+
     history_file=ROOT/"used_story_topics.json"
     history=json.loads(history_file.read_text(encoding="utf-8")) if history_file.is_file() else []
-    history.append({"title":data["title"],"topic":data["topic"],"description":data["description"]})
-    history_file.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    print("Recorded this completed topic in used_story_topics.json for future runs.",flush=True)
+    if not isinstance(history,list):
+        raise ValueError("used_story_topics.json must contain a JSON list")
+    topic_key=" ".join(str(data["topic"]).casefold().split())
+    existing={" ".join(str(item.get("topic","")).casefold().split())
+              for item in history if isinstance(item,dict)}
+    if topic_key not in existing:
+        history.append({"title":data["title"],"topic":data["topic"],"description":data["description"]})
+        temp_history=history_file.with_name(history_file.name+".tmp")
+        temp_history.write_text(json.dumps(history,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+        temp_history.replace(history_file)
+    print("Recorded completed topic history.",flush=True)
     print("STEP 5/5 - Package complete; artifact upload is the next GitHub Actions step.",flush=True)
-    print("FINAL_VIDEO="+str(final)); print("STORY_PACKAGE="+str(package))
+    print("FINAL_VIDEO="+str(final))
+    print("STORY_PACKAGE="+str(package))
 if __name__=="__main__": main()
