@@ -215,6 +215,27 @@ jobs:
           print(f"Marked delivered story complete: {story_path}")
           PY
 
+      - name: Clear saved progress after successful run
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-image-progress)"
+          if [[ -z "$REMOTE_PROGRESS" ]]; then
+            echo "No saved checkpoint to clear."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if git push origin --delete ai-image-progress; then
+              echo "Cleared completed-run checkpoint."
+              exit 0
+            fi
+            echo "Checkpoint cleanup attempt $attempt failed."
+            sleep $((attempt * 3))
+          done
+          echo "::error::Could not clear the completed checkpoint after three attempts; saving the completed state before retrying."
+          exit 1
+
       - name: Save failed-run progress to ai-image-progress
         if: failure()
         shell: bash
@@ -246,18 +267,6 @@ jobs:
           done
           echo "Could not save Cloudflare image checkpoint after five attempts."
           exit 1
-
-      - name: Clear saved progress after successful run
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git ls-remote --exit-code --heads origin ai-image-progress >/dev/null 2>&1; then
-            git push origin --delete ai-image-progress
-            echo "Cleared completed-run checkpoint."
-          else
-            echo "No saved checkpoint to clear."
-          fi
 
       - name: Preserve generated images for failed runs
         if: failure()
