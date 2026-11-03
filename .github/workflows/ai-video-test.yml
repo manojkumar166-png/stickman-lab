@@ -75,7 +75,14 @@ jobs:
           set -euo pipefail
           TODAY="$(date +%F)"
           AUDIO="output/narration-$TODAY.mp3"
-          VIDEO="$(find output -maxdepth 1 -type f -name "*-$TODAY.mp4" -print -quit)"
+          VIDEO="$(python - "$TODAY" <<'PY'
+          import sys
+          from pathlib import Path
+          day = sys.argv[1]
+          files = [p for p in Path("output").glob(f"*-{day}.mp4") if p.is_file()]
+          print(max(files, key=lambda p: p.stat().st_mtime_ns) if files else "")
+          PY
+          )"
           test -f "$AUDIO" || { echo "Narration file not found: $AUDIO"; exit 1; }
           test -n "$VIDEO" && test -f "$VIDEO" || { echo "Today's generated MP4 was not found."; exit 1; }
           CAPTIONS="output/karaoke-captions-$TODAY.ass"
@@ -106,10 +113,11 @@ jobs:
           python - <<'PY'
           import glob, json, os, re
           from pathlib import Path
-          files = sorted(glob.glob("output/story-*.json"))
+          files = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
           if not files:
               raise SystemExit("No generated story JSON was found.")
-          with open(files[-1], encoding="utf-8") as handle:
+          latest = max(files, key=lambda p: p.stat().st_mtime_ns)
+          with latest.open(encoding="utf-8") as handle:
               topic = str(json.load(handle).get("topic", "")).strip()
           if not topic:
               raise SystemExit("Generated story has no topic.")
@@ -177,6 +185,25 @@ jobs:
           done
           echo "Could not publish topic history after 5 attempts."
           exit 1
+      - name: Mark AI story completed after delivery and history commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import glob, json, os
+          from pathlib import Path
+          files = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
+          if not files:
+              raise SystemExit("Cannot mark story complete: no story JSON found.")
+          story_path = max(files, key=lambda p: p.stat().st_mtime_ns)
+          story = json.loads(story_path.read_text(encoding="utf-8"))
+          story["completed"] = True
+          temporary = story_path.with_name(story_path.name + ".tmp")
+          temporary.write_text(json.dumps(story, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+          os.replace(temporary, story_path)
+          print(f"Marked delivered story complete: {story_path}")
+          PY
+
       - name: Save failed-run progress to ai-image-progress
         if: failure()
         shell: bash
