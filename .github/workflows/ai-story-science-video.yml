@@ -27,7 +27,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ai-story-video-output
-          if git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress; then
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-story-science-progress)"
+          if [[ -n "$REMOTE_PROGRESS" ]]; then
+            git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress
             git archive origin/ai-story-science-progress progress | tar -x -C .
             if [[ -d progress/ai-story-video-output ]]; then
               cp -a progress/ai-story-video-output/. ai-story-video-output/
@@ -222,7 +224,9 @@ jobs:
         run: |
           set -euo pipefail
           SYNC_DIR="$RUNNER_TEMP/science-progress-worktree"
-          if git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress; then
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-story-science-progress)"
+          if [[ -n "$REMOTE_PROGRESS" ]]; then
+            git fetch origin +refs/heads/ai-story-science-progress:refs/remotes/origin/ai-story-science-progress
             git worktree add -B ai-story-science-progress "$SYNC_DIR" origin/ai-story-science-progress
           else
             git worktree add --detach "$SYNC_DIR" HEAD
@@ -255,14 +259,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-story-science-progress)"
+          if [[ -z "$REMOTE_PROGRESS" ]]; then
+            echo "No science-video checkpoint to clear."
+            exit 0
+          fi
           for attempt in 1 2 3; do
-            if git ls-remote --exit-code --heads origin ai-story-science-progress >/dev/null 2>&1; then
-              if git push origin --delete ai-story-science-progress; then
-                echo "Completed science-video checkpoint cleared."
-                exit 0
-              fi
-            else
-              echo "No science-video checkpoint to clear."
+            if git push origin --delete ai-story-science-progress; then
+              echo "Completed science-video checkpoint cleared."
               exit 0
             fi
             echo "Checkpoint cleanup attempt $attempt failed."
