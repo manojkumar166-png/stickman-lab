@@ -105,6 +105,37 @@ jobs:
           rm -f "$CAPTIONS"
           echo "Karaoke subtitles burned into $VIDEO"
 
+      - name: Record topic after successful video generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import glob, json
+          from pathlib import Path
+          from scripts.generate_story import _is_repeat
+
+          files = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
+          if not files:
+              raise SystemExit("Cannot record topic: no story JSON found.")
+          latest = max(files, key=lambda p: p.stat().st_mtime_ns)
+          story = json.loads(latest.read_text(encoding="utf-8"))
+          topic = str(story.get("topic", "")).strip()
+          if not topic:
+              raise SystemExit("Cannot record topic: story has no topic.")
+          history_path = Path("topic_history.json")
+          history = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else []
+          if not isinstance(history, list):
+              raise SystemExit("Topic history must be a JSON list; refusing to overwrite it.")
+          if _is_repeat(topic, history):
+              print(f"Topic already present in history: {topic}")
+          else:
+              history.append(topic)
+              temporary = history_path.with_suffix(".json.tmp")
+              temporary.write_text(json.dumps(history[-200:], ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+              temporary.replace(history_path)
+              print(f"Recorded successfully generated video topic: {topic}")
+          PY
+
       - name: Get Video Topic
         id: get_topic
         shell: bash
