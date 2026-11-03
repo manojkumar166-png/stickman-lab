@@ -276,6 +276,26 @@ jobs:
           temporary.replace(story_path)
           print(f'Marked delivered story complete: {story_path}')
           PY
+      - name: Clear science-video progress after success
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-story-science-progress)"
+          if [[ -z "$REMOTE_PROGRESS" ]]; then
+            echo "No science-video checkpoint to clear."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if git push origin --delete ai-story-science-progress; then
+              echo "Completed science-video checkpoint cleared."
+              exit 0
+            fi
+            echo "Checkpoint cleanup attempt $attempt failed."
+            sleep $((attempt * 3))
+          done
+          echo "::error::Could not clear the completed checkpoint after three attempts; saving the completed state before retrying."
+          exit 1
       - name: Save science-video progress after failure
         if: failure()
         shell: bash
@@ -312,25 +332,6 @@ jobs:
           done
           echo "Could not save science-video checkpoint after five attempts."
           exit 1
-      - name: Clear science-video progress after success
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-story-science-progress)"
-          if [[ -z "$REMOTE_PROGRESS" ]]; then
-            echo "No science-video checkpoint to clear."
-            exit 0
-          fi
-          for attempt in 1 2 3; do
-            if git push origin --delete ai-story-science-progress; then
-              echo "Completed science-video checkpoint cleared."
-              exit 0
-            fi
-            echo "Checkpoint cleanup attempt $attempt failed."
-            sleep $((attempt * 3))
-          done
-          echo "::warning::The completed science-video checkpoint could not be deleted; it will be safely reused on the next run."
       - name: Retry failed workflow run
         if: failure() && fromJSON(github.run_attempt) < 3
         env:
