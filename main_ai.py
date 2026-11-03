@@ -24,9 +24,20 @@ def main():
         candidate_day = candidate.stem.removeprefix("story-")
         try:
             candidate_story = json.loads(candidate.read_text(encoding="utf-8"))
-            if candidate_story.get("scenes") and candidate_story.get("completed") is not True:
+            saved_scenes = candidate_story.get("scenes")
+            if (
+                isinstance(saved_scenes, list)
+                and len(saved_scenes) == int(config["scene_count"])
+                and candidate_story.get("completed") is not True
+            ):
                 pending_story = (candidate, candidate_story, candidate_day)
                 break
+            if isinstance(saved_scenes, list) and len(saved_scenes) != int(config["scene_count"]):
+                print(
+                    f"Skipping checkpoint {candidate.name}: it has {len(saved_scenes)} scenes, "
+                    f"but the current target is {config['scene_count']}.",
+                    flush=True,
+                )
         except Exception:
             continue
     if pending_story:
@@ -63,7 +74,7 @@ def main():
         print(f"Resuming saved story: {story.get('topic', 'untitled')}")
     print(f"Topic: {story['topic']}")
 
-    print("Generating AI scene artwork...")
+    print(f"Generating AI scene artwork ({len(story['scenes'])} scenes)...", flush=True)
     scene_dir = OUT / f"scenes-{scene_day}"
     scene_dir.mkdir(parents=True, exist_ok=True)
 
@@ -77,6 +88,7 @@ def main():
         make_scene_art(scene, i, len(story["scenes"]), scene_dir / f"scene-{i:03d}.png",
                        config["width"], config["height"], ai_image_data=ai_images.get(i))
 
+    print("All scene images are prepared. Starting narration generation...", flush=True)
     narration = "\n\n".join(s["narration"].strip() for s in story["scenes"])
     narration_path = OUT / f"narration-{day}.mp3"
     make_voice(narration, narration_path, config)
@@ -89,6 +101,7 @@ def main():
 
     topic_slug = re.sub(r"[^a-z0-9]+", "-", story["topic"].lower()).strip("-")[:80].strip("-") or "science-video"
     video_path = OUT / f"{topic_slug}-{day}.mp4"
+    print("Narration is ready. Starting FFmpeg video rendering...", flush=True)
     render_video(scene_dir, narration_path, video_path, story, config)
 
     print(f"Finished: {video_path}")
