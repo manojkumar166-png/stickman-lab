@@ -24,7 +24,7 @@ def main():
         candidate_day = candidate.stem.removeprefix("story-")
         try:
             candidate_story = json.loads(candidate.read_text(encoding="utf-8"))
-            if candidate_story.get("scenes"):
+            if candidate_story.get("scenes") and candidate_story.get("completed") is not True:
                 pending_story = (candidate, candidate_story, candidate_day)
                 break
         except Exception:
@@ -33,15 +33,29 @@ def main():
         story_path, story, scene_day = pending_story
         print(f"Resuming saved failed-run story from {scene_day}.")
     else:
+        # A successful run is marked completed by the workflow only after
+        # Telegram delivery and topic-history publication. If another run is
+        # started on the same date, give it a fresh story/image checkpoint so
+        # it cannot accidentally reuse the previous run's scene images.
+        run_number = 1
         story_path = OUT / f"story-{day}.json"
-        scene_day = day
+        while story_path.exists():
+            run_number += 1
+            story_path = OUT / f"story-{day}-{run_number}.json"
+        scene_day = day if run_number == 1 else f"{day}-{run_number}"
 
     if not os.getenv("GEMINI_API_KEY"):
         raise RuntimeError("GEMINI_API_KEY is missing.")
 
     if not pending_story:
         story = generate_story(ROOT, config)
-        story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
+        story["completed"] = False
+        temporary_story = story_path.with_name(story_path.name + ".tmp")
+        temporary_story.write_text(
+            json.dumps(story, ensure_ascii=False, indent=2) + "\\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_story, story_path)
     else:
         print(f"Resuming saved story: {story.get('topic', 'untitled')}")
     print(f"Topic: {story['topic']}")
