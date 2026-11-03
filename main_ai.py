@@ -52,7 +52,7 @@ def main():
 
     # Force AI generation for this experiment
     ai_images = {}
-    images_data = asyncio.run(generate_all_ai_images(story["scenes"], scene_dir, config["width"], config["height"]))
+    images_data = asyncio.run(generate_all_ai_images(story["scenes"], scene_dir, config["width"], config["height"], story_path=story_path))
     for i, img_data in images_data:
         ai_images[i] = img_data
 
