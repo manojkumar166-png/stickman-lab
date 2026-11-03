@@ -103,8 +103,15 @@ jobs:
           git worktree add --detach "$SYNC_DIR" origin/main
 
           for attempt in 1 2 3 4 5; do
-            git -C "$SYNC_DIR" fetch origin main
-            git -C "$SYNC_DIR" checkout --detach origin/main
+            if ! git -C "$SYNC_DIR" fetch origin main; then
+              echo "Topic-history fetch attempt $attempt failed; retrying."
+              if [ "$attempt" -lt 5 ]; then sleep "$((attempt * 3))"; fi
+              continue
+            fi
+            if ! git -C "$SYNC_DIR" checkout --detach origin/main; then
+              echo "Could not reset isolated history worktree to origin/main."
+              exit 1
+            fi
 
             python - "$GITHUB_WORKSPACE/$STORY_FILE" "$SYNC_DIR/used_story_topics.json" <<'PY'
           import json, sys
