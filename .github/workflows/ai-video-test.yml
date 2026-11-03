@@ -127,10 +127,13 @@ jobs:
               raise SystemExit("Could not make a safe MP4 filename from the topic.")
           filename += ".mp4"
           today = __import__("datetime").date.today().isoformat()
-          candidates = [p for p in Path("output").glob(f"*-{today}.mp4") if p.name != filename]
-          if len(candidates) != 1:
-              raise SystemExit(f"Expected exactly one generated video for {today}; found {len(candidates)}.")
-          candidates[0].replace(Path("output") / filename)
+          candidates = [p for p in Path("output").glob(f"*-{today}.mp4") if p.is_file() and p.name != filename]
+          if not candidates:
+              raise SystemExit(f"No dated generated video was found for {today}.")
+          # A manual rerun on the same day may leave older dated MP4s behind.
+          # Rename only the newest output from this run.
+          newest_video = max(candidates, key=lambda p: p.stat().st_mtime_ns)
+          newest_video.replace(Path("output") / filename)
           display_topic = " ".join(topic.split())
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"topic={display_topic}\n")
