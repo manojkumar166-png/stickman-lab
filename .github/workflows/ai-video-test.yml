@@ -166,6 +166,40 @@ jobs:
           done
           echo "Could not publish topic history after 5 attempts."
           exit 1
+      - name: Save failed-run progress to ai-image-progress
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p progress
+          if [[ -d output ]]; then cp -a output/. progress/; fi
+          git fetch origin ai-image-progress || true
+          git checkout --orphan ai-image-progress
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p progress
+          cp -a "$GITHUB_WORKSPACE"/progress/. progress/
+          git add progress
+          if git diff --cached --quiet; then
+            echo "No progress files to save."
+            exit 0
+          fi
+          git commit -m "Save AI video experiment progress"
+          git push origin HEAD:refs/heads/ai-image-progress --force
+
+      - name: Clear saved progress after successful run
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin ai-image-progress >/dev/null 2>&1; then
+            git push origin --delete ai-image-progress
+            echo "Cleared completed-run checkpoint."
+          else
+            echo "No saved checkpoint to clear."
+          fi
+
       - name: Preserve generated images for failed runs
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
