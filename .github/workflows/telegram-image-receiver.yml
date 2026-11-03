@@ -87,10 +87,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EPISODE_PATH: ${{ steps.publish.outputs.episode_path }}
+        shell: bash
         run: |
           set -euo pipefail
-          gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"
-          echo "Dispatched the renderer for $EPISODE_PATH."
+          for attempt in 1 2 3; do
+            if gh workflow run free-science-visuals.yml --ref main -f "episode_path=$EPISODE_PATH"; then
+              echo "Dispatched the renderer for $EPISODE_PATH."
+              exit 0
+            fi
+            echo "Renderer dispatch attempt $attempt failed."
+            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 5)); fi
+          done
+          echo "Could not dispatch the renderer. The episode and READY marker are safely committed to main; run free-science-visuals.yml manually."
+          exit 1
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
