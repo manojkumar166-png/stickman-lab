@@ -34,65 +34,36 @@ class CloudflareRateLimited(RuntimeError):
 CF_URL_CHEAP = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
 
 def cf_image_cheap(prompt):
-    global _CLOUDFLARE_COOLDOWN_UNTIL
-    if time.monotonic() < _CLOUDFLARE_COOLDOWN_UNTIL:
-        remaining = int(_CLOUDFLARE_COOLDOWN_UNTIL - time.monotonic())
-        raise CloudflareRateLimited(f"Cloudflare is cooling down for about {remaining}s; using fallback for this scene.")
     if not CF_ACCOUNT_ID or not CF_API_TOKEN:
         raise RuntimeError("CF credentials missing")
-    
-    form_data = {
-        "prompt": (None, prompt),
-        "width": (None, "1024"),
-        "height": (None, "576")
-    }
-    
+    form_data = {"prompt": (None, prompt), "width": (None, "1024"), "height": (None, "576")}
     headers = {"Authorization": f"Bearer {CF_API_TOKEN}"}
-    r = None
-    for attempt in range(1, 6):
-        try:
-            r = requests.post(CF_URL_CHEAP, headers=headers, files=form_data, timeout=(20, 180))
-            if r.status_code == 429:
-                retry_after = r.headers.get("Retry-After", "")
-                try:
-                    cooldown = max(1, min(900, int(float(retry_after)))) if retry_after else 60
-                except ValueError:
-                    cooldown = 60
-                _CLOUDFLARE_COOLDOWN_UNTIL = time.monotonic() + cooldown
-                if attempt < 5:
-                    print(f"Cloudflare returned HTTP 429; waiting {cooldown}s, then retrying Cloudflare for this same scene (attempt {attempt + 1}/5).", flush=True)
-                    time.sleep(cooldown)
-                    continue
-                raise CloudflareRateLimited(f"Cloudflare remained rate-limited after 5 attempts; using fallback for this scene.")
-            if r.status_code >= 500:
-                retry_after = r.headers.get("Retry-After", "")
-                try:
-                    delay = max(1, min(90, int(float(retry_after)))) if retry_after else min(60, 5 * (2 ** (attempt - 1)))
-                except ValueError:
-                    delay = min(60, 5 * (2 ** (attempt - 1)))
-                if attempt < 5:
-                    print(f"Cloudflare image API returned {r.status_code} for this scene; retry {attempt}/5 in {delay}s.", flush=True)
-                    time.sleep(delay)
-                    continue
-            r.raise_for_status()
-            break
-        except requests.RequestException:
-            if attempt == 5:
-                raise
-            delay = min(60, 5 * (2 ** (attempt - 1)))
-            print(f"Cloudflare image request attempt {attempt}/5 failed; retrying in {delay}s.", flush=True)
-            time.sleep(delay)
-    if r is None:
-        raise RuntimeError("Cloudflare image request did not return a response.")
-    r.raise_for_status()
-
-    if r.headers.get("content-type", "").startswith("image/"):
-        return r.content
-        
-    j = r.json()
-    return base64.b64decode(j.get("result", j)["image"])
-
-_OVH_LAST_CALL = 0.0
+    for attempt in range(1, 4):
+        response = requests.post(CF_URL_CHEAP, headers=headers, files=form_data, timeout=(20, 180))
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "")
+            try:
+                wait = max(60, min(1800, int(float(retry_after)))) if retry_after else (300 * attempt)
+            except ValueError:
+                wait = 300 * attempt
+            if attempt == 3:
+                raise CloudflareRateLimited(
+                    f"Cloudflare rate limit persisted after {attempt} attempts; checkpoint saved for next run."
+                )
+            print(f"Cloudflare HTTP 429. Waiting {wait}s before retry {attempt + 1}/3.", flush=True)
+            time.sleep(wait)
+            continue
+        if response.status_code >= 500 and attempt < 3:
+            wait = 30 * attempt
+            print(f"Cloudflare HTTP {response.status_code}; retrying in {wait}s.", flush=True)
+            time.sleep(wait)
+            continue
+        response.raise_for_status()
+        if response.headers.get("content-type", "").startswith("image/"):
+            return response.content
+        payload = response.json()
+        return base64.b64decode(payload.get("result", payload)["image"])
+    raise CloudflareRateLimited("Cloudflare remained unavailable; checkpoint saved for next run.")
 
 def valid_png(raw):
     if not raw:
@@ -130,104 +101,36 @@ def ovh_image(prompt):
         return valid_png(base64.b64decode(encoded))
     return valid_png(response.content)
 
-def ai_horde_image(prompt):
-    """Anonymous AI Horde backup provider; wait up to 10 minutes for a worker."""
-    base = "https://aihorde.net/api/v2"
-    headers = {
-        "apikey": "0000000000",
-        "Client-Agent": "stickman-lab:1.0:https://github.com/manojkumar166-png/stickman-lab"
-    }
-    payload = {
-        "prompt": prompt + "###text, watermark, logo, blurry, low quality",
-        "params": {"width": 1024, "height": 576, "steps": 20, "n": 1},
-        "nsfw": False,
-        "censor_nsfw": True,
-        "trusted_workers": False
-    }
-    response = requests.post(base + "/generate/async", headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    job_id = response.json().get("id")
-    if not job_id:
-        raise RuntimeError("AI Horde returned no job ID")
-    deadline = time.monotonic() + 600
-    while time.monotonic() < deadline:
-        time.sleep(5)
-        check = requests.get(base + f"/generate/check/{job_id}", headers=headers, timeout=45)
-        check.raise_for_status()
-        state = check.json()
-        if state.get("faulted"):
-            raise RuntimeError("AI Horde generation faulted")
-        if state.get("done"):
-            break
-    else:
-        raise TimeoutError("AI Horde queue timed out after 10 minutes")
-    result = requests.get(base + f"/generate/status/{job_id}", headers=headers, timeout=60)
-    result.raise_for_status()
-    generations = result.json().get("generations") or []
-    if not generations or not generations[0].get("img"):
-        raise RuntimeError("AI Horde completed without an image")
-    image_data = generations[0]["img"]
-    if image_data.startswith("data:") and "," in image_data:
-        return valid_png(base64.b64decode(image_data.split(",", 1)[1]))
-    if image_data.startswith(("http://", "https://")):
-        download = requests.get(image_data, timeout=(20, 180))
-        download.raise_for_status()
-        return valid_png(download.content)
-    return valid_png(base64.b64decode(image_data, validate=True))
-
 async def generate_all_ai_images(scenes, out_dir, width, height):
-    print("Generating AI illustrations: Cloudflare primary -> AI Horde backup -> OVHcloud final fallback.")
+    print("Generating AI illustrations with Cloudflare FLUX.2 Klein only.", flush=True)
     os.makedirs(out_dir, exist_ok=True)
     results = []
-    failures = []
-
     for i, scene in enumerate(scenes, 1):
+        image_path = os.path.join(out_dir, f"scene-{i:03d}.png")
+        if os.path.isfile(image_path) and os.path.getsize(image_path) > 0:
+            try:
+                with Image.open(image_path) as existing:
+                    existing.verify()
+                with open(image_path, "rb") as image_file:
+                    results.append((i, image_file.read()))
+                print(f"  Scene {i}/{len(scenes)} already saved; skipping.", flush=True)
+                continue
+            except Exception:
+                os.remove(image_path)
         prompt = build_prompt(scene.get("visual", "science illustration"))
-        providers = (
-            ("Cloudflare FLUX.2 Klein", lambda: valid_png(cf_image_cheap(prompt))),
-            ("AI Horde", lambda: ai_horde_image(prompt)),
-            ("OVHcloud SDXL", lambda: ovh_image(prompt))
-        )
-        image_data = None
-        errors = []
-        for provider_name, generate in providers:
-            # A 429 is a shared account throttle, not a scene-specific failure.
-            # Never repeat the same throttled request for every scene.
-            attempts = 1 if provider_name.startswith("Cloudflare") else (2 if provider_name.startswith("OVHcloud") else 1)
-            for attempt in range(1, attempts + 1):
-                try:
-                    print(f"  Scene {i}/{len(scenes)}: trying {provider_name} (attempt {attempt}/{attempts})", flush=True)
-                    image_data = generate()
-                    image_path = os.path.join(out_dir, f"scene-{i:03d}.png")
-                    with open(image_path, "wb") as image_file:
-                        image_file.write(image_data)
-                    print(f"  Scene {i}/{len(scenes)}: generated with {provider_name}", flush=True)
-                    break
-                except Exception as error:
-                    errors.append(f"{provider_name} attempt {attempt}: {error}")
-                    print(f"  Scene {i}: {provider_name} failed: {error}", flush=True)
-                    if attempt < attempts:
-                        delay = min(60, 5 * (2 ** (attempt - 1)))
-                        print(f"  Retrying {provider_name} in {delay}s.", flush=True)
-                        time.sleep(delay)
-            if image_data is not None:
-                break
-
-        if image_data is None:
-            failures.append(f"Scene {i}: " + " | ".join(errors))
-            results.append((i, None))
-        else:
-            results.append((i, image_data))
-
+        print(f"  Scene {i}/{len(scenes)}: requesting Cloudflare.", flush=True)
+        try:
+            image_data = valid_png(cf_image_cheap(prompt))
+        except CloudflareRateLimited:
+            print(f"Cloudflare quota/rate limit reached at scene {i}; completed scenes are preserved.", flush=True)
+            raise
+        with open(image_path, "wb") as image_file:
+            image_file.write(image_data)
+        results.append((i, image_data))
+        print(f"  Scene {i}/{len(scenes)}: saved from Cloudflare.", flush=True)
         if i < len(scenes):
             time.sleep(2)
-
-    if failures:
-        raise RuntimeError(
-            "All configured image providers failed for one or more scenes; "
-            "no stickman fallback is used. " + " || ".join(failures)
-        )
-    print(f"Successfully generated and saved all {len(results)} AI scene images.", flush=True)
+    print(f"Successfully generated or resumed all {len(results)} scene images.", flush=True)
     return results
 
 def make_scene_art(scene, idx, total, path, width=1280, height=720, ai_image_data=None):
