@@ -192,16 +192,12 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                     print(f"  Scene {i}: revised prompt was still flagged.", flush=True)
                 except Exception as exc:
                     print(f"  Scene {i}: prompt rewrite/retry failed: {exc}", flush=True)
-            # If Cloudflare keeps flagging this scene, try the existing alternate image provider.
+            # Cloudflare only: if revised prompts are still flagged, skip this
+            # scene for now and continue with later scenes. The missing scene is
+            # checkpointed and will be retried on the next workflow attempt.
             if image_data is None:
-                try:
-                    print(f"  Scene {i}: trying alternate image provider for this scene.", flush=True)
-                    image_data = valid_png(ovh_image(build_prompt(scene.get("visual", original_visual))))
-                except Exception as exc:
-                    print(f"  Scene {i}: alternate provider failed: {exc}", flush=True)
-                    # Continue generating later scenes; this missing image is checkpointed
-                    # and will be the first one retried on the next workflow attempt.
-                    continue
+                print(f"  Scene {i}: Cloudflare rejected all prompt versions; continuing to the next scene.", flush=True)
+                continue
         except CloudflareRateLimited:
             print(f"Cloudflare quota/rate limit reached at scene {i}; completed scenes are preserved.", flush=True)
             raise
