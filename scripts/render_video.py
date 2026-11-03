@@ -1,8 +1,10 @@
 import subprocess, json, math, shutil, tempfile
 from pathlib import Path
 
-def run(cmd):
-    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+def run(cmd, timeout=300):
+    p = subprocess.run(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout
+    )
     if p.returncode:
         raise RuntimeError("Command failed:\n"+" ".join(map(str,cmd))+"\n"+p.stdout[-5000:])
 
@@ -29,20 +31,29 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
         for i,img in enumerate(images):
             clip=td/f"clip-{i:03d}.mp4"
             frames=max(2,math.ceil(per_scene*fps))
-            
-            # Keep the image perfectly still (stable)
+
+            # Keep the image perfectly still (stable). Use veryfast here:
+            # dozens of short still-image clips do not benefit much from medium
+            # preset, but medium can add several minutes of silent CPU work.
             vf = f"scale={width}:{height},format=yuv420p"
-            
+            print(f"Rendering scene clip {i + 1}/{len(images)}...", flush=True)
             run(["ffmpeg","-y","-loglevel","error","-loop","1","-i",str(img),"-vf",vf,
-                 "-frames:v",str(frames),"-an","-c:v","libx264","-preset","medium","-crf","18",str(clip)])
+                 "-frames:v",str(frames),"-an","-c:v","libx264","-preset","veryfast","-crf","19",str(clip)],
+                timeout=300)
             clips.append(clip)
+            print(f"Rendered scene clip {i + 1}/{len(images)}.", flush=True)
             
         concat=td/"concat.txt"
         concat.write_text("".join(f"file '{p.as_posix()}'\n" for p in clips),encoding="utf-8")
         silent=td/"silent.mp4"
+        print("Joining scene clips...", flush=True)
         run(["ffmpeg","-y","-loglevel","error","-f","concat","-safe","0","-i",str(concat),
-             "-c","copy","-an",str(silent)])
+             "-c","copy","-an",str(silent)], timeout=300)
              
+        print("Encoding final video and combining narration...", flush=True)
         run(["ffmpeg","-y","-loglevel","error","-i",str(silent),"-i",str(audio_path),
-             "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","medium","-crf","18",
-             "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(output_path)])
+             "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-crf","19",
+             "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(output_path)],
+            timeout=1800)
+        if not output_path.is_file() or output_path.stat().st_size < 100000:
+            raise RuntimeError("FFmpeg did not produce a valid final MP4.")
