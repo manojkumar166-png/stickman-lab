@@ -31,6 +31,9 @@ def main():
             continue
     if pending_story:
         story_path, story, scene_day = pending_story
+        # Refresh the checkpoint timestamp so downstream workflow steps select
+        # this resumed story rather than an older completed story in the folder.
+        story_path.touch()
         print(f"Resuming saved failed-run story from {scene_day}.")
     else:
         # A successful run is marked completed by the workflow only after
