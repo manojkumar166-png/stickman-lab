@@ -131,7 +131,7 @@ jobs:
           else:
               history.append(topic)
               temporary = history_path.with_suffix(".json.tmp")
-              temporary.write_text(json.dumps(history[-200:], ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+              temporary.write_text(json.dumps(history[-200:], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
               temporary.replace(history_path)
               print(f"Recorded successfully generated video topic: {topic}")
           PY
