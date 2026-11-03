@@ -80,8 +80,25 @@ jobs:
 
           # Publish topic history from an isolated worktree so a concurrent
           # main-branch update cannot disrupt the rendered video workspace.
-          STORY_FILE="$(find ai-story-video-output -mindepth 2 -maxdepth 2 -name story.json -type f | sort | tail -n 1)"
-          test -n "$STORY_FILE" && test -s "$STORY_FILE"
+          STORY_FILE="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("ai-story-video-output")
+          candidates = []
+          for package in root.iterdir():
+              story_file = package / "story.json"
+              if not package.is_dir() or not story_file.is_file():
+                  continue
+              try:
+                  story = json.loads(story_file.read_text(encoding="utf-8"))
+              except (OSError, ValueError):
+                  continue
+              if story.get("completed") is not True:
+                  candidates.append((package.name, story_file))
+          print(max(candidates, key=lambda item: item[0])[1] if candidates else "")
+          PY
+          )"
+          test -n "$STORY_FILE" && test -s "$STORY_FILE" || { echo "No unfinished story package was found for topic-history publication."; exit 1; }
           SYNC_DIR="$RUNNER_TEMP/story-history-sync"
           git worktree add --detach "$SYNC_DIR" origin/main
 
@@ -144,12 +161,21 @@ jobs:
           from pathlib import Path
 
           root = Path("ai-story-video-output")
-          packages = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name)
+          packages = []
+          for candidate in root.iterdir():
+              story_file = candidate / "story.json"
+              if not candidate.is_dir() or not story_file.is_file():
+                  continue
+              try:
+                  saved = json.loads(story_file.read_text(encoding="utf-8"))
+              except (OSError, ValueError):
+                  continue
+              if saved.get("completed") is not True:
+                  packages.append((candidate.name, candidate, saved))
           if not packages:
-              raise SystemExit("No output package was created.")
+              raise SystemExit("No unfinished output package was created.")
 
-          package = packages[-1]
-          story = json.loads((package / "story.json").read_text(encoding="utf-8"))
+          _, package, story = max(packages, key=lambda item: item[0])
           title = str(story.get("title", "")).strip()
           if not title:
               raise SystemExit("Story title is missing.")
