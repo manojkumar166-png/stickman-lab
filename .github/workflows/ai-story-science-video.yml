@@ -69,6 +69,85 @@ jobs:
           set -euo pipefail
           # One-click default: Gemini invents a fresh topic and creates 48 scenes.
           python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
+      - name: Generate karaoke subtitles and name final video
+        id: final_video
+        env:
+          HF_HOME: ${{ runner.temp }}/huggingface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+
+          root = Path("ai-story-video-output")
+          packages = []
+          for candidate in root.iterdir():
+              story_file = candidate / "story.json"
+              if not candidate.is_dir() or not story_file.is_file():
+                  continue
+              try:
+                  saved = json.loads(story_file.read_text(encoding="utf-8"))
+              except (OSError, ValueError):
+                  continue
+              if saved.get("completed") is not True:
+                  packages.append((candidate.name, candidate, saved))
+          if not packages:
+              raise SystemExit("No unfinished output package was created.")
+
+          _, package, story = max(packages, key=lambda item: item[0])
+          title = str(story.get("title", "")).strip()
+          if not title:
+              raise SystemExit("Story title is missing.")
+
+          safe_title = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
+          safe_title = re.sub(r"\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
+          if not safe_title or safe_title in {".", ".."}:
+              raise SystemExit("Could not make a safe filename from the story title.")
+
+          video = package / "final-video.mp4"
+          if not video.is_file() or video.stat().st_size < 100000:
+              raise SystemExit("Final video is missing or too small.")
+
+          work = package / "subtitle-work"
+          work.mkdir(exist_ok=True)
+          audio = work / "narration-for-whisper.mp3"
+          captions = work / "karaoke-captions.ass"
+          subprocess.run([
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
+          ], check=True)
+
+          import sys
+          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
+          from karaoke_subtitles import generate_karaoke_ass
+          config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
+          words = generate_karaoke_ass(
+              str(audio), str(captions), int(config["width"]), int(config["height"])
+          )
+          if not captions.is_file() or captions.stat().st_size == 0:
+              raise SystemExit("Karaoke subtitle generation did not produce an ASS file.")
+
+          final_video = root / f"{safe_title}.mp4"
+          subprocess.run([
+              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(video),
+              "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
+              "-map", "0:v:0", "-map", "0:a:0",
+              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+              "-c:a", "aac", "-b:a", "192k", "-shortest",
+              "-movflags", "+faststart", str(final_video)
+          ], check=True)
+          if not final_video.is_file() or final_video.stat().st_size < 100000:
+              raise SystemExit("Final subtitled video is missing or too small.")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"video={final_video.as_posix()}\n")
+              output.write(f"filename={final_video.name}\n")
+              output.write(f"title={' '.join(title.split())}\n")
+              output.write(f"package={package.as_posix()}\n")
+          print(f"Burned karaoke captions for {words} timed words into {final_video}.")
+          PY
       - name: Save used topic history
         shell: bash
         env:
@@ -156,85 +235,6 @@ jobs:
 
           echo "::error::Topic history could not be published after five attempts. Failing safely so the story checkpoint is preserved and this run can be retried."
           exit 1
-      - name: Generate karaoke subtitles and name final video
-        id: final_video
-        env:
-          HF_HOME: ${{ runner.temp }}/huggingface
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os, re, subprocess
-          from pathlib import Path
-
-          root = Path("ai-story-video-output")
-          packages = []
-          for candidate in root.iterdir():
-              story_file = candidate / "story.json"
-              if not candidate.is_dir() or not story_file.is_file():
-                  continue
-              try:
-                  saved = json.loads(story_file.read_text(encoding="utf-8"))
-              except (OSError, ValueError):
-                  continue
-              if saved.get("completed") is not True:
-                  packages.append((candidate.name, candidate, saved))
-          if not packages:
-              raise SystemExit("No unfinished output package was created.")
-
-          _, package, story = max(packages, key=lambda item: item[0])
-          title = str(story.get("title", "")).strip()
-          if not title:
-              raise SystemExit("Story title is missing.")
-
-          safe_title = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
-          safe_title = re.sub(r"\s+", " ", safe_title).strip().rstrip(".")[:120].rstrip(".")
-          if not safe_title or safe_title in {".", ".."}:
-              raise SystemExit("Could not make a safe filename from the story title.")
-
-          video = package / "final-video.mp4"
-          if not video.is_file() or video.stat().st_size < 100000:
-              raise SystemExit("Final video is missing or too small.")
-
-          work = package / "subtitle-work"
-          work.mkdir(exist_ok=True)
-          audio = work / "narration-for-whisper.mp3"
-          captions = work / "karaoke-captions.ass"
-          subprocess.run([
-              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-              "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
-          ], check=True)
-
-          import sys
-          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
-          from karaoke_subtitles import generate_karaoke_ass
-          config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
-          words = generate_karaoke_ass(
-              str(audio), str(captions), int(config["width"]), int(config["height"])
-          )
-          if not captions.is_file() or captions.stat().st_size == 0:
-              raise SystemExit("Karaoke subtitle generation did not produce an ASS file.")
-
-          final_video = root / f"{safe_title}.mp4"
-          subprocess.run([
-              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-              "-i", str(video),
-              "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
-              "-map", "0:v:0", "-map", "0:a:0",
-              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-              "-c:a", "aac", "-b:a", "192k", "-shortest",
-              "-movflags", "+faststart", str(final_video)
-          ], check=True)
-          if not final_video.is_file() or final_video.stat().st_size < 100000:
-              raise SystemExit("Final subtitled video is missing or too small.")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"video={final_video.as_posix()}\n")
-              output.write(f"filename={final_video.name}\n")
-              output.write(f"title={' '.join(title.split())}\n")
-              output.write(f"package={package.as_posix()}\n")
-          print(f"Burned karaoke captions for {words} timed words into {final_video}.")
-          PY
       - name: Upload final video
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
