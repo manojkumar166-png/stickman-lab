@@ -49,8 +49,16 @@ jobs:
           git rm "$ZIP_PATH"
           git commit -m "Import images and retain source ZIP for $(basename "$EPISODE_PATH")"
           for attempt in 1 2 3 4 5; do
-            git fetch origin main
-            git rebase origin/main
+            if ! git fetch origin main; then
+              echo "Fetch attempt $attempt failed; retrying."
+              if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+              continue
+            fi
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Rebase conflict; refusing to overwrite concurrent main-branch changes."
+              exit 1
+            fi
             if git push origin HEAD:refs/heads/main; then
               echo "Imported images published to main."
               exit 0
