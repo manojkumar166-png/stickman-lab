@@ -26,7 +26,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          if git fetch origin +refs/heads/ai-image-progress:refs/remotes/origin/ai-image-progress; then
+          REMOTE_PROGRESS="$(git ls-remote --heads origin refs/heads/ai-image-progress)"
+          if [[ -n "$REMOTE_PROGRESS" ]]; then
+            git fetch origin +refs/heads/ai-image-progress:refs/remotes/origin/ai-image-progress
             git archive origin/ai-image-progress progress | tar -x -C .
             if [[ -d progress ]]; then cp -a progress/. output/; fi
             rm -rf progress
