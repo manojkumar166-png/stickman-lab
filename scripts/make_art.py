@@ -159,7 +159,7 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                         saved_story["scenes"][i - 1]["visual"] = revised_visual
                         temporary_story = story_file.with_name(story_file.name + ".tmp")
                         temporary_story.write_text(
-                            json.dumps(saved_story, ensure_ascii=False, indent=2) + "\\n",
+                            json.dumps(saved_story, ensure_ascii=False, indent=2) + "\n",
                             encoding="utf-8",
                         )
                         os.replace(temporary_story, story_file)
