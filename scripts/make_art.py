@@ -33,8 +33,6 @@ class CloudflareRateLimited(RuntimeError):
 class CloudflarePromptFlagged(RuntimeError):
     pass
 
-_OVH_LAST_CALL = 0.0
-
 # --- CHEAP MODEL ONLY: FLUX-2-KLEIN-4B ---
 CF_URL_CHEAP = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
 
@@ -92,31 +90,6 @@ def valid_png(raw):
         output = io.BytesIO()
         converted.save(output, format="PNG", optimize=True)
         return output.getvalue()
-
-def ovh_image(prompt):
-    """Anonymous OVHcloud SDXL fallback; limited to roughly 2 requests/minute."""
-    global _OVH_LAST_CALL
-    wait = max(0.0, 31.0 - (time.monotonic() - _OVH_LAST_CALL))
-    if wait:
-        print(f"  Waiting {wait:.1f}s for OVHcloud's anonymous rate limit.", flush=True)
-        time.sleep(wait)
-    _OVH_LAST_CALL = time.monotonic()
-    response = requests.post(
-        "https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image",
-        headers={"accept": "application/octet-stream", "Content-Type": "application/json"},
-        json={
-            "prompt": prompt,
-            "negative_prompt": "text, letters, typography, watermark, logo, signature, border, collage, split screen, duplicate subjects, extra limbs, malformed hands, deformed face, distorted anatomy, blurry, pixelated, low detail, flat lighting, oversaturated, noisy, jpeg artifacts"
-        },
-        timeout=(20, 180)
-    )
-    response.raise_for_status()
-    if "application/json" in response.headers.get("Content-Type", ""):
-        encoded = (response.json().get("data") or [{}])[0].get("b64_json")
-        if not encoded:
-            raise ValueError("OVHcloud returned no image data")
-        return valid_png(base64.b64decode(encoded))
-    return valid_png(response.content)
 
 def rewrite_flagged_prompt(original_visual, attempt):
     """Ask Gemini to safely rephrase one flagged visual while preserving its meaning."""
@@ -184,7 +157,12 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                         story_file = Path(story_path)
                         saved_story = json.loads(story_file.read_text(encoding="utf-8"))
                         saved_story["scenes"][i - 1]["visual"] = revised_visual
-                        story_file.write_text(json.dumps(saved_story, ensure_ascii=False, indent=2), encoding="utf-8")
+                        temporary_story = story_file.with_name(story_file.name + ".tmp")
+                        temporary_story.write_text(
+                            json.dumps(saved_story, ensure_ascii=False, indent=2) + "\\n",
+                            encoding="utf-8",
+                        )
+                        os.replace(temporary_story, story_file)
                     break
                 except CloudflareRateLimited:
                     raise
