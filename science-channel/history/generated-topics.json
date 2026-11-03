@@ -22,7 +22,8 @@
     "Why do deserts sing?",
     "Why do rivers meander?",
     "Why do songs get stuck in your head?",
-    "Why does soap make bubbles?"
+    "Why does soap make bubbles?",
+    "Why do pinecones open and close?"
   ],
   "topic_details": [
     {
@@ -124,6 +125,11 @@
       "title": "Why does soap make bubbles?",
       "angle": "Explore the unique molecular structure of surfactants that allows water to stretch into thin, shimmering films filled with air.",
       "pillar": "Chemistry and materials around us"
+    },
+    {
+      "title": "Why do pinecones open and close?",
+      "angle": "We explore the clever, non-living mechanical engineering inside pinecones that allows them to sense humidity and time their seed release without using a single muscle.",
+      "pillar": "Plants and the natural world"
     }
   ]
 }
