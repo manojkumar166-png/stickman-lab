@@ -175,42 +175,6 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      - name: Delete generated images after successful run
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          for image_dir in output/*-gemini/images; do
-            if [[ -d "$image_dir" ]]; then
-              rm -rf -- "$image_dir"
-              echo "Deleted generated scene images: $image_dir"
-            fi
-          done
-
-      - name: Save Cloudflare image progress
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/progress-worktree"
-          git fetch origin ai-image-progress || true
-          if git show-ref --verify --quiet refs/remotes/origin/ai-image-progress; then
-            git worktree add -B ai-image-progress "$RUNNER_TEMP/progress-worktree" origin/ai-image-progress
-          else
-            git worktree add --detach "$RUNNER_TEMP/progress-worktree" HEAD
-            git -C "$RUNNER_TEMP/progress-worktree" switch --orphan ai-image-progress
-            git -C "$RUNNER_TEMP/progress-worktree" rm -rf . >/dev/null 2>&1 || true
-          fi
-          mkdir -p "$RUNNER_TEMP/progress-worktree/progress"
-          find output -maxdepth 1 -type f -name 'story-*.json' -exec cp {} "$RUNNER_TEMP/progress-worktree/progress/" \;
-          find output -maxdepth 1 -type d -name 'scenes-*' -exec cp -a {} "$RUNNER_TEMP/progress-worktree/progress/" \;
-          git -C "$RUNNER_TEMP/progress-worktree" add -A progress
-          if ! git -C "$RUNNER_TEMP/progress-worktree" diff --cached --quiet; then
-            git -C "$RUNNER_TEMP/progress-worktree" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Checkpoint Cloudflare scene generation"
-            git -C "$RUNNER_TEMP/progress-worktree" push origin HEAD:refs/heads/ai-image-progress
-          else
-            echo "No new progress to save."
-          fi
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
