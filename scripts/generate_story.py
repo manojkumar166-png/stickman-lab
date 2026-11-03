@@ -239,10 +239,7 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
     if not final_topic or _is_repeat(final_topic, history):
         raise RuntimeError("Generated topic is empty or duplicates history; refusing to save it.")
 
-    # Save only after the story has passed duplicate and scene validation.
-    history.append(final_topic)
-    history_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = history_path.with_suffix(history_path.suffix + ".tmp")
-    temp_path.write_text(json.dumps(history[-200:], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temp_path.replace(history_path)
+    # Topic history is published by the workflow only after the video and
+    # subtitles have been generated successfully. A failed/incomplete run
+    # must remain eligible for retry without consuming its topic.
     return story
