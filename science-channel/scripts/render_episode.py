@@ -291,4 +291,13 @@ captions = work/"karaoke-captions.ass"
 word_count = generate_karaoke_ass(audio, captions, SETTINGS["width"], SETTINGS["height"])
 video = out/"final-video.mp4"
 run(["ffmpeg","-y","-i",str(silent),"-i",str(audio),"-vf",f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)])
-print(f"Rendered {video} with karaoke captions ({word_count} timed words)")
+if not video.is_file() or video.stat().st_size < 100000:
+    raise RuntimeError("Final MP4 is missing or too small after rendering")
+final_probe = subprocess.run(
+    ["ffprobe","-v","error","-show_entries","stream=codec_type","-of","csv=p=0",str(video)],
+    capture_output=True,text=True,timeout=30
+)
+streams = set(final_probe.stdout.splitlines()) if final_probe.returncode == 0 else set()
+if not {"video","audio"}.issubset(streams):
+    raise RuntimeError(f"Final MP4 failed audio/video stream validation: {final_probe.stderr[-500:]}")
+print(f"Rendered and validated {video} with karaoke captions ({word_count} timed words)")
