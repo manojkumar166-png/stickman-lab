@@ -21,7 +21,7 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |
 | Check workflow YAML, Python entry points and Cloudflare Worker syntax | **Validate Workflows** | Repository code/workflow changes |
 
-There are **seven active workflow files** in `.github/workflows/` (including the workflow validator). Each active workflow now has a dedicated detailed guide linked from [`.github/workflows/README.md`](.github/workflows/README.md). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
+There are **eight active workflow files** in `.github/workflows/` (including the workflow validator). Each active workflow now has a dedicated detailed guide linked from [`.github/workflows/README.md`](.github/workflows/README.md). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
 
@@ -396,7 +396,7 @@ This is a separate generator from the Science Channel episode pipeline and the l
 
 ## Documentation map
 
-Every active workflow has a dedicated guide. Start with [the workflow index](.github/workflows/README.md), which links to all seven workflow guides.
+Every active workflow has a dedicated guide. Start with [the workflow index](.github/workflows/README.md), which links to all eight workflow guides.
 
 - [Science Channel operating guide](science-channel/README.md) — shared episode format, planner, image preparation, Telegram operations and renderer behavior.
 - [AI Story & Science Video Creator](ai-story-science-video/README.md) — standalone free-provider 48-scene generator.
@@ -431,7 +431,7 @@ Do not assume that a setting in one pipeline affects another. In particular:
 
 ## 2. Workflow inventory and operational matrix
 
-All seven active workflows are listed in [`.github/workflows/README.md`](.github/workflows/README.md). This table summarizes their operational role.
+All eight active workflows are listed in [`.github/workflows/README.md`](.github/workflows/README.md). This table summarizes their operational role.
 
 | Workflow | Trigger | Main output or side effect | Main branch behavior |
 |---|---|---|---|
@@ -735,7 +735,7 @@ If Telegram delivery failed, the renderer should leave incoming files and READY 
 
 | Path | Responsibility |
 |---|---|
-| `.github/workflows/` | Seven workflow definitions and the workflow index |
+| `.github/workflows/` | Eight workflow definitions and the workflow index |
 | `.github/workflows/guides/` | Detailed guides for the five operational Science Channel/validation workflows |
 | `science-channel/settings.json` | Science Channel render/planning defaults |
 | `science-channel/topics.txt` | Science topic inspiration |
