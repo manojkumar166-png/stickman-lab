@@ -78,6 +78,7 @@ def main():
     if existing:
         fail("This episode already contains incoming images. Refusing to overwrite them.")
 
+    installed = []
     try:
         with zipfile.ZipFile(archive_path) as archive:
             image_entries = []
@@ -104,7 +105,6 @@ def main():
 
             # Extract into a temporary directory first. A corrupt member or CRC
             # failure must never leave a half-imported episode in images/incoming.
-            installed = []
             with tempfile.TemporaryDirectory(prefix=".zip-import-", dir=incoming) as temp_name:
                 temp_dir = Path(temp_name)
                 staged = []
