@@ -25,7 +25,8 @@
     "Why does soap make bubbles?",
     "Why do pinecones open and close?",
     "Why do we yawn?",
-    "Why do clouds float?"
+    "Why do clouds float?",
+    "Why are planets round?"
   ],
   "topic_details": [
     {
@@ -142,6 +143,11 @@
       "title": "Why do clouds float?",
       "angle": "An exploration of how rising warm air, tiny aerosol particles, and droplet surface tension allow massive water masses to defy gravity and stay aloft.",
       "pillar": "Earth, oceans and weather"
+    },
+    {
+      "title": "Why are planets round?",
+      "angle": "An exploration of how gravity relentlessly pulls matter from all directions toward a center of mass, and why smaller space rocks manage to stay lumpy.",
+      "pillar": "Space and astronomy"
     }
   ]
 }
