@@ -145,38 +145,103 @@ def valid_png(raw):
     with Image.open(io.BytesIO(raw)) as im:
         im=im.convert("RGB"); b=io.BytesIO(); im.save(b,"PNG",optimize=True); return b.getvalue()
 
-CF_ACCOUNT_ID=os.getenv("CF_ACCOUNT_ID","").strip()
-CF_API_TOKEN=os.getenv("CF_API_TOKEN","").strip()
-CF_URL=f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
-class CloudflareRateLimited(RuntimeError): pass
-
-def cloudflare_image(prompt):
-    if not CF_ACCOUNT_ID or not CF_API_TOKEN: raise RuntimeError("Configure CF_ACCOUNT_ID and CF_API_TOKEN secrets.")
-    for attempt in range(1,4):
-        r=requests.post(CF_URL,headers={"Authorization":f"Bearer {CF_API_TOKEN}"},json={"prompt":prompt,"width":1024,"height":576},timeout=TIMEOUT)
-        if r.status_code==429:
-            try: wait=max(60,min(1800,int(float(r.headers.get("Retry-After","300")))))
-            except ValueError: wait=300*attempt
-            if attempt==3: raise CloudflareRateLimited("Cloudflare rate limit persisted after three attempts.")
-            print(f"Cloudflare 429; waiting {wait}s before retry {attempt+1}/3.",flush=True); time.sleep(wait); continue
-        if r.status_code>=500 and attempt<3: time.sleep(30*attempt); continue
-        r.raise_for_status(); payload=r.json(); result=payload.get("result") or {}
-        encoded=result.get("image") or result.get("b64_json")
-        if not encoded: raise RuntimeError(f"Cloudflare returned no image: {str(payload)[:400]}")
+def ovh(prompt):
+    global _OVH_LAST_CALL
+    wait=max(0.0,31.0-(time.monotonic()-_OVH_LAST_CALL))
+    if wait: time.sleep(wait)
+    _OVH_LAST_CALL=time.monotonic()
+    r=requests.post("https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image",
+      headers={"accept":"application/octet-stream","Content-Type":"application/json"},
+      json={"prompt":prompt,"negative_prompt":"text, letters, typography, watermark, logo, signature, border, collage, split screen, duplicate subjects, extra limbs, malformed hands, deformed face, distorted anatomy, blurry, pixelated, low detail, flat lighting, oversaturated, noisy, jpeg artifacts"},timeout=TIMEOUT)
+    r.raise_for_status()
+    if "application/json" in r.headers.get("Content-Type",""):
+        encoded=(r.json().get("data") or [{}])[0].get("b64_json")
+        if not encoded: raise ValueError("OVH returned no image data")
         return valid_png(base64.b64decode(encoded))
-    raise CloudflareRateLimited("Cloudflare unavailable.")
+    return valid_png(r.content)
+
+def ai_horde(prompt):
+    base="https://aihorde.net/api/v2"
+    headers={"apikey":"0000000000","Client-Agent":"stickman-lab:1.0:https://github.com/manojkumar166-png/stickman-lab"}
+    payload={"prompt":prompt+"###text, watermark, logo, blurry, low quality",
+      "params":{"width":1024,"height":576,"steps":20,"n":1},
+      "nsfw":False,"censor_nsfw":True,"trusted_workers":False}
+    r=requests.post(base+"/generate/async",headers=headers,json=payload,timeout=60)
+    r.raise_for_status(); job=r.json().get("id")
+    if not job: raise RuntimeError("AI Horde returned no job ID")
+    deadline=time.monotonic()+600
+    while time.monotonic()<deadline:
+        time.sleep(5)
+        check=requests.get(base+f"/generate/check/{job}",headers=headers,timeout=45)
+        check.raise_for_status(); state=check.json()
+        if state.get("faulted"): raise RuntimeError("AI Horde generation faulted")
+        if state.get("done"): break
+    else: raise TimeoutError("AI Horde queue timed out after 10 minutes")
+    result=requests.get(base+f"/generate/status/{job}",headers=headers,timeout=60)
+    result.raise_for_status(); generations=result.json().get("generations") or []
+    if not generations: raise RuntimeError("AI Horde completed without an image")
+    img=generations[0].get("img")
+    if not img: raise RuntimeError("AI Horde response contained no image")
+    if img.startswith("data:") and "," in img:
+        return valid_png(base64.b64decode(img.split(",",1)[1]))
+    if img.startswith("http://") or img.startswith("https://"):
+        download=requests.get(img,timeout=TIMEOUT); download.raise_for_status(); return valid_png(download.content)
+    try: return valid_png(base64.b64decode(img,validate=True))
+    except Exception as e: raise RuntimeError(f"Unrecognized AI Horde image payload: {e}")
+
+def vexa(prompt):
+    errors=[]
+    for model in ("hd","flux"):
+        try:
+            r=requests.post("https://vexa-ai.pages.dev/image",
+                json={"prompt":prompt[:1000],"model":model,"preference":"quality"},timeout=TIMEOUT)
+            r.raise_for_status(); data=r.json()
+            if not data.get("success") or not data.get("proxy_url"):
+                raise RuntimeError(data.get("error") or "Vexa returned no proxy URL")
+            image=requests.get(data["proxy_url"],timeout=TIMEOUT); image.raise_for_status()
+            return valid_png(image.content)
+        except Exception as e: errors.append(f"{model}: {e}")
+    raise RuntimeError("Vexa routes failed: "+" | ".join(errors))
+
+def pollinations(prompt):
+    url="https://image.pollinations.ai/prompt/"+requests.utils.quote(prompt,safe="")
+    r=requests.get(url,params={"width":1280,"height":720,"nologo":"true"},headers={"Accept":"image/*"},timeout=TIMEOUT)
+    r.raise_for_status(); return valid_png(r.content)
+
+def generation_prompt(scene):
+    base=scene["image_prompt"].strip()
+    quality=("Premium cinematic 3D CGI still for a polished science documentary or original animated film; "
+      "physically based materials, fine surface detail, believable scale, clear subject separation, "
+      "natural cinematic color grading, realistic global illumination, crisp focal subject, controlled highlights "
+      "and shadows, coherent environment. Compose as a wide 16:9 movie frame even if the generator returns a square "
+      "image; keep faces, key objects and the main action within the central horizontal band, away from top/bottom "
+      "edges. One unified scene, intentional camera framing, no text.")
+    return base+"\\n\\n"+quality
+
 
 def generate_all(scenes,folder):
-    folder.mkdir(parents=True,exist_ok=True)
+    folder.mkdir(parents=True,exist_ok=True); failures=[]
+    providers=(("OVHcloud anonymous",ovh,2),("AI Horde anonymous",ai_horde,1),
+               ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
-        n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"
-        if target.is_file() and target.stat().st_size>0:
-            try: valid_png(target.read_bytes()); print(f"Scene {n} already saved; skipping.",flush=True); continue
-            except Exception: target.unlink(missing_ok=True)
-        print(f"Scene {n}/{len(scenes)}: Cloudflare only.",flush=True)
-        target.write_bytes(valid_png(cloudflare_image(generation_prompt(s))))
-        print(f"Scene {n} saved.",flush=True); time.sleep(2)
-    print(f"Validated all {len(scenes)} images.",flush=True)
+        n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
+        prompt=generation_prompt(s)
+        for name,fn,retries in providers:
+            for attempt in range(retries):
+                print(f"Scene {n}/{len(scenes)}: trying {name} (attempt {attempt+1}/{retries})",flush=True)
+                try:
+                    target.write_bytes(valid_png(fn(prompt)))
+                    print(f"Image {n}/{len(scenes)} generated with {name}",flush=True)
+                    completed=True; break
+                except Exception as e:
+                    errors.append(f"{name} attempt {attempt+1}: {e}")
+                    print(f"Scene {n}: {name} failed: {e}",file=sys.stderr,flush=True)
+                    if attempt+1<retries: time.sleep(min(90,30*(attempt+1)))
+            if completed: break
+        if not completed: failures.append({"scene":n,"errors":errors})
+    if failures: raise RuntimeError("Missing scene images; video render cancelled: "+json.dumps(failures))
+    print(f"Validated all {len(scenes)} scene images.",flush=True)
+
 
 async def speak(text,path,voice):
     last=None
@@ -222,7 +287,7 @@ def main():
     if not 4<=a.scenes<=48: p.error("Scene count must be 4–48")
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
-    print("Images: free anonymous providers; cinematic prompt enhancement and center-crop-safe framing; OVHcloud first.",flush=True)
+    print("Images: OVHcloud, AI Horde, Vexa and Pollinations fallback chain.",flush=True)
     print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
     print("::endgroup::",flush=True)
     OUT.mkdir(exist_ok=True)
