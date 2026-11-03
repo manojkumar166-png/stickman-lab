@@ -138,6 +138,7 @@ jobs:
           retention-days: 2
 
       - name: Send Video to Telegram
+        id: telegram
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
         with:
@@ -146,6 +147,12 @@ jobs:
           files: output/${{ steps.get_topic.outputs.filename }}
           message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
 
+      - name: Require successful Telegram delivery
+        if: steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
+          exit 1
       - name: Commit topic history safely to main
         shell: bash
         run: |
