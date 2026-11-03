@@ -16,21 +16,39 @@ def main():
     
     config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     day = date.today().isoformat()
-    story_path = OUT / f"story-{day}.json"
+    # Resume the newest incomplete story first, even when it was started yesterday.
+    pending_story = None
+    for candidate in sorted(OUT.glob("story-*.json"), reverse=True):
+        candidate_day = candidate.stem.removeprefix("story-")
+        candidate_scene_dir = OUT / f"scenes-{candidate_day}"
+        try:
+            candidate_story = json.loads(candidate.read_text(encoding="utf-8"))
+            expected = len(candidate_story.get("scenes", []))
+            completed = sum(1 for p in candidate_scene_dir.glob("scene-*.png") if p.is_file() and p.stat().st_size > 0)
+            if expected and completed < expected:
+                pending_story = (candidate, candidate_story, candidate_day)
+                break
+        except Exception:
+            continue
+    if pending_story:
+        story_path, story, scene_day = pending_story
+        print(f"Resuming unfinished story from {scene_day}.")
+    else:
+        story_path = OUT / f"story-{day}.json"
+        scene_day = day
     
     if not os.getenv("GEMINI_API_KEY"):
         raise RuntimeError("GEMINI_API_KEY is missing.")
 
-    if story_path.exists():
-        story = json.loads(story_path.read_text(encoding="utf-8"))
-        print(f"Resuming saved story: {story.get('topic', 'untitled')}")
-    else:
+    if not pending_story:
         story = generate_story(ROOT, config)
         story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
+    else:
+        print(f"Resuming saved story: {story.get('topic', 'untitled')}")
     print(f"Topic: {story['topic']}")
 
     print("Generating AI scene artwork...")
-    scene_dir = OUT / f"scenes-{day}"
+    scene_dir = OUT / f"scenes-{scene_day}"
     scene_dir.mkdir(parents=True, exist_ok=True)
 
     # Force AI generation for this experiment
