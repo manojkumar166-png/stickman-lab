@@ -189,7 +189,16 @@ jobs:
             exit 0
           fi
           git commit -m "Save AI video experiment progress"
-          git push origin HEAD:refs/heads/ai-image-progress --force
+          for attempt in 1 2 3 4 5; do
+            if git push --force origin HEAD:refs/heads/ai-image-progress; then
+              echo "Cloudflare image checkpoint saved."
+              exit 0
+            fi
+            echo "Checkpoint push attempt $attempt failed."
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+          done
+          echo "Could not save Cloudflare image checkpoint after five attempts."
+          exit 1
 
       - name: Clear saved progress after successful run
         if: success()
