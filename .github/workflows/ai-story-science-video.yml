@@ -70,7 +70,6 @@ jobs:
           # One-click default: Gemini invents a fresh topic and creates 48 scenes.
           python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
       - name: Save used topic history
-        continue-on-error: true
         shell: bash
         env:
           RUNNER_TEMP: ${{ runner.temp }}
