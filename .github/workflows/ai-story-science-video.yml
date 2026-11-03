@@ -130,8 +130,8 @@ jobs:
             sleep "$((attempt * 3))"
           done
 
-          echo "::warning::Video rendering will continue, but topic history could not be published after five attempts."
-          exit 0
+          echo "::error::Topic history could not be published after five attempts. Failing safely so the story checkpoint is preserved and this run can be retried."
+          exit 1
       - name: Generate karaoke subtitles and name final video
         id: final_video
         env:
