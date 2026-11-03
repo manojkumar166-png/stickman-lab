@@ -61,7 +61,11 @@ jobs:
           git add "$EPISODE_PATH" science-channel/history/generated-topics.json
           git commit -m "Add Gemini-planned episode"
           for attempt in 1 2 3; do
-            git fetch origin main
+            if ! git fetch origin main; then
+              echo "Fetch attempt $attempt failed; retrying."
+              if [ "$attempt" -lt 3 ]; then sleep $((attempt * 3)); fi
+              continue
+            fi
             # Keep any incidental generated/untracked files out of the rebase.
             # The episode and topic history are already committed above.
             if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
@@ -69,7 +73,11 @@ jobs:
               git status --short
               exit 1
             fi
-            git rebase origin/main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Rebase conflict; refusing to overwrite concurrent main-branch changes."
+              exit 1
+            fi
             if git push origin HEAD:refs/heads/main; then
               echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
               exit 0
