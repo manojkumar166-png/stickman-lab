@@ -173,13 +173,14 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p progress
-          if [[ -d output ]]; then cp -a output/. progress/; fi
-          git fetch origin ai-image-progress || true
+          CHECKPOINT_DIR="$RUNNER_TEMP/ai-image-progress"
+          rm -rf "$CHECKPOINT_DIR"
+          mkdir -p "$CHECKPOINT_DIR"
+          if [[ -d output ]]; then cp -a output/. "$CHECKPOINT_DIR"/; fi
           git checkout --orphan ai-image-progress
           git rm -rf . >/dev/null 2>&1 || true
           mkdir -p progress
-          cp -a "$GITHUB_WORKSPACE"/progress/. progress/
+          cp -a "$CHECKPOINT_DIR"/. progress/
           git add progress
           if git diff --cached --quiet; then
             echo "No progress files to save."
