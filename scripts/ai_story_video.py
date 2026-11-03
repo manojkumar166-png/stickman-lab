@@ -221,7 +221,7 @@ def generation_prompt(scene):
 
 def generate_all(scenes,folder):
     folder.mkdir(parents=True,exist_ok=True); failures=[]
-    providers=(("OVHcloud anonymous",ovh,2),("AI Horde anonymous",ai_horde,1),
+    providers=(("OVHcloud anonymous",ovh,5),("AI Horde anonymous",ai_horde,1),
                ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
         n=s["scene_number"]; target=folder/f"scene-{n:02d}.png"; errors=[]; completed=False
@@ -287,7 +287,7 @@ def main():
     if not 4<=a.scenes<=48: p.error("Scene count must be 4–48")
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
-    print("Images: OVHcloud, AI Horde, Vexa and Pollinations fallback chain.",flush=True)
+    print("Images: OVHcloud primary (up to 5 attempts), then AI Horde, Vexa and Pollinations fallbacks.",flush=True)
     print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
     print("::endgroup::",flush=True)
     OUT.mkdir(exist_ok=True)
