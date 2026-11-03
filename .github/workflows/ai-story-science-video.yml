@@ -211,6 +211,7 @@ jobs:
           compression-level: 0
           retention-days: 7
       - name: Send final video to Telegram
+        id: telegram
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
         with:
@@ -218,6 +219,12 @@ jobs:
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.final_video.outputs.video }}
           message: "🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator\nTitle: ${{ steps.final_video.outputs.title }}"
+      - name: Require successful Telegram delivery
+        if: steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
+          exit 1
       - name: Save science-video progress after failure
         if: failure()
         shell: bash
