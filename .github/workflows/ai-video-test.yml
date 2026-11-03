@@ -145,22 +145,6 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-      - name: Send Video to Telegram
-        id: telegram
-        continue-on-error: true
-        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
-        with:
-          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: output/${{ steps.get_topic.outputs.filename }}
-          message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
-
-      - name: Require successful Telegram delivery
-        if: steps.telegram.outcome != 'success'
-        shell: bash
-        run: |
-          echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
-          exit 1
       - name: Commit topic history safely to main
         shell: bash
         run: |
@@ -184,6 +168,22 @@ jobs:
             if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
           done
           echo "Could not publish topic history after 5 attempts."
+          exit 1
+      - name: Send Video to Telegram
+        id: telegram
+        continue-on-error: true
+        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
+        with:
+          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          files: output/${{ steps.get_topic.outputs.filename }}
+          message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
+
+      - name: Require successful Telegram delivery
+        if: steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
           exit 1
       - name: Mark AI story completed after delivery and history commit
         shell: bash
