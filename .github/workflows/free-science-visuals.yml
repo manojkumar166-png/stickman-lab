@@ -151,6 +151,12 @@ jobs:
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
           files: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
           message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
+      - name: Require successful Telegram delivery
+        if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::The MP4 artifact was created, but Telegram delivery failed. Uploaded images and READY.txt are intentionally retained for a safe retry."
+          exit 1
       - name: Remove uploaded ZIP, scene images and READY marker from main
         if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome == 'success'
         env:
