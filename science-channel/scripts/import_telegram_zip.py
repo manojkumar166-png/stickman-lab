@@ -104,6 +104,7 @@ def main():
 
             # Extract into a temporary directory first. A corrupt member or CRC
             # failure must never leave a half-imported episode in images/incoming.
+            installed = []
             with tempfile.TemporaryDirectory(prefix=".zip-import-", dir=incoming) as temp_name:
                 temp_dir = Path(temp_name)
                 staged = []
@@ -125,9 +126,14 @@ def main():
                     staged.append((target, incoming / target.name))
                 for source, destination in staged:
                     source.replace(destination)
+                    installed.append(destination)
     except zipfile.BadZipFile:
+        for installed_path in installed:
+            installed_path.unlink(missing_ok=True)
         fail("The uploaded document is not a valid ZIP archive.")
     except (RuntimeError, OSError, EOFError) as exc:
+        for installed_path in installed:
+            installed_path.unlink(missing_ok=True)
         fail(f"Could not safely extract the ZIP archive: {exc}")
 
     (episode / "READY.txt").write_text(
