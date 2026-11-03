@@ -52,7 +52,7 @@ def main():
         story["completed"] = False
         temporary_story = story_path.with_name(story_path.name + ".tmp")
         temporary_story.write_text(
-            json.dumps(story, ensure_ascii=False, indent=2) + "\\n",
+            json.dumps(story, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         os.replace(temporary_story, story_path)
