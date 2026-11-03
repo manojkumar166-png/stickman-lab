@@ -266,6 +266,7 @@ def main():
             if len(download_content) > 50 * 1024 * 1024:
                 send("ZIP skipped: the archive is over 50 MB.")
                 continue
+            installed = []
             try:
                 with zipfile.ZipFile(io.BytesIO(download_content)) as archive:
                     entries = []
@@ -296,7 +297,6 @@ def main():
 
                     # Stage every extracted image before touching the episode.
                     # A CRC/decompression failure must not leave partial scene files.
-                    installed = []
                     with tempfile.TemporaryDirectory(prefix=".telegram-zip-", dir=dest_dir) as temp_name:
                         temp_dir = Path(temp_name)
                         staged = []
