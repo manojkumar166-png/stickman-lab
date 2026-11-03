@@ -21,15 +21,17 @@ def main():
     if not os.getenv("GEMINI_API_KEY"):
         raise RuntimeError("GEMINI_API_KEY is missing.")
 
-    story = generate_story(ROOT, config)
-    story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
+    if story_path.exists():
+        story = json.loads(story_path.read_text(encoding="utf-8"))
+        print(f"Resuming saved story: {story.get('topic', 'untitled')}")
+    else:
+        story = generate_story(ROOT, config)
+        story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Topic: {story['topic']}")
 
     print("Generating AI scene artwork...")
     scene_dir = OUT / f"scenes-{day}"
-    if scene_dir.exists():
-        shutil.rmtree(scene_dir)
-    scene_dir.mkdir(parents=True)
+    scene_dir.mkdir(parents=True, exist_ok=True)
 
     # Force AI generation for this experiment
     ai_images = {}
