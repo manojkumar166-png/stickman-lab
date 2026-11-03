@@ -26,9 +26,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          if git fetch origin ai-image-progress; then
+          if git fetch origin +refs/heads/ai-image-progress:refs/remotes/origin/ai-image-progress; then
             git archive origin/ai-image-progress progress | tar -x -C .
             if [[ -d progress ]]; then cp -a progress/. output/; fi
+            rm -rf progress
+            echo "Restored the saved Cloudflare image checkpoint."
           else
             echo "No saved image progress branch yet."
           fi
