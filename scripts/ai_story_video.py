@@ -354,6 +354,9 @@ def main():
             continue
         try:
             saved=json.loads(story_file.read_text(encoding="utf-8"))
+            if saved.get("completed") is True:
+                print(f"Skipping completed story package {candidate.name}.",flush=True)
+                continue
             saved_scenes=saved.get("scenes")
             if (not isinstance(saved_scenes,list) or len(saved_scenes)!=a.scenes
                     or any(not isinstance(scene,dict) or scene.get("scene_number")!=i
@@ -379,11 +382,12 @@ def main():
         package.mkdir(parents=True)
         print("::group::STEP 1/5 - Gemini story planning",flush=True)
         data=plan_story(a.topic,a.scenes)
-        data.update({"scene_count":a.scenes,"voice":a.voice})
+        data.update({"scene_count":a.scenes,"voice":a.voice,"completed":False})
         print("Gemini selected format: "+data["mode"],flush=True)
     else:
         data.setdefault("scene_count",a.scenes)
         data.setdefault("voice",a.voice)
+        data.setdefault("completed",False)
         print("Reusing the saved story without asking Gemini to replace it.",flush=True)
 
     story_file=package/"story.json"
