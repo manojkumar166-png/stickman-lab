@@ -131,7 +131,7 @@ jobs:
           name: ai-topic-video
           path: output/${{ steps.get_topic.outputs.filename }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2
 
       - name: Send Video to Telegram
         continue-on-error: true
