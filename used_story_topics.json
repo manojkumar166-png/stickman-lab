@@ -113,5 +113,10 @@
     "title": "Why Glass Doesn't Fall Apart: The Physics of Amorphous Solids",
     "topic": "The microscopic molecular structure of silicate glass, explaining why it behaves as an amorphous solid rather than a crystalline structure.",
     "description": "An in-depth scientific documentary exploring the fascinating atomic architecture of glass. We investigate how rapid cooling prevents atoms from forming orderly crystals, locking them into a rigid yet disordered network."
+  },
+  {
+    "title": "Why Geckos Can Walk on Ceilings: The Mechanics of Van der Waals Forces",
+    "topic": "The exact microscopic biophysics of setulae and spatulae on gecko toe pads that utilize intermolecular Van der Waals forces for adhesion.",
+    "description": "This scientific documentary explores the extraordinary biomechanics of gecko feet. We investigate how millions of microscopic hairs create intermolecular attraction with surfaces, allowing gravity-defying movement."
   }
 ]
