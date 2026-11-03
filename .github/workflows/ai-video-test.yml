@@ -3,10 +3,11 @@ name: AI Video Experiment
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 5,9,13 * * *" # 11:00 AM, 3:00 PM, 7:00 PM IST
+    - cron: "30 5 * * *" # Once daily at 11:00 AM IST
 
 permissions:
   contents: write
+  actions: write
 concurrency:
   group: stickman-lab-main-writer
   cancel-in-progress: false
@@ -175,6 +176,15 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+      - name: Retry failed workflow run
+        if: failure() && fromJSON(github.run_attempt) < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Workflow attempt ${GITHUB_RUN_ATTEMPT} failed. Requesting retry; maximum total attempts: 3."
+          gh run rerun "${GITHUB_RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
