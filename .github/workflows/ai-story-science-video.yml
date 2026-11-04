@@ -56,9 +56,13 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 10))
           done
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
-          python -m pip install --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts faster-whisper
+          for attempt in 1 2 3; do
+            if sudo apt-get install -y ffmpeg fonts-dejavu-core; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          python -m pip install --retries 5 --timeout 60 --upgrade pip
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -79,6 +83,35 @@ jobs:
           python - <<'PY'
           import json, os, re, subprocess
           from pathlib import Path
+
+          def run_ffmpeg(command):
+              last_error = None
+              for attempt in range(1, 4):
+                  try:
+                      subprocess.run(command, check=True, timeout=900)
+                      return
+                  except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                      last_error = exc
+                      print(f"FFmpeg attempt {attempt}/3 failed: {exc}", flush=True)
+                      if attempt < 3:
+                          import time
+                          time.sleep(attempt * 5)
+              if "-c:v" in command and "libx264" in command:
+                  fallback, skip = [], False
+                  for arg in command:
+                      if skip:
+                          skip = False
+                          continue
+                      if arg in ("-preset", "-crf", "-tune"):
+                          skip = True
+                      elif arg == "libx264":
+                          fallback.extend(["mpeg4", "-q:v", "5"])
+                      else:
+                          fallback.append(arg)
+                  print("H.264 failed after 3 attempts; trying MPEG-4 encoder.", flush=True)
+                  subprocess.run(fallback, check=True, timeout=900)
+                  return
+              raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
 
           root = Path("ai-story-video-output")
           packages = []
@@ -113,7 +146,7 @@ jobs:
           work.mkdir(exist_ok=True)
           audio = work / "narration-for-whisper.mp3"
           captions = work / "karaoke-captions.ass"
-          subprocess.run([
+          run_ffmpeg([
               "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
               "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
           ], check=True)

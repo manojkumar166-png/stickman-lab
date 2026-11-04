@@ -28,7 +28,7 @@ jobs:
       - name: Install receiver dependency
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 requests
       - name: Receive Telegram images for main branch episodes only
         id: process
