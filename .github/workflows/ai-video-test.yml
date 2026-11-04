@@ -19,8 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.ref }}
+          ref: main
           fetch-depth: 0
+      - name: Validate required secrets before expensive setup
+        shell: bash
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          for name in GEMINI_API_KEY CF_ACCOUNT_ID CF_API_TOKEN TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required repository secret $name is missing. Configure it before running AI Video Experiment."
+              exit 1
+            fi
+          done
       - name: Restore Cloudflare image progress
         shell: bash
         run: |
