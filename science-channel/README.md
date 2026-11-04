@@ -118,7 +118,7 @@ If you revise narration after generating images, revise the matching prompt and 
 - **How it starts:** It can run from a push that adds real files to an episode's `images/incoming/` folder (the `.gitkeep` placeholder alone is ignored) or changes its `READY.txt` marker, or you can start **Free Science Visuals — Render Ready Episode** manually in Actions.
 - **Choosing the episode:** For a manual run, enter the exact folder in the optional `episode_path` field. If left blank, it chooses the newest episode it finds with a READY marker or incoming image files. For a push run, the changed files must identify exactly one episode; commits affecting multiple episodes are rejected.
 - **Validation:** It checks the episode metadata and scene data, requires exactly 48 ordered scene records, checks for 48 numbered narration sections in `script.md`, and requires exactly 48 supported images (either one ZIP or individual files, not a mixture).
-- **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It uses faster-whisper Small on CPU to align narration word-by-word, then burns phrase-based karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline.**
+- **Rendering:** It converts the images into 16:9 frames, creates spoken narration using Edge TTS and the configured voice, and combines the visuals and narration into `output/final-video.mp4`. **It uses WhisperX large-v3-turbo with forced word alignment on CPU to align narration word-by-word, then burns word-by-word karaoke captions into the video. The active word is yellow; surrounding words are white with a dark outline.**
 - **Artifact upload:** after rendering, it uploads the final MP4 only as a topic-named GitHub Actions artifact. The artifact is retained for **2 days**.
 - **Telegram delivery:** the workflow attempts to send the MP4 to the configured Telegram chat. This step is non-blocking, so a Telegram failure does not erase an artifact that has already been uploaded.
 - **Cleanup after successful delivery:** only when Telegram reports success, the workflow deletes every uploaded file in the episode's `images/incoming/` folder except `.gitkeep` (including `source-upload.zip` and all scene images), and removes `READY.txt`. It commits the cleanup to `main`. The original ZIP remains available during rendering and delivery, then is removed with the extracted images.
@@ -299,7 +299,7 @@ Entering the exact path is recommended when you have multiple episode folders. I
 
 The renderer checks that there are 48 ordered scene records in `scenes.json`, 48 corresponding scene sections with narration in `script.md`, and exactly 48 input images. It generates narration using Edge TTS and renders the video.
 
-**Karaoke captions are generated from the final Edge-TTS audio using faster-whisper Small. Each short phrase stays visible while the current spoken word is highlighted yellow; other words remain white with a dark outline.**
+**Karaoke captions are generated from the final Edge-TTS audio using WhisperX large-v3-turbo with forced word alignment. Each short short phrase stays visible while the current spoken word is highlighted yellow; other words remain white with a dark outline.**
 
 ## 6. Find and download the rendered video
 
@@ -324,7 +324,7 @@ In **Settings → Secrets and variables → Actions**:
 - Optionally add repository variable `SCIENCE_GEMINI_MODEL` to choose the Gemini model.
 - Optionally add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as repository secrets if you want Telegram delivery.
 
-The render workflow installs FFmpeg, DejaVu fonts, Edge TTS and faster-whisper itself; no extra repository dependency setup is required.
+The render workflow installs FFmpeg, DejaVu fonts, Edge TTS and WhisperX itself; no extra repository dependency setup is required.
 
 ## 9. What this pipeline changes
 
@@ -415,13 +415,13 @@ If you change a scene's narration, update its matching scenes.json entry and ima
 File: `science-channel/scripts/karaoke_subtitles.py`.
 
 The caption style is defined in the ASS `Style:` line inside `generate_karaoke_ass()`. Current behavior:
-- faster-whisper Small runs on CPU and creates word timestamps;
+- WhisperX large-v3-turbo with forced word alignment runs on CPU and creates word timestamps;
 - words are grouped into phrases of up to 7 words, with sentence punctuation also ending a phrase;
 - the current spoken word is highlighted yellow; other words are white;
 - DejaVu Sans is bold, with a dark outline and shadow;
 - captions are horizontally centered near the bottom of the frame.
 
-You can change the font name, font size multiplier, primary/highlight colors, outline width, shadow and vertical margin in the ASS style. Change `make_groups(words, max_words=7)` to alter phrase length. Keep ASS color values in ASS format (not ordinary HTML hex). Test a short render after changing subtitle code. The renderer installs DejaVu fonts and faster-whisper as part of the workflow.
+You can change the font name, font size multiplier, primary/highlight colors, outline width, shadow and vertical margin in the ASS style. Change `make_groups(words, max_words=7)` to alter phrase length. Keep ASS color values in ASS format (not ordinary HTML hex). Test a short render after changing subtitle code. The renderer installs DejaVu fonts and WhisperX as part of the workflow.
 
 ### 6. Change image requirements or upload behavior
 
