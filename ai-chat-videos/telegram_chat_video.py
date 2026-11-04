@@ -187,22 +187,38 @@ def send_result(token, chat, output, filename, count):
         raise RuntimeError(f"Telegram delivery failed: {r.text}")
 
 def main():
-    token, chat = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
-    file_id = os.environ["TELEGRAM_FILE_ID"]
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    chat = os.environ["TELEGRAM_CHAT_ID"]
     filename = os.environ.get("ORIGINAL_FILENAME", "chat-recording.mp4")
+    output = Path(os.environ.get("OUTPUT_VIDEO_PATH", "ai-chat-videos-output/edited.mp4"))
+    if os.environ.get("DELIVER_ONLY") == "1":
+        if not output.is_file(): raise RuntimeError(f"Rendered output not found: {output}")
+        send_result(token, chat, output, filename, int(os.environ.get("REACTION_COUNT", "0")))
+        return
+    local_path = os.environ.get("LOCAL_VIDEO_PATH", "").strip()
+    file_id = os.environ.get("TELEGRAM_FILE_ID", "").strip()
+    if bool(local_path) == bool(file_id):
+        raise RuntimeError("Provide exactly one input: LOCAL_VIDEO_PATH or TELEGRAM_FILE_ID.")
     with tempfile.TemporaryDirectory(prefix="ai-chat-video-") as td:
         work = Path(td)
-        safe_name = Path(filename).name or "chat-recording.mp4"
-        if not Path(safe_name).suffix:
-            safe_name += ".mp4"
-        source, output = work / safe_name, work / "roast.mp4"
-        size = download(token, file_id, source)
-        say(token, chat, f"🎬 Video received ({size/1048576:.1f} MB). Editing a separate copy; original stays unchanged.")
+        if local_path:
+            source = Path(local_path).resolve()
+            if not source.is_file(): raise RuntimeError(f"Uploaded video not found: {source}")
+            size = source.stat().st_size
+            if size <= 0: raise RuntimeError("Uploaded video is empty.")
+        else:
+            safe_name = Path(filename).name or "chat-recording.mp4"
+            if not Path(safe_name).suffix: safe_name += ".mp4"
+            source = work / safe_name
+            size = download(token, file_id, source)
+            say(token, chat, f"🎬 Video received ({size/1048576:.1f} MB). Editing a separate copy; original stays unchanged.")
         duration, has_audio = probe(source)
         events = scan(source, duration)
+        output.parent.mkdir(parents=True, exist_ok=True)
         render(source, output, events, duration, has_audio, work)
-        send_result(token, chat, output, filename, len(events))
-        print(f"Done: {duration:.1f}s, {len(events)} reaction(s), {output.stat().st_size} bytes")
+        with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a", encoding="utf-8") as out:
+            out.write(f"reaction_count={len(events)}\\n")
+        print(f"Rendered: {duration:.1f}s, {len(events)} reaction(s), {output.stat().st_size} bytes")
 
 if __name__ == "__main__":
     try:
