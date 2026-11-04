@@ -71,7 +71,7 @@ jobs:
           done
           python -m pip --retries 5 --timeout 60 install --upgrade pip
           python -m pip install --upgrade --retries 5 --timeout 60 edge-tts gTTS whisperx faster-whisper
-      - name: Verify TTS client installation
+      - name: Verify TTS clients and compile episode renderer
         shell: bash
         run: |
           set -euo pipefail
@@ -82,6 +82,12 @@ jobs:
           print("edge-tts:", version("edge-tts"))
           print("gTTS:", version("gTTS"))
           print("Edge TTS and Google TTS fallback imports OK.")
+          PY
+          python -m compileall -q science-channel/scripts
+          echo "Science-channel Python syntax check passed."
+          python -m compileall -q science-channel/scripts
+          echo "Science-channel Python syntax check passed."
+          # Keep the TTS check ahead of expensive Whisper model setup.
           PY
       - name: Pin TorchCodec for PyTorch 2.8 and verify audio decoding
         shell: bash
