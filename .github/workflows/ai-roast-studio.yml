@@ -4,7 +4,18 @@ on:
   push:
     branches: [main]
     paths:
-      - "ai-chat-videos/uploads/**"
+      - "ai-chat-videos/uploads/*.mp4"
+      - "ai-chat-videos/uploads/*.MP4"
+      - "ai-chat-videos/uploads/*.mov"
+      - "ai-chat-videos/uploads/*.MOV"
+      - "ai-chat-videos/uploads/*.m4v"
+      - "ai-chat-videos/uploads/*.M4V"
+      - "ai-chat-videos/uploads/*.webm"
+      - "ai-chat-videos/uploads/*.WEBM"
+      - "ai-chat-videos/uploads/*.mkv"
+      - "ai-chat-videos/uploads/*.MKV"
+      - "ai-chat-videos/uploads/*.avi"
+      - "ai-chat-videos/uploads/*.AVI"
   workflow_dispatch:
     inputs:
       telegram_file_id:
