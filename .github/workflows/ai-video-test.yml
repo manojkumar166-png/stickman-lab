@@ -22,11 +22,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Install Chatterbox (only when private reference URL is configured)
+        if: ${{ vars.VOICE_ENGINE == 'chatterbox' }}
+        run: pip install chatterbox-tts
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CHATTERBOX_REFERENCE_AUDIO_URL: ${{ secrets.CHATTERBOX_REFERENCE_AUDIO_URL }}
         run: python main_ai.py
 
       - name: Get Video Topic
