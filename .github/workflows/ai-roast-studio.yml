@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ai-roast-studio-${{ github.run_id }}
+  group: ai-chat-videos-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -38,10 +38,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: ai-roast-studio/requirements.txt
+          cache-dependency-path: ai-chat-videos/requirements.txt
 
       - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r ai-roast-studio/requirements.txt
+        run: python -m pip install --upgrade pip && python -m pip install -r ai-chat-videos/requirements.txt
 
       - name: Run automatic editor and send result to Telegram
         env:
@@ -49,7 +49,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_FILE_ID: ${{ inputs.telegram_file_id }}
           ORIGINAL_FILENAME: ${{ inputs.original_filename }}
-        run: python -u ai-roast-studio/telegram_roast.py
+        run: python -u ai-chat-videos/telegram_chat_video.py
 
       - name: Notify Telegram if the job fails
         if: failure()
@@ -63,4 +63,4 @@ jobs:
             --connect-timeout 15 --max-time 30 \
             -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=AI Roast Studio failed. Logs: ${RUN_URL}"
+            --data-urlencode "text=AI Chat Videos failed. Logs: ${RUN_URL}"
