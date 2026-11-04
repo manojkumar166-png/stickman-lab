@@ -122,7 +122,7 @@ function mainMenuKeyboard() {
         { text: "📤 Upload Images" }
       ],
       [
-        { text: "🔥 AI Roast" }
+        { text: "💡 AI Chat Videos" }
       ],
       [
         { text: "📊 Status" },
@@ -377,7 +377,7 @@ async function handleMessage(message, env, update) {
     "🎬 Generate": () => generate(chatId, env),
     "💡 Topic": () => showTopicKeyboard(chatId, env),
     "📤 Upload Images": () => sendUploadEpisodeKeyboard(chatId, env),
-    "🔥 AI Roast": () => sendTelegramMessage(chatId, "Send your recorded ChatGPT video as an MP4, MOV, MKV or WebM file. I will edit a separate copy and return it here. Standard Bot API source limit: 20 MB.", env, { reply_markup: mainMenuKeyboard() }),
+    "💡 AI Chat Videos": () => sendTelegramMessage(chatId, "Send your recorded ChatGPT video as an MP4, MOV, MKV or WebM file. I will edit a separate copy and return it here. Standard Bot API source limit: 20 MB.", env, { reply_markup: mainMenuKeyboard() }),
     "📊 Status": () => showStatus(chatId, env),
     "🖼 Prompts": () => showPrompts(chatId, env),
     "📋 Runs": () => showRuns(chatId, env),
@@ -1356,13 +1356,13 @@ async function dispatchZipImporter(env, episodePath, zipPath) {
   );
 }
 
-/* ---------------- AI ROAST STUDIO DISPATCH ---------------- */
+/* ---------------- AI CHAT VIDEOS DISPATCH ---------------- */
 
 async function dispatchRoastVideo(chatId, fileId, filename, env) {
   try {
     const workflow = await gh(env, workflowPath(ROAST_WORKFLOW_FILE));
     if (workflow.state !== "active") {
-      throw new Error("AI Roast Studio workflow is not active. Check GitHub Actions.");
+      throw new Error("AI Chat Videos workflow is not active. Check GitHub Actions.");
     }
     await gh(env, workflowPath(ROAST_WORKFLOW_FILE) + "/dispatches", {
       method: "POST",
@@ -1377,7 +1377,7 @@ async function dispatchRoastVideo(chatId, fileId, filename, env) {
     await sendTelegramMessage(
       chatId,
       [
-        "🔥 AI ROAST STUDIO STARTED",
+        "🔥 AI CHAT VIDEOS STARTED",
         "",
         "Your video was accepted. GitHub Actions is downloading a temporary copy and will send the edited MP4 back here.",
         "The original upload remains unchanged in this chat.",
@@ -1388,8 +1388,8 @@ async function dispatchRoastVideo(chatId, fileId, filename, env) {
       { reply_markup: mainMenuKeyboard() }
     );
   } catch (error) {
-    console.error("AI Roast Studio dispatch failed:", error);
-    await sendTelegramMessage(chatId, "❌ Could not start AI Roast Studio: " + error.message, env);
+    console.error("AI Chat Videos dispatch failed:", error);
+    await sendTelegramMessage(chatId, "❌ Could not start AI Chat Videos: " + error.message, env);
   }
 }
 
@@ -1502,7 +1502,7 @@ const TRACKED_WORKFLOWS = [
     file: IMPORT_WORKFLOW_FILE
   },
   {
-    label: "AI Roast Studio",
+    label: "AI Chat Videos",
     file: ROAST_WORKFLOW_FILE
   }
 ];
@@ -1972,7 +1972,7 @@ function helpText() {
     "/cancel — Cancel a queued or running workflow",
     "/prompts — Retrieve latest episode prompts",
     "/upload — Select episode for ZIP upload",
-    "🔥 AI Roast — Send a recorded ChatGPT video for automatic editing (20 MB Bot API source limit)",
+    "💡 AI Chat Videos — Send a recorded ChatGPT video for automatic editing (20 MB Bot API source limit)",
     "/help — Show this menu",
     "",
     "All manual workflow dispatches use the main branch."
