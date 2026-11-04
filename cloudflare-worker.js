@@ -2395,3 +2395,6 @@ async function handleCommand(chatId, text, env) {
         chatId,
         "I didn't recognise that command. Use /help to open the control centre.",
         env,
+      );
+  }
+}
