@@ -122,7 +122,7 @@ function mainMenuKeyboard() {
         { text: "📤 Upload Images" }
       ],
       [
-        { text: "💡 AI Chat Videos" }
+        { text: "🤖 AI Chat Videos" }
       ],
       [
         { text: "📊 Status" },
@@ -377,7 +377,7 @@ async function handleMessage(message, env, update) {
     "🎬 Generate": () => generate(chatId, env),
     "💡 Topic": () => showTopicKeyboard(chatId, env),
     "📤 Upload Images": () => sendUploadEpisodeKeyboard(chatId, env),
-    "💡 AI Chat Videos": () => sendTelegramMessage(chatId, "Send your recorded ChatGPT video as an MP4, MOV, MKV or WebM file. I will edit a separate copy and return it here. Standard Bot API source limit: 20 MB.", env, { reply_markup: mainMenuKeyboard() }),
+    "🤖 AI Chat Videos": () => sendTelegramMessage(chatId, "Send your recorded ChatGPT video as an MP4, MOV, MKV or WebM file. I will edit a separate copy and return it here. Standard Bot API source limit: 20 MB.", env, { reply_markup: mainMenuKeyboard() }),
     "📊 Status": () => showStatus(chatId, env),
     "🖼 Prompts": () => showPrompts(chatId, env),
     "📋 Runs": () => showRuns(chatId, env),
@@ -1972,7 +1972,7 @@ function helpText() {
     "/cancel — Cancel a queued or running workflow",
     "/prompts — Retrieve latest episode prompts",
     "/upload — Select episode for ZIP upload",
-    "💡 AI Chat Videos — Send a recorded ChatGPT video for automatic editing (20 MB Bot API source limit)",
+    "🤖 AI Chat Videos — Send a recorded ChatGPT video for automatic editing (20 MB Bot API source limit)",
     "/help — Show this menu",
     "",
     "All manual workflow dispatches use the main branch."
