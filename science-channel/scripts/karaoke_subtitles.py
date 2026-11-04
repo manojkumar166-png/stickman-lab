@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Create phrase-based ASS captions with the currently spoken word highlighted."""
+"""Create phrase-based ASS captions with stable-position karaoke highlighting."""
 import re
+from pathlib import Path
 from faster_whisper import WhisperModel
+
 
 def ass_time(seconds):
     centiseconds = max(0, round(float(seconds) * 100))
@@ -10,8 +12,10 @@ def ass_time(seconds):
     secs, cs = divmod(remainder, 100)
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
+
 def clean_word(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
 
 def make_groups(words, max_words=7):
     groups, current = [], []
@@ -23,6 +27,7 @@ def make_groups(words, max_words=7):
     if current:
         groups.append(current)
     return groups
+
 
 def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
     model = WhisperModel("small", device="cpu", compute_type="int8")
@@ -36,6 +41,11 @@ def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
     if not words:
         raise RuntimeError("Whisper returned no word timestamps; cannot create synchronized captions.")
 
+    # Center-anchor every cue at the exact same canvas coordinate. Bottom-aligned
+    # captions move their top edge whenever a phrase wraps to another line.
+    # Center alignment keeps the caption block's centre steady across cue changes.
+    anchor_x = width // 2
+    anchor_y = round(height * 0.88)
     header = f"""[Script Info]
 Title: Science Channel Karaoke Captions
 ScriptType: v4.00+
@@ -46,7 +56,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Karaoke,DejaVu Sans,{int(height * 0.052)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,2,100,100,95,1
+Style: Karaoke,DejaVu Sans,{int(height * 0.052)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,5,100,100,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -64,10 +74,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 escaped = token.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
                 color = r"{\c&H0000FFFF&}" if j == index else r"{\c&H00FFFFFF&}"
                 rendered.append(color + escaped)
-            events.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Karaoke,,0,0,0,,{' '.join(rendered)}{{\\c&H00FFFFFF&}}")
-    with open(output_path, "w", encoding="utf-8") as target:
-        target.write(header + "\n".join(events) + "\n")
+            position = rf"{{\an5\pos({anchor_x},{anchor_y})}}"
+            events.append(
+                f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Karaoke,,0,0,0,,"
+                f"{position}{' '.join(rendered)}{{\c&H00FFFFFF&}}"
+            )
+    Path(output_path).write_text(header + "\n".join(events) + "\n", encoding="utf-8")
     return len(words)
+
 
 def srt_time(seconds):
     milliseconds = max(0, round(float(seconds) * 1000))
@@ -76,8 +90,9 @@ def srt_time(seconds):
     secs, ms = divmod(remainder, 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
 
+
 def generate_karaoke_srt(audio_path, output_path):
-    """Generate a portable SRT file with phrase-level synchronized captions."""
+    """Generate a portable SRT file with phrase-level synchronized subtitles."""
     model = WhisperModel("small", device="cpu", compute_type="int8")
     segments, _ = model.transcribe(
         str(audio_path), word_timestamps=True, vad_filter=True, beam_size=5
@@ -103,4 +118,3 @@ def generate_karaoke_srt(audio_path, output_path):
         entries.append(f"{len(entries) + 1}\n{srt_time(start)} --> {srt_time(end)}\n{text}\n")
     Path(output_path).write_text("\n".join(entries), encoding="utf-8")
     return len(words)
-
