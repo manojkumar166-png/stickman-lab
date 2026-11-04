@@ -49,7 +49,7 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip --retries 5 --timeout 60 install --upgrade pip
-          python -m pip install --retries 5 --timeout 60 edge-tts gTTS whisperx
+          python -m pip install --retries 5 --timeout 60 edge-tts gTTS whisperx faster-whisper
       - name: Resolve exact episode path
         id: episode
         shell: bash
