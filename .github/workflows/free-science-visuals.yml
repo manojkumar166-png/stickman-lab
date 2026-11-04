@@ -70,7 +70,19 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip --retries 5 --timeout 60 install --upgrade pip
-          python -m pip install --retries 5 --timeout 60 edge-tts gTTS whisperx faster-whisper
+          python -m pip install --upgrade --retries 5 --timeout 60 edge-tts gTTS whisperx faster-whisper
+      - name: Verify TTS client installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from importlib.metadata import version
+          import edge_tts
+          from gtts import gTTS
+          print("edge-tts:", version("edge-tts"))
+          print("gTTS:", version("gTTS"))
+          print("Edge TTS and Google TTS fallback imports OK.")
+          PY
       - name: Pin TorchCodec for PyTorch 2.8 and verify audio decoding
         shell: bash
         run: |
