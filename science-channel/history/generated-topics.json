@@ -30,7 +30,8 @@
     "How do electric eels generate high-voltage shocks?",
     "How do scientists find colors in fossilized feathers?",
     "Why does the universe look different depending on which way you look?",
-    "Why do sunflowers track the Sun?"
+    "Why do sunflowers track the Sun?",
+    "Why do bamboo stalks grow so fast?"
   ],
   "topic_details": [
     {
@@ -171,6 +172,11 @@
     {
       "title": "Why do sunflowers track the Sun?",
       "angle": "Explore the hidden internal clock and hydraulic pressure shifts that allow young sunflowers to effortlessly sweep across the sky every single day.",
+      "pillar": "Plants and the natural world"
+    },
+    {
+      "title": "Why do bamboo stalks grow so fast?",
+      "angle": "Explore the incredible hydraulic pressure and specialized cellular mechanics that allow certain bamboo species to shoot up nearly a meter in a single day.",
       "pillar": "Plants and the natural world"
     }
   ]
