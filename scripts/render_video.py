@@ -1,5 +1,6 @@
 import subprocess, json, math, shutil, tempfile
 from pathlib import Path
+from scripts.karaoke_subtitles import generate_karaoke_ass
 
 def run(cmd):
     p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -25,6 +26,9 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
     
     with tempfile.TemporaryDirectory(prefix="stickman_clips_") as td:
         td=Path(td)
+        captions = td / "captions.ass"
+        word_count = generate_karaoke_ass(audio_path, captions, width, height)
+        print("Generated " + str(word_count) + " word-timed karaoke captions at 94% frame height.", flush=True)
         clips=[]
         for i,img in enumerate(images):
             clip=td/f"clip-{i:03d}.mp4"
@@ -43,6 +47,8 @@ def render_video(scene_dir: Path, audio_path: Path, output_path: Path, story: di
         run(["ffmpeg","-y","-loglevel","error","-f","concat","-safe","0","-i",str(concat),
              "-c","copy","-an",str(silent)])
              
+        subtitle_filter = "subtitles=" + captions.as_posix()
         run(["ffmpeg","-y","-loglevel","error","-i",str(silent),"-i",str(audio_path),
-             "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","medium","-crf","18",
+             "-map","0:v:0","-map","1:a:0","-vf",subtitle_filter,
+             "-c:v","libx264","-preset","medium","-crf","18",
              "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(output_path)])
