@@ -19,11 +19,16 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
 | Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
 | Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |
+| Edit a recorded ChatGPT conversation video | **💡 AI Chat Videos** | Telegram bot upload or commit one video to `ai-chat-videos/uploads/` on main |
 | Check workflow YAML, Python entry points and Cloudflare Worker syntax | **Validate Workflows** | Repository code/workflow changes |
 
 There are **eight active workflow files** in `.github/workflows/` (including the workflow validator). Each active workflow now has a dedicated detailed guide linked from [`.github/workflows/README.md`](.github/workflows/README.md). The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
+
+### 💡 AI Chat Videos
+
+Upload a recording through the Stickman Lab Telegram bot or commit one supported video into [`ai-chat-videos/uploads/`](ai-chat-videos/uploads/). Both routes trigger the same OCR-based vertical video editor. The edited MP4 is saved as a GitHub Actions artifact for 7 days and sent to Telegram. For GitHub uploads, the workflow removes the source from the latest `main` branch after artifact creation succeeds. **This public repository retains the original upload in Git history, so GitHub uploads are publicly accessible and must not contain private recordings.** Read the [AI Chat Videos setup, workflow and troubleshooting guide](ai-chat-videos/README.md) before using or customizing it.
 
 ### 1. Science Channel — Daily Gemini Planner
 **Topic-generation approach:** each run randomly chooses one broad science category and asks Gemini to create a new, accessible curiosity-driven question within it. The planner reads `science-channel/topics.txt` as a **style reference, not a fixed topic list**. It aims for clear questions like “Why do we get goosebumps?” or “How do bees communicate?”—but generates new subjects rather than copying these examples. Gemini is instructed to consider at least 10 candidates internally, select the strongest idea for an 8–10 minute episode, and avoid manufactured drama or complicated clickbait. Exact and semantic duplicate checks compare proposed ideas against topic history and existing episode metadata. See [the complete Science Channel operating guide](science-channel/README.md#how-topic-selection-works).
