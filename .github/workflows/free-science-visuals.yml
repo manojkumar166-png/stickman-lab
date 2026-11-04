@@ -89,7 +89,150 @@ jobs:
             fi
             P="${EPISODES[0]}"
           fi
-          if [[ ! "$P" =~ ^science-channel/daily-episodes/[A-Za-z]+ [0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          EPISODE_PATH_REGEX='^science-channel/daily-episodes/[A-Za-z]+ [0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*
+            echo "Invalid episode path: $P"
+            exit 1
+          fi
+          test -f "$P/episode.json" || { echo "episode.json not found in $P"; exit 1; }
+          echo "path=$P" >> "$GITHUB_OUTPUT"
+      - name: Validate, narrate and render
+        if: steps.episode.outputs.skip != 'true'
+        env:
+          HF_HOME: ${{ runner.temp }}/huggingface
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+        run: |
+          set -euo pipefail
+          python -u science-channel/scripts/render_episode.py "$EPISODE_PATH"
+      - name: Resolve topic-based artifact name
+        if: steps.episode.outputs.skip != 'true'
+        id: artifact
+        env:
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          metadata = json.loads((Path(os.environ["EPISODE_PATH"]) / "episode.json").read_text(encoding="utf-8"))
+          title = str(metadata.get("title", "")).strip()
+          if not title:
+              raise SystemExit("episode.json is missing its topic title")
+          slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80].strip("-")
+          if not slug:
+              raise SystemExit("Could not create a valid artifact name from the episode title")
+          filename = re.sub(r'[<>:"/\\|?*\r\n]', "", title)
+          filename = re.sub(r"\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
+          if not filename or filename in {".", ".."}:
+              raise SystemExit("Could not create a valid MP4 filename from the episode title")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"filename={filename}.mp4\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"name=science-channel-{slug}\n")
+          PY
+      - name: Rename final video to the exact episode topic
+        if: steps.episode.outputs.skip != 'true'
+        env:
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+          VIDEO_FILENAME: ${{ steps.artifact.outputs.filename }}
+        run: |
+          test -f "$EPISODE_PATH/output/final-video.mp4"
+          mv "$EPISODE_PATH/output/final-video.mp4" "$EPISODE_PATH/output/$VIDEO_FILENAME"
+      - name: Upload final MP4 only
+        if: steps.episode.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 2
+      - name: Send finished video to Telegram
+        if: steps.episode.outputs.skip != 'true'
+        id: telegram
+        continue-on-error: true
+        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
+        with:
+          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          files: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
+          message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
+      - name: Require successful Telegram delivery
+        if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::The MP4 artifact was created, but Telegram delivery failed. Uploaded images and READY.txt are intentionally retained for a safe retry."
+          exit 1
+      - name: Remove uploaded ZIP, scene images and READY marker from main
+        if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome == 'success'
+        env:
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          incoming="$EPISODE_PATH/images/incoming"
+          # Delete every uploaded file but preserve .gitkeep. This also removes
+          # dream.zip, allowing that exact filename to be uploaded again later.
+          if [ -d "$incoming" ]; then
+            find "$incoming" -maxdepth 1 -type f ! -name '.gitkeep' -delete
+          fi
+          rm -f "$EPISODE_PATH/READY.txt"
+          git add -A -- "$incoming"
+          if git ls-files --error-unmatch "$EPISODE_PATH/READY.txt" >/dev/null 2>&1; then
+            git rm -f -- "$EPISODE_PATH/READY.txt"
+          fi
+          if git diff --cached --quiet; then
+            echo "No uploaded files or READY marker need cleanup."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Clean up episode uploads after Telegram delivery"
+          for attempt in 1 2 3 4 5; do
+            if ! git fetch origin main; then
+              echo "Fetch attempt $attempt failed; retrying."
+              if [ "$attempt" -lt 5 ]; then sleep $((attempt * 3)); fi
+              continue
+            fi
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Rebase conflict; refusing to overwrite concurrent main-branch changes."
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Cleanup committed to main. The same ZIP filename can now be uploaded again."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying."
+            sleep 3
+          done
+          echo "ERROR: Could not push upload cleanup to main."
+          exit 1
+      - name: Alert Telegram when workflow fails
+        if: failure()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          JOB_NAME: ${{ github.job }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "Telegram alert skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured."
+            exit 0
+          fi
+          MESSAGE="$(printf '%s\n' '🚨 GitHub Actions workflow failed' "Workflow: $WORKFLOW_NAME" "Job: $JOB_NAME" "Branch: $BRANCH_NAME" "Run: #$RUN_NUMBER" "$RUN_URL")"
+          curl --fail --silent --show-error \
+            --connect-timeout 15 --max-time 30 \
+            --retry 3 --retry-all-errors --retry-delay 2 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}"
+
+          if [[ ! "$P" =~ $EPISODE_PATH_REGEX ]]; then
             echo "Invalid episode path: $P"
             exit 1
           fi
