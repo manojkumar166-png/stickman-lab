@@ -109,7 +109,7 @@ jobs:
         id: final_video
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
-          KARAOKE_WHISPER_BACKEND: faster-whisper
+          KARAOKE_WHISPER_BACKEND: whisperx
         shell: bash
         run: |
           set -euo pipefail
