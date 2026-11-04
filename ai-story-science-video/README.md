@@ -88,3 +88,10 @@ The workflow index and repository-wide editing guidance are in [`.github/workflo
 ## Runtime expectations
 
 Forty-eight images are generated sequentially. Anonymous image services have queues and rate limits; OVHcloud spacing alone adds roughly 24 minutes across 48 scene requests, before actual image-generation time, provider fallbacks, narration, subtitles and video rendering. This is a no-card design, not an instant-generation guarantee. Reducing the scene count in the workflow command is the most direct way to shorten a run.
+
+
+## Gemini scene-count reliability
+
+The generator targets exactly **48 scene objects** by default (the workflow's configured scene count). Gemini is explicitly instructed to return 48 complete objects and is given a larger output-token budget so it is less likely to stop after 47. The script validates the returned array; if it is short or long, it attempts a focused scene-count repair before accepting the story. If repair still cannot produce the required count, that generation attempt is rejected and a fresh story is requested. The workflow must not silently render a partial story.
+
+A log such as `Gemini returned 47 scenes; repairing to exactly 48` means the count validator caught a short response and the repair safety net is being used. A successful repair log ends with `48/48 now available`. The prompt and token-budget improvements reduce the likelihood of repair but cannot guarantee that a probabilistic model will always return the exact count on its first response.
