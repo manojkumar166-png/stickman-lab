@@ -149,7 +149,7 @@ jobs:
           run_ffmpeg([
               "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
               "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
-          ], check=True)
+          ])
 
           import sys
           sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
@@ -162,7 +162,7 @@ jobs:
               raise SystemExit("Karaoke subtitle generation did not produce an ASS file.")
 
           final_video = root / f"{safe_title}.mp4"
-          subprocess.run([
+          run_ffmpeg([
               "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
               "-i", str(video),
               "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
@@ -170,7 +170,7 @@ jobs:
               "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
               "-c:a", "aac", "-b:a", "192k", "-shortest",
               "-movflags", "+faststart", str(final_video)
-          ], check=True)
+          ])
           if not final_video.is_file() or final_video.stat().st_size < 100000:
               raise SystemExit("Final subtitled video is missing or too small.")
 
