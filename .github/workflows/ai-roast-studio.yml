@@ -119,6 +119,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git rm -- "$SOURCE_PATH"
             git commit -m "Clean up processed AI Chat Videos source upload"
+            git pull --rebase origin main
             git push
             echo "Removed source from the current main branch after artifact creation."
           else
