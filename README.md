@@ -21,6 +21,7 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |
 | Edit a recorded ChatGPT conversation video | **💡 AI Chat Videos** | Telegram bot upload or commit one video to `ai-chat-videos/uploads/` on main |
 | Check workflow YAML, Python entry points and Cloudflare Worker syntax | **Validate Workflows** | Repository code/workflow changes |
+| Get a Telegram message when a monitored workflow fails | **Telegram Failed Workflow Alerts** | Automatically after a monitored workflow completes with failure |
 
 There are **nine workflow files** in `.github/workflows/`. Each has an individual operating guide linked from [`.github/workflows/README.md`](.github/workflows/README.md), including the Telegram failure-alert workflow. The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
