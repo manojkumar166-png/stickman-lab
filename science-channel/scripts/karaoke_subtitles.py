@@ -99,7 +99,7 @@ def normalize_words(words):
     return result
 
 
-def make_groups(words, max_words=6, pause_seconds=0.42):
+def make_groups(words, max_words=7, pause_seconds=0.42):
     groups, current = [], []
     for word in words:
         if current and word["start"] - current[-1]["end"] >= pause_seconds:
@@ -146,7 +146,8 @@ def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
 def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
     words = transcribe_and_align(audio_path)
     anchor_x = width // 2
-    anchor_y = round(height * 0.88)
+    # Bottom-center anchor matches the reference clip's lower-third baseline.
+    anchor_y = round(height * 0.86)
     header = f"""[Script Info]
 Title: WhisperX Word Karaoke Captions
 ScriptType: v4.00+
@@ -157,7 +158,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Karaoke,DejaVu Sans,{int(height * 0.052)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,5,100,100,0,1
+Style: Karaoke,DejaVu Sans,{int(height * 0.052)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,2,100,100,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -175,7 +176,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 escaped = token.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
                 color = r"{\c&H0000FFFF&}" if j == index else r"{\c&H00FFFFFF&}"
                 rendered.append(color + escaped)
-            position = rf"{{\an5\pos({anchor_x},{anchor_y})}}"
+            position = rf"{{\an2\pos({anchor_x},{anchor_y})}}"
             events.append(
                 f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Karaoke,,0,0,0,,"
                 f"{position}{' '.join(rendered)}{{\c&H00FFFFFF&}}"
