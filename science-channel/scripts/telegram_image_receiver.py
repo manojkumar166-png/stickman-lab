@@ -115,7 +115,7 @@ def valid_episode(value):
     match = EPISODE_RE.fullmatch(value)
     if not match:
         return None
-    path = ROOT / match.group(1) / match.group(2)
+    path = ROOT / match.group(1) / match.group(2) / match.group(3)
     if not (path / "episode.json").is_file():
         return None
     return path
@@ -129,7 +129,7 @@ def newest_episode():
             for episode_dir in date_dir.glob("episode-*"):
                 if episode_dir.is_dir() and (episode_dir / "episode.json").is_file():
                     episodes.append(episode_dir)
-    return max(episodes, key=lambda p: (p.parent.name, p.name)) if episodes else None
+    return max(episodes, key=lambda p: (p.parent.name, p.parent.parent.name, p.name)) if episodes else None
 
 def image_payload(message):
     if message.get("photo"):
