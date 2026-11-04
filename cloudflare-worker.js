@@ -613,37 +613,73 @@ function workflowPath(file) {
 /* ---------------- EPISODE DISCOVERY ---------------- */
 
 async function listEpisodeDates(env) {
-  const months = await gh(env, repoPath(`/contents/${EPISODE_ROOT}?ref=${BRANCH}`));
+  const months = await gh(
+    env,
+    repoPath(`/contents/${EPISODE_ROOT}?ref=${BRANCH}`)
+  );
+
   if (!Array.isArray(months)) return [];
+
   const dates = [];
-  for (const month of months.filter(x => x.type === "dir" && /^[A-Z][a-z]+ \d{4}$/.test(x.name))) {
-    const children = await gh(env, repoPath(`/contents/${month.path}?ref=${BRANCH}`));
+
+  for (const month of months.filter(item =>
+    item.type === "dir" &&
+    /^[A-Za-z]+ \d{4}$/.test(item.name)
+  )) {
+    // Month folder names contain spaces; encode each path segment for GitHub.
+    const monthPath = month.path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
+
+    const children = await gh(
+      env,
+      repoPath(`/contents/${monthPath}?ref=${BRANCH}`)
+    );
+
     if (!Array.isArray(children)) continue;
-    for (const day of children.filter(x => x.type === "dir" && /^\d{4}-\d{2}-\d{2}$/.test(x.name))) {
-      dates.push({ name: day.name, month: month.name, path: day.path });
+
+    for (const day of children.filter(item =>
+      item.type === "dir" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(item.name)
+    )) {
+      dates.push({
+        name: day.name,
+        month: month.name,
+        path: day.path
+      });
     }
   }
-  return dates.sort((a, b) => b.name.localeCompare(a.name));
+
+  return dates.sort((a, b) =>
+    b.name.localeCompare(a.name) ||
+    b.month.localeCompare(a.month)
+  );
 }
 
 async function listEpisodesForDate(env, datePath) {
-  if (!/^science-channel\/daily-episodes\/[A-Z][a-z]+ \d{4}\/\d{4}-\d{2}-\d{2}$/.test(datePath)) {
-    throw new Error("Invalid episode date folder.");
+  if (!/^science-channel\\/daily-episodes\\/[A-Za-z]+ \\d{4}\\/\\d{4}-\\d{2}-\\d{2}$/.test(datePath)) {
+    throw new Error(`Invalid episode date folder: ${datePath}`);
   }
+
+  const encodedPath = datePath
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
 
   const result = await gh(
     env,
-    repoPath(`/contents/${datePath}?ref=${BRANCH}`)
+    repoPath(`/contents/${encodedPath}?ref=${BRANCH}`)
   );
 
   if (!Array.isArray(result)) return [];
 
   return result
-    .filter(x =>
-      x.type === "dir" &&
-      /^episode-\d{3}(?:-|$)/i.test(x.name)
+    .filter(item =>
+      item.type === "dir" &&
+      /^episode-\\d{3}(?:-|$)/i.test(item.name)
     )
-    .map(x => ({ name: x.name, path: x.path }))
+    .map(item => ({ name: item.name, path: item.path }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -1129,7 +1165,9 @@ function constantTimeEqual(a, b) {
 }
 
 function isValidEpisodePath(path) {
-  return /^science-channel\/daily-episodes\/\d{4}-\d{2}-\d{2}\/episode-\d{3}(?:-|$)/.test(
+  // Match the real repository layout:
+  // daily-episodes/Month YYYY/YYYY-MM-DD/episode-NNN-name
+  return /^science-channel\\/daily-episodes\\/[A-Za-z]+ \\d{4}\\/\\d{4}-\\d{2}-\\d{2}\\/episode-\\d{3}(?:-|$)/.test(
     path
   );
 }
