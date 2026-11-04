@@ -203,7 +203,6 @@ jobs:
           path: output/${{ steps.get_topic.outputs.filename }}
           if-no-files-found: error
           retention-days: 2
-
       - name: Commit topic history safely to main
         shell: bash
         run: |
@@ -331,7 +330,7 @@ jobs:
           name: ai-video-scene-images-failed-run
           path: output/*-gemini/images/
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 2
           compression-level: 0
 
       - name: Retry failed workflow run
