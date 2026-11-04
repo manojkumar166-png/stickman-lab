@@ -22,6 +22,20 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Validate required secrets before expensive setup
+        shell: bash
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          for name in GEMINI_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required repository secret $name is missing. Configure it before running AI Story & Science Video Creator."
+              exit 1
+            fi
+          done
       - name: Restore saved science-video progress
         shell: bash
         run: |
