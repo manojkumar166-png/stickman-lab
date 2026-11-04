@@ -659,7 +659,7 @@ async function listEpisodeDates(env) {
 
 async function listEpisodesForDate(env, datePath) {
   if (!/^science-channel\/daily-episodes\/[A-Za-z]+ \d{4}\/\d{4}-\d{2}-\d{2}$/.test(datePath)) {
-    throw new Error(\`Invalid episode date folder: \${datePath}\`);
+    throw new Error("Invalid episode date folder: " + datePath);
   }
 
   const encodedPath = datePath
@@ -669,7 +669,7 @@ async function listEpisodesForDate(env, datePath) {
 
   const result = await gh(
     env,
-    repoPath(\`/contents/\${encodedPath}?ref=\${BRANCH}\`)
+    repoPath("/contents/" + encodedPath + "?ref=" + BRANCH)
   );
 
   if (!Array.isArray(result)) return [];
@@ -1165,11 +1165,8 @@ function constantTimeEqual(a, b) {
 }
 
 function isValidEpisodePath(path) {
-  // Match the real repository layout:
-  // daily-episodes/Month YYYY/YYYY-MM-DD/episode-NNN-name
-  return /^science-channel\/daily-episodes\/[A-Za-z]+ \d{4}\/\d{4}-\d{2}-\d{2}\/episode-\d{3}(?:-|$)/.test(
-    path
-  );
+  // Match: daily-episodes/Month YYYY/YYYY-MM-DD/episode-NNN-name
+  return /^science-channel\/daily-episodes\/[A-Za-z]+ \d{4}\/\d{4}-\d{2}-\d{2}\/episode-\d{3}(?:-|$)/.test(path);
 }
 
 /* ---------------- UPLOAD PAGE ---------------- */
