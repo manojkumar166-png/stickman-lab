@@ -9,5 +9,6 @@
   "speech_rate": "+0%",
   "artifact_retention_days": 7,
   "topic_history_file": "topic_history.json",
-  "use_ai_art": true
+  "use_ai_art": true,
+  "voice_engine": "edge_tts"
 }
