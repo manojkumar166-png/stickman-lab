@@ -63,7 +63,7 @@ jobs:
           set -euo pipefail
           python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
-          python -m pip install --retries 5 --timeout 60 whisperx
+          python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -74,6 +74,7 @@ jobs:
       - name: Generate and burn karaoke subtitles
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
+          KARAOKE_WHISPER_BACKEND: faster-whisper
         shell: bash
         run: |
           set -euo pipefail
