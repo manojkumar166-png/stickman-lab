@@ -122,6 +122,9 @@ function mainMenuKeyboard() {
         { text: "📤 Upload Images" }
       ],
       [
+        { text: "🔥 AI Roast" }
+      ],
+      [
         { text: "📊 Status" },
         { text: "🖼 Prompts" }
       ],
