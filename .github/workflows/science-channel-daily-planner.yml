@@ -131,7 +131,7 @@ jobs:
             ${{ steps.generated.outputs.path }}/
             science-channel/history/generated-topics.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 2
           compression-level: 6
       - name: Alert Telegram when workflow fails
         if: failure()
