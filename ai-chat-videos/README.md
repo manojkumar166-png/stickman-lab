@@ -29,7 +29,9 @@ The standard Telegram Bot API download limit is **20 MB**. This workflow rejects
 1. Open [ai-chat-videos/uploads/](uploads/).
 2. Select **Add file → Upload files**.
 3. Choose your video and commit the upload to the repository's `main` branch.
-4. Commit the upload to `main`. The `push` trigger detects the added/modified video and starts **💡 AI Chat Videos** automatically.\n5. The workflow renders the edit, uploads the edited MP4 as a GitHub Actions artifact (7-day retention), and attempts Telegram delivery.\n6. After the artifact upload succeeds, the workflow deletes the source file from the current `main` branch in a cleanup commit. One video per commit; supported extensions: MP4, MOV, M4V, WEBM, MKV and AVI.
+4. Commit the upload to `main`. The `push` trigger detects the added/modified video and starts **💡 AI Chat Videos** automatically.
+5. The workflow renders the edit, uploads the edited MP4 as a GitHub Actions artifact (7-day retention), and attempts Telegram delivery.
+6. After the artifact upload succeeds, the workflow deletes the source file from the current `main` branch in a cleanup commit. One video per commit; supported extensions: MP4, MOV, M4V, WEBM, MKV and AVI.
 
 **Public-repository warning:** because this repository is public, a GitHub-uploaded video is publicly visible as soon as the upload commit is published. The cleanup commit removes it from the latest branch contents, but the original video remains retrievable from earlier Git commits/history. Do not use the GitHub upload route for private, confidential, or personal recordings. To prevent public exposure, use Telegram or make the repository private before uploading.
 
@@ -71,16 +73,21 @@ For GitHub uploads, the workflow checks the push commit diff and requires exactl
 | System packages | Installs FFmpeg, Tesseract OCR and DejaVu fonts |
 | Python setup | Uses Python 3.11 and pip dependency caching |
 | Dependencies | Installs packages from `requirements.txt` |
-| Source selection | Selects the changed GitHub video path or Telegram `file_id` |\n| Editor | Runs `telegram_chat_video.py` against the selected source and writes an edited MP4 in the runner temporary directory |\n| Artifact | Uploads the edited MP4 as `ai-chat-video-edited-N`, retained for 7 days |\n| Telegram delivery | Attempts to send the edited MP4 to the configured Telegram chat |\n| GitHub cleanup | For GitHub-triggered runs, deletes the uploaded source from the current branch after artifact creation succeeds |
+| Source selection | Selects the changed GitHub video path or Telegram `file_id` |
+| Editor | Runs `telegram_chat_video.py` against the selected source and writes an edited MP4 in the runner temporary directory |
+| Artifact | Uploads the edited MP4 as `ai-chat-video-edited-N`, retained for 7 days |
+| Telegram delivery | Attempts to send the edited MP4 to the configured Telegram chat |
+| GitHub cleanup | For GitHub-triggered runs, deletes the uploaded source from the current branch after artifact creation succeeds |
 | Failure notice | If the job fails, attempts to send a Telegram message containing the Actions run URL |
 
 ### Permissions, concurrency and runtime
 
-- Workflow permission is `contents: write` so the GitHub-upload cleanup step can commit deletion of the processed source.\n- Runs on `ubuntu-latest`; timeout is 60 minutes.\n- GitHub-triggered uploads are cleaned from the latest `main` branch only after rendering and artifact upload succeed. If rendering or artifact upload fails, the source file remains in the branch for troubleshooting/retry.\n- **Git cleanup is not secure erasure:** the upload commit remains in public Git history. A later deletion commit does not make a public video private.
-- Runs on `ubuntu-latest`.
-- Job timeout is 60 minutes.
+- Workflow permission is `contents: write` so the GitHub-upload cleanup step can commit deletion of the processed source.
+- Runs on `ubuntu-latest`; timeout is 60 minutes.
+- GitHub-triggered uploads are cleaned from the latest `main` branch only after rendering and artifact upload succeed. If rendering or artifact upload fails, the source file remains in the branch for troubleshooting/retry.
+- **Git cleanup is not secure erasure:** the upload commit remains in public Git history. A later deletion commit does not make a public video private.
 - Each run has its own concurrency group and is not configured to cancel another run.
-- The source and generated intermediate files live in a temporary directory. The temporary directory is removed when the script exits.
+- Telegram source downloads and generated intermediate files use a temporary directory; the GitHub-uploaded source stays in the checkout until the cleanup step commits its deletion.
 - The original Telegram message/file is not modified or deleted.
 
 ### Start or inspect a run
