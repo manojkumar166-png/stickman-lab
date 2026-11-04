@@ -100,6 +100,7 @@ jobs:
         if: steps.episode.outputs.skip != 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
+          KARAOKE_WHISPER_BACKEND: whisperx
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
         run: |
           set -euo pipefail
