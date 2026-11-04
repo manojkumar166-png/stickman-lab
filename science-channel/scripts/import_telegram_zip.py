@@ -45,7 +45,7 @@ def main():
         EPISODE_PATH,
     )
     if not match or ".." in Path(EPISODE_PATH).parts:
-        fail("Invalid episode_path. Expected a folder under science-channel/daily-episodes/YYYY-MM-DD/.")
+        fail("Invalid episode_path. Expected a folder under science-channel/daily-episodes/Month YYYY/YYYY-MM-DD/.")
 
     # The filename is irrelevant: accept any .zip filename staged directly
     # in the Telegram upload directory. zipfile below verifies the actual format.
