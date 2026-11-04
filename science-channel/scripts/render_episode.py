@@ -37,9 +37,38 @@ def scene_number(path):
     numbers = re.findall(r"\d+", path.stem)
     return int(numbers[-1]) if numbers else None
 
+def run(cmd):
+    """Retry transient FFmpeg failures, then fall back from H.264 to MPEG-4."""
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            print(f"FFmpeg attempt {attempt}/3 failed: {exc}", file=sys.stderr, flush=True)
+            if attempt < 3:
+                time.sleep(attempt * 5)
+    if "-c:v" in cmd and "libx264" in cmd:
+        fallback, skip = [], False
+        for arg in cmd:
+            if skip:
+                skip = False
+                continue
+            if arg in ("-preset", "-crf", "-tune"):
+                skip = True
+            elif arg == "libx264":
+                fallback.extend(["mpeg4", "-q:v", "5"])
+            else:
+                fallback.append(arg)
+        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.", flush=True)
+        subprocess.run(fallback, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
+        return
+    raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
+
 def normalize(src, number, target_dir):
     target = target_dir/f"scene-{number:03d}.png"
-    subprocess.run(["ffmpeg","-y","-i",str(src),"-frames:v","1","-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    run(["ffmpeg","-y","-i",str(src),"-frames:v","1","-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",str(target)])
     return target
 
 # Explicit smoke-test fixtures remain isolated from real episode behavior.
@@ -48,7 +77,7 @@ if meta.get("smoke_test") is True:
     for n in range(1, scene_count+1):
         target = work/f"smoke-scene-{n:03d}.png"
         color = ["0x173B63","0x167C80","0xE0A82E"][(n-1)%3]
-        subprocess.run(["ffmpeg","-y","-f","lavfi","-i",f"color=c={color}:s=1280x720:d=1","-frames:v","1",str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        run(["ffmpeg","-y","-f","lavfi","-i",f"color=c={color}:s=1280x720:d=1","-frames:v","1",str(target)])
         visual_paths.append(target)
 else:
     # source-upload.zip is an archival copy retained by the ZIP importer.
@@ -279,35 +308,6 @@ async def make_audio():
     )
 
 asyncio.run(make_audio())
-
-def run(cmd):
-    """Retry transient FFmpeg failures, then fall back from H.264 to MPEG-4."""
-    last_error = None
-    for attempt in range(1, 4):
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
-            return
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            last_error = exc
-            print(f"FFmpeg attempt {attempt}/3 failed: {exc}", file=sys.stderr, flush=True)
-            if attempt < 3:
-                time.sleep(attempt * 5)
-    if "-c:v" in cmd and "libx264" in cmd:
-        fallback, skip = [], False
-        for arg in cmd:
-            if skip:
-                skip = False
-                continue
-            if arg in ("-preset", "-crf", "-tune"):
-                skip = True
-            elif arg == "libx264":
-                fallback.extend(["mpeg4", "-q:v", "5"])
-            else:
-                fallback.append(arg)
-        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.", flush=True)
-        subprocess.run(fallback, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
-        return
-    raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
 
 probe = subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(audio)], text=True)
 duration = float(probe.strip())
