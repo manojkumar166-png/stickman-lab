@@ -39,9 +39,26 @@ def make_voice(text: str, output_path: Path, config: dict):
                 delay = min(30, 2 ** attempt)
                 print(f"Edge TTS attempt {attempt}/5 failed: {exc}. Retrying in {delay}s.", flush=True)
                 await asyncio.sleep(delay)
-        raise RuntimeError(
-            f"Edge TTS failed after 5 attempts using voice {voice!r}: {last_error}"
-        ) from last_error
+        print(
+            f"Edge TTS failed after 5 attempts using voice {voice!r}: {last_error}. Switching to Google TTS backup.",
+            flush=True,
+        )
+        try:
+            from gtts import gTTS
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.unlink(missing_ok=True)
+            language = config.get("tts_fallback_language", "en")
+            gTTS(text=text, lang=language, slow=False).save(str(output_path))
+            if not output_path.is_file() or output_path.stat().st_size < 1000:
+                raise RuntimeError("Google TTS produced no usable narration audio.")
+            print(f"Backup Google TTS narration generated successfully ({output_path.stat().st_size} bytes).", flush=True)
+            return
+        except Exception as fallback_error:
+            output_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                "Edge TTS failed after 5 attempts and Google TTS backup also failed. "
+                f"Edge error: {last_error}; backup error: {fallback_error}"
+            ) from fallback_error
 
     try:
         asyncio.run(run())

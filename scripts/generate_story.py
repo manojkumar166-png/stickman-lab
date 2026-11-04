@@ -54,6 +54,46 @@ def _call_gemini(api_key, model, prompt, attempts=3):
     raise RuntimeError(f"Gemini API gave up on {model} after {attempts} tries: {last_err}")
 
 
+
+def _repair_missing_scenes(api_key, model, story, desired_count):
+    """Ask Gemini to continue a short story instead of discarding a nearly complete response."""
+    scenes = story.get("scenes")
+    if not isinstance(scenes, list):
+        return False
+    if len(scenes) > desired_count:
+        story["scenes"] = scenes[:desired_count]
+        return True
+
+    for repair_attempt in range(1, 4):
+        missing = desired_count - len(scenes)
+        if missing <= 0:
+            return True
+        prompt = f"""
+Continue this educational science explainer as a seamless continuation.
+Topic: {story.get("topic", "")}
+Description: {story.get("description", "")}
+The story currently has {len(scenes)} scenes and needs exactly {missing} additional scenes.
+The final existing scenes are:
+{json.dumps(scenes[-5:], ensure_ascii=False)}
+Return ONLY valid JSON in this shape: {{"scenes":[{{"title":"short heading","narration":"28-32 spoken words","visual":"drawable cartoon scene without text","background":"sky, lab, space, ocean, forest, city, home, cave, desert, or mountain","action":"explain, walk, point, run, think, surprised, celebrate, observe"}}]}}
+Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep the narration factually careful and make the final added scene a memorable conclusion.
+"""
+        try:
+            data = _call_gemini(api_key, model, prompt)
+            raw = data["candidates"][0]["content"]["parts"][0]["text"]
+            addition = json.loads(raw)
+            new_scenes = addition.get("scenes", []) if isinstance(addition, dict) else addition
+            if not isinstance(new_scenes, list) or not new_scenes:
+                raise ValueError("repair response contained no scene list")
+            accepted = [item for item in new_scenes if isinstance(item, dict)]
+            scenes.extend(accepted[:missing])
+            story["scenes"] = scenes
+            print(f"Scene-count repair {repair_attempt}/3 added {min(len(accepted), missing)} scenes; {len(scenes)}/{desired_count} now available.", flush=True)
+        except Exception as exc:
+            print(f"Scene-count repair {repair_attempt}/3 failed: {exc}", flush=True)
+            time.sleep(repair_attempt * 2)
+    return len(story.get("scenes", [])) == desired_count
+
 def _normalise_topic(value):
     value = re.sub(r"[^a-z0-9 ]+", " ", str(value).lower())
     return " ".join(value.split())
@@ -186,15 +226,19 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
             raise RuntimeError(f"Could not parse AI story response: {exc}; response was {str(data)[:1200]}") from exc
 
         returned_scenes = candidate_story.get("scenes", [])
-        if not isinstance(returned_scenes, list) or len(returned_scenes) != desired_scene_count:
-            actual_count = len(returned_scenes) if isinstance(returned_scenes, list) else "invalid"
-            last_scene_count = actual_count
-            print(
-                f"Gemini returned {actual_count} scenes; exactly {desired_scene_count} are required. "
-                "Requesting a fresh story.",
-                flush=True,
-            )
+        if not isinstance(returned_scenes, list):
+            last_scene_count = "invalid"
+            print("Gemini returned an invalid scenes field; requesting a fresh story.", flush=True)
             continue
+        if len(returned_scenes) != desired_scene_count:
+            actual_count = len(returned_scenes)
+            print(f"Gemini returned {actual_count} scenes; repairing to exactly {desired_scene_count}.", flush=True)
+            if not _repair_missing_scenes(api_key, used_model, candidate_story, desired_scene_count):
+                last_scene_count = len(candidate_story.get("scenes", []))
+                print("Could not repair this story's scene count; requesting a fresh story.", flush=True)
+                continue
+            returned_scenes = candidate_story["scenes"]
+        last_scene_count = None
 
         candidate_topic = str(candidate_story.get("topic", "")).strip()
         if _is_repeat(candidate_topic, history):
@@ -208,7 +252,7 @@ Create exactly {config.get('scene_count', 48)} scenes. The total narration shoul
     if story is None:
         if last_scene_count is not None:
             raise RuntimeError(
-                f"Gemini did not return exactly {desired_scene_count} scenes after 5 attempts "
+                f"Gemini could not produce exactly {desired_scene_count} scenes after 5 story attempts "
                 f"(last response contained {last_scene_count}). No story or topic history was saved; rerun to try again."
             )
         raise RuntimeError(

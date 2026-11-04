@@ -97,7 +97,27 @@ jobs:
           count = generate_karaoke_ass(sys.argv[1], sys.argv[2], int(config["width"]), int(config["height"]))
           print(f"Generated karaoke captions for {count} timed words.")
           PY
-          ffmpeg -y -hide_banner -loglevel error -i "$VIDEO" \
+          run_ffmpeg_with_fallback() {
+            local attempt
+            for attempt in 1 2 3; do
+              if ffmpeg "$@"; then return 0; fi
+              echo "Subtitle FFmpeg attempt $attempt/3 failed."
+              if [ "$attempt" -lt 3 ]; then sleep $((attempt * 5)); fi
+            done
+            local -a fallback=()
+            local skip_next=0
+            for arg in "$@"; do
+              if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+              case "$arg" in
+                -preset|-crf) skip_next=1 ;;
+                libx264) fallback+=(mpeg4 -q:v 5) ;;
+                *) fallback+=("$arg") ;;
+              esac
+            done
+            echo "H.264 subtitle encoding failed; trying FFmpeg MPEG-4 fallback."
+            ffmpeg "${fallback[@]}"
+          }
+          run_ffmpeg_with_fallback -y -hide_banner -loglevel error -i "$VIDEO" \
             -vf "subtitles=$CAPTIONS:fontsdir=/usr/share/fonts/truetype/dejavu" \
             -map 0:v:0 -map 0:a:0 -c:v libx264 -preset veryfast -crf 21 \
             -c:a copy -shortest -movflags +faststart "$SUBTITLED"

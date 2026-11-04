@@ -1,12 +1,48 @@
-import subprocess, json, math, shutil, tempfile
+import subprocess, json, math, shutil, tempfile, time
 from pathlib import Path
 
 def run(cmd, timeout=300):
-    p = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout
-    )
-    if p.returncode:
-        raise RuntimeError("Command failed:\n"+" ".join(map(str,cmd))+"\n"+p.stdout[-5000:])
+    last_output = ""
+    for attempt in range(1, 4):
+        try:
+            p = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout
+            )
+            if p.returncode == 0:
+                return
+            last_output = p.stdout[-5000:]
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            last_output = str(exc)
+        if attempt < 3:
+            delay = attempt * 5
+            print(f"FFmpeg command attempt {attempt}/3 failed; retrying in {delay}s.", flush=True)
+            time.sleep(delay)
+
+    if "-c:v" in cmd and "libx264" in cmd:
+        fallback = []
+        skip_next = False
+        for item in cmd:
+            if skip_next:
+                skip_next = False
+                continue
+            if item in ("-preset", "-crf"):
+                skip_next = True
+                continue
+            if item == "libx264":
+                fallback.extend(["mpeg4", "-q:v", "5"])
+            else:
+                fallback.append(item)
+        print("FFmpeg H.264 encoding failed after 3 attempts; trying MPEG-4 fallback encoder.", flush=True)
+        try:
+            p = subprocess.run(
+                fallback, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout
+            )
+            if p.returncode == 0:
+                return
+            last_output = p.stdout[-5000:]
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            last_output = str(exc)
+    raise RuntimeError("Command failed after retries:\\n" + " ".join(map(str, cmd)) + "\\n" + last_output)
 
 def duration_seconds(audio):
     p=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(audio)],
