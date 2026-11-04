@@ -43,7 +43,11 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep $((attempt * 10))
           done
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          for attempt in 1 2 3; do
+  if sudo apt-get install -y ffmpeg fonts-dejavu-core; then break; fi
+  if [ "$attempt" -eq 3 ]; then exit 1; fi
+  sleep $((attempt * 10))
+done
           python -m pip --retries 5 --timeout 60 install --upgrade pip
           python -m pip install --retries 5 --timeout 60 edge-tts gTTS faster-whisper
       - name: Resolve exact episode path
