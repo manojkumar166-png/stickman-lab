@@ -62,7 +62,7 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip install --retries 5 --timeout 60 --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS whisperx
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS whisperx faster-whisper
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -77,6 +77,7 @@ jobs:
         id: final_video
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
+          KARAOKE_WHISPER_BACKEND: faster-whisper
         shell: bash
         run: |
           set -euo pipefail
