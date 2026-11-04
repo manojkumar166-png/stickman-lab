@@ -146,15 +146,15 @@ def render(source, output, events, duration, has_audio, work):
         cmd += ["-i", str(p)]
     filters = [
         "[0:v]split=2[bg][fg]",
-        "[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=22:10[bg2]",
-        "[fg]scale=980:1740:force_original_aspect_ratio=decrease[fg2]",
+        "[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=22:10[bg2]",
+        "[fg]scale=1740:980:force_original_aspect_ratio=decrease[fg2]",
         "[bg2][fg2]overlay=(W-w)/2:(H-h)/2[v0]"
     ]
     lastv = "v0"
     for i, e in enumerate(events):
         nxt = f"v{i+1}"
         start, end = max(0, e["time"]), min(duration, e["time"] + 2.2)
-        filters.append(f"[{lastv}][{image_start+i}:v]overlay=(W-w)/2:1450:enable='between(t,{start:.3f},{end:.3f})'[{nxt}]")
+        filters.append(f"[{lastv}][{image_start+i}:v]overlay=(W-w)/2:760:enable='between(t,{start:.3f},{end:.3f})'[{nxt}]")
         lastv = nxt
     aud = "0:a" if has_audio else f"{silent}:a"
     filters.append(f"[{aud}]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a0]")
