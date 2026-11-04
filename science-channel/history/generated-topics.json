@@ -31,7 +31,8 @@
     "How do scientists find colors in fossilized feathers?",
     "Why does the universe look different depending on which way you look?",
     "Why do sunflowers track the Sun?",
-    "Why do bamboo stalks grow so fast?"
+    "Why do bamboo stalks grow so fast?",
+    "Why do pine needles stay green all winter?"
   ],
   "topic_details": [
     {
@@ -178,6 +179,11 @@
       "title": "Why do bamboo stalks grow so fast?",
       "angle": "Explore the incredible hydraulic pressure and specialized cellular mechanics that allow certain bamboo species to shoot up nearly a meter in a single day.",
       "pillar": "Plants and the natural world"
+    },
+    {
+      "title": "Why do pine needles stay green all winter?",
+      "angle": "Explore the microscopic antifreeze proteins and specialized cellular architecture that allow evergreen trees to endure freezing temperatures without losing their foliage.",
+      "pillar": "Earth, oceans and weather"
     }
   ]
 }
