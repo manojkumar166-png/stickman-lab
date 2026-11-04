@@ -13,7 +13,7 @@ This workflow processes Telegram updates staged by the repository's Cloudflare W
 4. The receiver saves its state and removes processed inbox JSON only after the updates have been handled. The workflow stages episode changes, receiver state and inbox deletions, commits them, then fetches/rebases/pushes to `main` with up to five attempts.
 5. If the selected episode now has `READY.txt`, the workflow explicitly dispatches **Free Science Visuals — Render Ready Episode** for that exact episode. This explicit dispatch is required because a push made with the workflow's `GITHUB_TOKEN` does not automatically start another workflow.
 
-The job timeout is 15 minutes. It shares `stickman-lab-main-writer` concurrency with other main-branch writers. It needs `contents: write` to publish received files and `actions: write` to dispatch the renderer.
+The job timeout is 45 minutes. It shares `stickman-lab-main-writer` concurrency with other main-branch writers. It needs `contents: write` to publish received files and `actions: write` to dispatch the renderer.
 
 ## Required configuration
 
