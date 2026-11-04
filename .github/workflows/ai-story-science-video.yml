@@ -80,6 +80,35 @@ jobs:
           import json, os, re, subprocess
           from pathlib import Path
 
+          def run_ffmpeg(command):
+              last_error = None
+              for attempt in range(1, 4):
+                  try:
+                      subprocess.run(command, check=True, timeout=900)
+                      return
+                  except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                      last_error = exc
+                      print(f"FFmpeg attempt {attempt}/3 failed: {exc}", flush=True)
+                      if attempt < 3:
+                          import time
+                          time.sleep(attempt * 5)
+              if "-c:v" in command and "libx264" in command:
+                  fallback, skip = [], False
+                  for arg in command:
+                      if skip:
+                          skip = False
+                          continue
+                      if arg in ("-preset", "-crf", "-tune"):
+                          skip = True
+                      elif arg == "libx264":
+                          fallback.extend(["mpeg4", "-q:v", "5"])
+                      else:
+                          fallback.append(arg)
+                  print("H.264 failed after 3 attempts; trying MPEG-4 encoder.", flush=True)
+                  subprocess.run(fallback, check=True, timeout=900)
+                  return
+              raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
+
           root = Path("ai-story-video-output")
           packages = []
           for candidate in root.iterdir():
@@ -113,7 +142,7 @@ jobs:
           work.mkdir(exist_ok=True)
           audio = work / "narration-for-whisper.mp3"
           captions = work / "karaoke-captions.ass"
-          subprocess.run([
+          run_ffmpeg([
               "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
               "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
           ], check=True)
