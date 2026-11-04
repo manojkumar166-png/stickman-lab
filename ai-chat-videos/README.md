@@ -2,7 +2,7 @@
 
 A GitHub Actions video editor for recorded ChatGPT conversations. It detects selected phrases visible on screen, adds original reaction cards and generated sound cues, renders a vertical MP4, and sends the result to Telegram.
 
-> **Current capability note:** Telegram-triggered processing is implemented. The GitHub `ai-chat-videos/uploads/` folder is currently a place to store/upload source files only; uploading a video there does **not** yet start this editor. Do not assume GitHub-folder uploads are automatically processed until a separate push-trigger workflow is added.
+**Both upload routes trigger the same editor:** Telegram uploads dispatch the workflow through the existing bot; a new video committed to `ai-chat-videos/uploads/` on `main` triggers the workflow automatically.
 
 ## Quick links
 
@@ -24,26 +24,26 @@ A GitHub Actions video editor for recorded ChatGPT conversations. It detects sel
 
 The standard Telegram Bot API download limit is **20 MB**. This workflow rejects larger source files and reports the reason. The source message remains in Telegram.
 
-### B. GitHub — upload/storage only (automation not yet connected)
+### B. GitHub — automatic processing
 
 1. Open [ai-chat-videos/uploads/](uploads/).
 2. Select **Add file → Upload files**.
 3. Choose your video and commit the upload to the repository's `main` branch.
-4. The file will be stored in GitHub. **No editor run is triggered by this upload in the current workflow.**
+4. Commit the upload to `main`. The `push` trigger detects the added/modified video and starts **💡 AI Chat Videos** automatically.\n5. The workflow renders the edit, uploads the edited MP4 as a GitHub Actions artifact (7-day retention), and attempts Telegram delivery.\n6. After the artifact upload succeeds, the workflow deletes the source file from the current `main` branch in a cleanup commit. One video per commit; supported extensions: MP4, MOV, M4V, WEBM, MKV and AVI.
 
-GitHub upload is not a private transfer service. If the repository is public, uploaded recordings can be viewed by anyone. Even in a private repository, collaborators with access may view them. Avoid committing confidential conversations, personal data, access tokens, or other sensitive recordings. Git history can retain a file after you delete it from the latest version.
+**Public-repository warning:** because this repository is public, a GitHub-uploaded video is publicly visible as soon as the upload commit is published. The cleanup commit removes it from the latest branch contents, but the original video remains retrievable from earlier Git commits/history. Do not use the GitHub upload route for private, confidential, or personal recordings. To prevent public exposure, use Telegram or make the repository private before uploading.
 
 GitHub also enforces file-size limits for repository files and browser uploads. For large video files, use Telegram only if within the Bot API limit, or arrange a suitable private large-file storage/transfer method.
 
 ## 2. What the editor does
 
-1. **Download:** retrieves the Telegram file using its `file_id` into a temporary GitHub runner directory.
+1. **Input:** Telegram route downloads the file using its `file_id`; GitHub route reads the video path committed under `ai-chat-videos/uploads/`.
 2. **Probe:** FFprobe reads the duration and checks whether the source has an audio stream.
 3. **OCR scan:** OpenCV samples frames about every 1.5 seconds, converts them to grayscale, thresholds the image, and runs Tesseract OCR.
 4. **Reaction matching:** recognized text is compared against phrase patterns in `RULES` in `telegram_chat_video.py`. A cooldown prevents rapid repeated reactions; the current scan caps detections at eight.
 5. **Original overlays:** Pillow draws original reaction cards; NumPy generates short synthetic sound cues. These are created locally during the run.
 6. **Render:** FFmpeg creates a 1080 × 1920 vertical composition, using a blurred fill background and a fitted foreground copy of the source. It encodes H.264 video and AAC audio at 30 fps.
-7. **Delivery:** the MP4 is sent to Telegram as a document. The output is targeted below 48 MB to leave headroom under the bot upload limit.
+7. **Save and deliver:** the rendered MP4 is uploaded as a GitHub Actions artifact retained for 7 days, then sent to Telegram as a document. The output is targeted below 48 MB to leave headroom under the bot upload limit.
 
 If no phrase matches, the video can still render without reaction cards or added cues. OCR is heuristic: it can miss text, misread text, or match a phrase in an unintended context.
 
@@ -54,14 +54,14 @@ Displayed name: **💡 AI Chat Videos**
 
 ### Trigger and inputs
 
-The current workflow has a `workflow_dispatch` trigger with:
+The workflow supports two triggers: a `push` to `main` that changes a video under `ai-chat-videos/uploads/`, and `workflow_dispatch` for Telegram bot requests/manual maintenance.
 
 | Input | Required | Purpose |
 |---|---:|---|
-| `telegram_file_id` | Yes | Telegram file identifier passed by the bot/Worker |
+| `telegram_file_id` | Required for a Telegram/manual dispatch | Telegram file identifier passed by the bot/Worker; not needed for GitHub folder uploads |
 | `original_filename` | No | Original filename used to name the returned MP4; defaults to `chat-recording.mp4` |
 
-It is not configured with a `push` trigger for `ai-chat-videos/uploads/**`.
+For GitHub uploads, the workflow checks the push commit diff and requires exactly one added/modified video file in the upload folder. Upload one video per commit. Supported extensions: `.mp4`, `.mov`, `.m4v`, `.webm`, `.mkv`, `.avi`.
 
 ### Job steps
 
@@ -71,12 +71,12 @@ It is not configured with a `push` trigger for `ai-chat-videos/uploads/**`.
 | System packages | Installs FFmpeg, Tesseract OCR and DejaVu fonts |
 | Python setup | Uses Python 3.11 and pip dependency caching |
 | Dependencies | Installs packages from `requirements.txt` |
-| Editor | Runs `telegram_chat_video.py` with Telegram secrets and workflow inputs |
+| Source selection | Selects the changed GitHub video path or Telegram `file_id` |\n| Editor | Runs `telegram_chat_video.py` against the selected source and writes an edited MP4 in the runner temporary directory |\n| Artifact | Uploads the edited MP4 as `ai-chat-video-edited-N`, retained for 7 days |\n| Telegram delivery | Attempts to send the edited MP4 to the configured Telegram chat |\n| GitHub cleanup | For GitHub-triggered runs, deletes the uploaded source from the current branch after artifact creation succeeds |
 | Failure notice | If the job fails, attempts to send a Telegram message containing the Actions run URL |
 
 ### Permissions, concurrency and runtime
 
-- Job permission is `contents: read`; the editor does not commit source or output videos to the repository.
+- Workflow permission is `contents: write` so the GitHub-upload cleanup step can commit deletion of the processed source.\n- Runs on `ubuntu-latest`; timeout is 60 minutes.\n- GitHub-triggered uploads are cleaned from the latest `main` branch only after rendering and artifact upload succeed. If rendering or artifact upload fails, the source file remains in the branch for troubleshooting/retry.\n- **Git cleanup is not secure erasure:** the upload commit remains in public Git history. A later deletion commit does not make a public video private.
 - Runs on `ubuntu-latest`.
 - Job timeout is 60 minutes.
 - Each run has its own concurrency group and is not configured to cancel another run.
@@ -88,7 +88,7 @@ It is not configured with a `push` trigger for `ai-chat-videos/uploads/**`.
 1. Open [GitHub Actions — AI Chat Videos](https://github.com/manojkumar166-png/stickman-lab/actions/workflows/ai-roast-studio.yml).
 2. Select **Run workflow** only if you have a valid Telegram `file_id` and the workflow input is available to you. This is mainly a maintenance/manual dispatch route; ordinary users should send the video through the bot.
 3. Open the run to inspect each step's logs.
-4. On success, check the configured Telegram chat for the returned MP4. This workflow does not currently publish a GitHub Actions artifact.
+4. On success, check Telegram and open the run's **Artifacts** section to download the edited MP4. The artifact is retained for 7 days.
 
 ## 4. Required configuration
 
@@ -172,7 +172,7 @@ After changing OCR rules, test with a short non-sensitive sample containing both
 - OCR rules are simple phrase matching, not semantic understanding or reliable joke detection.
 - Up to eight reaction events are added per video.
 - The current workflow has no scheduled trigger and no automatic retry policy.
-- No source video or final MP4 is stored as a GitHub Actions artifact by this workflow.
+- The edited MP4 artifact is retained for 7 days; the source video is not uploaded as an artifact.
 
 ## 9. Safe change checklist
 
