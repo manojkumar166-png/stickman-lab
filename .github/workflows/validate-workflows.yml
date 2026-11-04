@@ -16,6 +16,7 @@ on:
       - "cloudflare-worker.js"
       - "science-channel/scripts/**"
       - "scripts/**"
+      - "ai-roast-studio/**"
       - "main_ai.py"
   workflow_dispatch:
 
