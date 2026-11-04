@@ -60,8 +60,7 @@ jobs:
           path: |
             output/ai-experiment-*.mp4
             output/story-*.json
-          retention-days: 7
-
+          retention-days: 2
       - name: Commit topic history
         run: |
           git config --global user.name 'github-actions[bot]'
