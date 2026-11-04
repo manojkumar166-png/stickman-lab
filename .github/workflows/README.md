@@ -12,7 +12,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 | Science Channel — Daily Gemini Planner | [science-channel-daily-planner.yml](science-channel-daily-planner.yml) | Creates a new Science Channel episode package with 48 scenes and image prompts. | [Daily Planner guide](guides/science-channel-daily-planner.md) |
 | Telegram Image Receiver | [telegram-image-receiver.yml](telegram-image-receiver.yml) | Receives images/ZIPs forwarded by the Cloudflare Telegram webhook and fills an episode's incoming image slots. | [Telegram Image Receiver guide](guides/telegram-image-receiver.md) |
 | Telegram ZIP Import | [telegram-zip-import.yml](telegram-zip-import.yml) | Imports a ZIP staged in the repository into a selected Science Channel episode. | [Telegram ZIP Import guide](guides/telegram-zip-import.md) |
-| AI Roast Studio — Telegram Video Editor | [ai-roast-studio.yml](ai-roast-studio.yml) | Receives an authorized Telegram video, OCR-detects likely punchlines, renders a separate vertical meme edit and sends it back to Telegram. | [AI Roast Studio guide](../../ai-roast-studio/README.md) |
+| 💡 AI Chat Videos | [ai-roast-studio.yml](ai-roast-studio.yml) | Automatically edits videos submitted through the Telegram bot or committed under `ai-chat-videos/uploads/`; saves an edited artifact, sends it to Telegram and cleans GitHub uploads from the current branch after artifact creation. | [AI Chat Videos guide](../../ai-chat-videos/README.md) |
 | Free Science Visuals — Render Ready Episode | [free-science-visuals.yml](free-science-visuals.yml) | Validates 48 episode images, renders the narrated video with karaoke captions, sends Telegram video and cleans uploads after successful delivery. | [Renderer guide](guides/free-science-visuals.md) |
 | Validate Workflows | [validate-workflows.yml](validate-workflows.yml) | Runs actionlint, Python syntax compilation and Cloudflare Worker JavaScript syntax checks. | [Validation guide](guides/validate-workflows.md) |
 
@@ -21,6 +21,7 @@ This directory contains the repository's GitHub Actions workflows. Open the YAML
 - **Science Channel pipeline:** the planner, Telegram receiver, ZIP importer and renderer work together, so their shared instructions are in [science-channel/README.md](../../science-channel/README.md).
 - **AI Story & Science Video Creator:** its standalone guide is [ai-story-science-video/README.md](../../ai-story-science-video/README.md).
 - **AI Video Experiment:** its standalone guide is [ai-video-experiment/README.md](../../ai-video-experiment/README.md).
+- **AI Chat Videos:** its upload methods, workflow triggers, artifact/Telegram delivery, cleanup behavior and public-repository warning are in [ai-chat-videos/README.md](../../ai-chat-videos/README.md).
 - **Repository overview and customization map:** [root README.md](../../README.md).
 
 Every workflow has a linked detailed guide. The Science Channel overview remains useful for understanding how the planner, Telegram intake, ZIP importer and renderer fit together.
@@ -43,7 +44,7 @@ Every workflow has a linked detailed guide. The Science Channel overview remains
 - [Daily Gemini Planner](guides/science-channel-daily-planner.md)
 - [Telegram Image Receiver](guides/telegram-image-receiver.md)
 - [Telegram ZIP Import](guides/telegram-zip-import.md)
-- [AI Roast Studio](../../ai-roast-studio/README.md)
+- [AI Chat Videos](../../ai-chat-videos/README.md)
 - [Free Science Visuals renderer](guides/free-science-visuals.md)
 - [Validate Workflows](guides/validate-workflows.md)
 
