@@ -136,40 +136,76 @@ def transcribe_with_original_whisper(audio_path):
     return normalize_words(words)
 
 
-def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
-    """Try WhisperX first, then fall back to the original faster-whisper implementation."""
-    try:
-        import whisperx
+def transcribe_with_whisperx(audio_path, device="cpu", model_name="large-v3-turbo"):
+    """Run WhisperX transcription and alignment."""
+    import whisperx
 
-        model = whisperx.load_model(
-            model_name,
-            device=device,
-            compute_type="int8" if device == "cpu" else "float16",
-            language="en",
+    model = whisperx.load_model(
+        model_name,
+        device=device,
+        compute_type="int8" if device == "cpu" else "float16",
+        language="en",
+    )
+    result = model.transcribe(str(audio_path), batch_size=8, language="en")
+    align_model, metadata = whisperx.load_align_model(
+        language_code=result.get("language", "en"), device=device
+    )
+    aligned = whisperx.align(
+        result["segments"], align_model, metadata, str(audio_path), device,
+        return_char_alignments=False,
+    )
+    words = []
+    for segment in aligned.get("segments", []):
+        words.extend(_segment_words(segment))
+    if not words:
+        raise RuntimeError("WhisperX returned no transcript words.")
+    print(f"WhisperX produced {len(words)} aligned words.", flush=True)
+    return normalize_words(words)
+
+
+def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
+    """Use faster-whisper by default; WhisperX can be primary for selected workflows."""
+    import os
+
+    backend = os.environ.get("KARAOKE_WHISPER_BACKEND", "faster-whisper").strip().lower()
+    if backend not in {"faster-whisper", "whisperx"}:
+        raise ValueError(
+            "KARAOKE_WHISPER_BACKEND must be 'faster-whisper' or 'whisperx'."
         )
-        result = model.transcribe(str(audio_path), batch_size=8, language="en")
-        align_model, metadata = whisperx.load_align_model(
-            language_code=result.get("language", "en"), device=device
-        )
-        aligned = whisperx.align(
-            result["segments"], align_model, metadata, str(audio_path), device,
-            return_char_alignments=False,
-        )
-        words = []
-        for segment in aligned.get("segments", []):
-            words.extend(_segment_words(segment))
-        if not words:
-            raise RuntimeError("WhisperX returned no transcript words.")
-        print(f"WhisperX produced {len(words)} aligned words.", flush=True)
-        return normalize_words(words)
-    except Exception as whisperx_error:
-        print(f"WhisperX unavailable or failed: {whisperx_error!r}", flush=True)
+
+    if backend == "whisperx":
         try:
-            return transcribe_with_original_whisper(audio_path)
+            return transcribe_with_whisperx(audio_path, device, model_name)
+        except Exception as whisperx_error:
+            print(
+                f"WhisperX primary backend failed: {whisperx_error!r}; "
+                "falling back to faster-whisper.",
+                flush=True,
+            )
+            try:
+                return transcribe_with_original_whisper(audio_path)
+            except Exception as fallback_error:
+                raise RuntimeError(
+                    "Both WhisperX and faster-whisper failed. "
+                    f"WhisperX error: {whisperx_error!r}; "
+                    f"faster-whisper error: {fallback_error!r}"
+                ) from fallback_error
+
+    try:
+        return transcribe_with_original_whisper(audio_path)
+    except Exception as faster_error:
+        print(
+            f"faster-whisper primary backend failed: {faster_error!r}; "
+            "falling back to WhisperX.",
+            flush=True,
+        )
+        try:
+            return transcribe_with_whisperx(audio_path, device, model_name)
         except Exception as fallback_error:
             raise RuntimeError(
-                "Both WhisperX and the original faster-whisper fallback failed. "
-                f"WhisperX error: {whisperx_error!r}; fallback error: {fallback_error!r}"
+                "Both faster-whisper and WhisperX failed. "
+                f"faster-whisper error: {faster_error!r}; "
+                f"WhisperX error: {fallback_error!r}"
             ) from fallback_error
 
 
