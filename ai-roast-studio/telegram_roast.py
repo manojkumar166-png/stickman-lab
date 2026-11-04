@@ -166,7 +166,7 @@ def render(source, output, events, duration, has_audio, work):
         filters.append(f"[{lasta}][s{i}]amix=inputs=2:duration=first:dropout_transition=0[{nxt}]")
         lasta = nxt
     target = 44 * 1024 * 1024
-    vbps = max(350000, min(8000000, int(target * 8 / max(duration, 1)) - 128000))
+    vbps = max(64000, min(8000000, int(target * 8 / max(duration, 1)) - 128000))
     cmd += ["-filter_complex", ";".join(filters), "-map", f"[{lastv}]", "-map", f"[{lasta}]",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-r", "30",
             "-b:v", str(vbps), "-maxrate", str(vbps), "-bufsize", str(vbps*2),
