@@ -36,7 +36,7 @@ jobs:
       - name: Install image-generation dependencies
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
+          python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS
 
       - name: Try AI Horde, then Vexa HD/FLUX, then Pollinations
