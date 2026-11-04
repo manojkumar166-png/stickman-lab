@@ -217,7 +217,7 @@ def main():
         output.parent.mkdir(parents=True, exist_ok=True)
         render(source, output, events, duration, has_audio, work)
         with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a", encoding="utf-8") as out:
-            out.write(f"reaction_count={len(events)}\\n")
+            out.write(f"reaction_count={len(events)}\n")
         print(f"Rendered: {duration:.1f}s, {len(events)} reaction(s), {output.stat().st_size} bytes")
 
 if __name__ == "__main__":
