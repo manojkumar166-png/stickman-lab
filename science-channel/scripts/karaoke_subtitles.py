@@ -235,8 +235,9 @@ def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
 def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
     words = transcribe_and_align(audio_path)
     anchor_x = width // 2
-    # Bottom-center anchor matches the reference clip's lower-third baseline.
-    anchor_y = round(height * 0.86)
+    # Keep captions close to the bottom edge, matching the faster-whisper layout.
+    # This renderer is shared by both faster-whisper and WhisperX backends.
+    anchor_y = round(height * 0.94)
     header = f"""[Script Info]
 Title: WhisperX Word Karaoke Captions
 ScriptType: v4.00+
