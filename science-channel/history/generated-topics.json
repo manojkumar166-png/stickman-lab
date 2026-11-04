@@ -27,7 +27,8 @@
     "Why do we yawn?",
     "Why do clouds float?",
     "Why are planets round?",
-    "How do electric eels generate high-voltage shocks?"
+    "How do electric eels generate high-voltage shocks?",
+    "How do scientists find colors in fossilized feathers?"
   ],
   "topic_details": [
     {
@@ -154,6 +155,11 @@
       "title": "How do electric eels generate high-voltage shocks?",
       "angle": "Exploring the specialized cellular machinery that allows electric fish to combine thousands of living batteries into a powerful biological taser.",
       "pillar": "Animal senses and abilities"
+    },
+    {
+      "title": "How do scientists find colors in fossilized feathers?",
+      "angle": "Explore how microscopic structures called melanosomes preserved in ancient rock allow researchers to reconstruct the true colors and patterns of dinosaurs.",
+      "pillar": "Dinosaurs, fossils and ancient Earth"
     }
   ]
 }
