@@ -122,7 +122,7 @@ function mainMenuKeyboard() {
         { text: "📤 Upload Images" }
       ],
       [
-        { text: "💡 AI Chat Videos" }
+        { text: "😍 AI Chat Videos" }
       ],
       [
         { text: "📊 Status" },
