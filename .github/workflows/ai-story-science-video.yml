@@ -58,7 +58,7 @@ jobs:
           done
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts faster-whisper
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
