@@ -3,6 +3,7 @@
 import argparse, asyncio, base64, io, json, os, re, subprocess, sys, time
 from pathlib import Path
 import edge_tts, requests
+from gtts import gTTS
 from PIL import Image
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -273,10 +274,45 @@ async def speak(text,path,voice):
         except Exception as e:
             last=e; path.unlink(missing_ok=True)
             if attempt<4: await asyncio.sleep(min(30,2**(attempt+1)))
-    raise RuntimeError(f"Edge TTS failed: {last}")
+    print(f"Edge TTS failed after 5 attempts ({last}); switching to Google TTS fallback.",file=sys.stderr,flush=True)
+    try:
+        path.unlink(missing_ok=True)
+        gTTS(text=text, lang="en").save(str(path))
+        if not path.is_file() or path.stat().st_size <= 1000:
+            raise RuntimeError("Google TTS returned an empty audio file")
+        print(f"Google TTS fallback completed: {path}",flush=True)
+    except Exception as fallback_error:
+        path.unlink(missing_ok=True)
+        raise RuntimeError(f"Edge TTS failed after 5 attempts ({last}); Google TTS fallback also failed: {fallback_error}") from fallback_error
 
 def command(args):
-    subprocess.run(args,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+    """Retry transient FFmpeg failures, then use MPEG-4 if H.264 encoding fails."""
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            subprocess.run(args,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=900)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            print(f"FFmpeg attempt {attempt}/3 failed: {exc}",file=sys.stderr,flush=True)
+            if attempt < 3:
+                time.sleep(attempt * 5)
+    if "-c:v" in args and "libx264" in args:
+        fallback, skip = [], False
+        for item in args:
+            if skip:
+                skip = False
+                continue
+            if item in ("-preset", "-crf", "-tune"):
+                skip = True
+            elif item == "libx264":
+                fallback.extend(["mpeg4", "-q:v", "5"])
+            else:
+                fallback.append(item)
+        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.",flush=True)
+        subprocess.run(fallback,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=900)
+        return
+    raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
 
 def media_has_stream(path,selector,minimum_bytes=1024):
     path=Path(path)
