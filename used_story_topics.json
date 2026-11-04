@@ -123,5 +123,10 @@
     "title": "Why Sound Travels Faster in Water: The Acoustic Density Paradox",
     "topic": "The exact thermodynamic and molecular mechanisms governing the speed of sound through liquid water versus gaseous air, driven by density and elastic modulus.",
     "description": "This scientific documentary explores the counterintuitive acoustic properties of fluids. We investigate why compressional wave propagation accelerates dramatically in dense media due to molecular proximity and high elastic stiffness."
+  },
+  {
+    "title": "Why Soap Bubbles Float: The Fluid Physics of Thin-Film Interference",
+    "topic": "The exact physical mechanisms of surface tension, Marangoni effect, and thin-film optical interference that allow soap bubbles to sustain spherical geometries and display iridescent color bands.",
+    "description": "An in-depth scientific documentary exploring the fascinating physics and chemistry of soap bubbles. We investigate how surfactant molecules trap water in microscopic elastic layers, creating self-healing spheres governed by minimal surface energy."
   }
 ]
