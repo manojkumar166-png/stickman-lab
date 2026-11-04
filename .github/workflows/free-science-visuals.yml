@@ -85,10 +85,6 @@ jobs:
           PY
           python -m compileall -q science-channel/scripts
           echo "Science-channel Python syntax check passed."
-          python -m compileall -q science-channel/scripts
-          echo "Science-channel Python syntax check passed."
-          # Keep the TTS check ahead of expensive Whisper model setup.
-          PY
       - name: Pin TorchCodec for PyTorch 2.8 and verify audio decoding
         shell: bash
         run: |
