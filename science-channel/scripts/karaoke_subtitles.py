@@ -114,33 +114,63 @@ def make_groups(words, max_words=7, pause_seconds=0.42):
     return groups
 
 
-def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
-    """Transcribe in English, then force-align every transcript word to the audio."""
-    model = whisperx.load_model(
-        model_name,
-        device=device,
-        compute_type="int8" if device == "cpu" else "float16",
-        language="en",
-    )
-    result = model.transcribe(str(audio_path), batch_size=8, language="en")
-    align_model, metadata = whisperx.load_align_model(
-        language_code=result.get("language", "en"),
-        device=device,
-    )
-    aligned = whisperx.align(
-        result["segments"],
-        align_model,
-        metadata,
-        str(audio_path),
-        device,
-        return_char_alignments=False,
+def transcribe_with_original_whisper(audio_path):
+    """Fallback to the original working faster-whisper-small word-timestamp method."""
+    from faster_whisper import WhisperModel
+
+    print("WhisperX failed; using original faster-whisper-small fallback.", flush=True)
+    model = WhisperModel("small", device="cpu", compute_type="int8")
+    segments, _ = model.transcribe(
+        str(audio_path), word_timestamps=True, vad_filter=True, beam_size=5
     )
     words = []
-    for segment in aligned.get("segments", []):
-        words.extend(_segment_words(segment))
+    for segment in segments:
+        for item in (segment.words or []):
+            token = clean_word(item.word)
+            if token and item.start is not None and item.end is not None:
+                start, end = float(item.start), float(item.end)
+                if end > start:
+                    words.append({"word": token, "start": start, "end": end})
     if not words:
-        raise RuntimeError("WhisperX returned no transcript words; cannot create karaoke captions.")
+        raise RuntimeError("Original faster-whisper fallback returned no word timestamps.")
     return normalize_words(words)
+
+
+def transcribe_and_align(audio_path, device="cpu", model_name="large-v3-turbo"):
+    """Try WhisperX first, then fall back to the original faster-whisper implementation."""
+    try:
+        import whisperx
+
+        model = whisperx.load_model(
+            model_name,
+            device=device,
+            compute_type="int8" if device == "cpu" else "float16",
+            language="en",
+        )
+        result = model.transcribe(str(audio_path), batch_size=8, language="en")
+        align_model, metadata = whisperx.load_align_model(
+            language_code=result.get("language", "en"), device=device
+        )
+        aligned = whisperx.align(
+            result["segments"], align_model, metadata, str(audio_path), device,
+            return_char_alignments=False,
+        )
+        words = []
+        for segment in aligned.get("segments", []):
+            words.extend(_segment_words(segment))
+        if not words:
+            raise RuntimeError("WhisperX returned no transcript words.")
+        print(f"WhisperX produced {len(words)} aligned words.", flush=True)
+        return normalize_words(words)
+    except Exception as whisperx_error:
+        print(f"WhisperX unavailable or failed: {whisperx_error!r}", flush=True)
+        try:
+            return transcribe_with_original_whisper(audio_path)
+        except Exception as fallback_error:
+            raise RuntimeError(
+                "Both WhisperX and the original faster-whisper fallback failed. "
+                f"WhisperX error: {whisperx_error!r}; fallback error: {fallback_error!r}"
+            ) from fallback_error
 
 
 def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
