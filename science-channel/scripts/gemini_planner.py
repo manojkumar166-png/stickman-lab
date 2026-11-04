@@ -264,7 +264,7 @@ used_topics = list(history.get("topics", []))
 used_topic_details = list(history.get("topic_details", []))
 episode_root = ROOT / "daily-episodes"
 if episode_root.exists():
-    for metadata in episode_root.glob("*/episode-*/episode.json"):
+    for metadata in episode_root.glob("*/*/episode-*/episode.json"):
         try:
             saved = json.loads(metadata.read_text())
             if saved.get("title"):
@@ -408,7 +408,8 @@ if topic is None:
 title = topic["title"]
 
 # Use the next available episode number for today; never overwrite an earlier run.
-day_root = episode_root / TODAY
+month_root = episode_root / datetime.date.today().strftime("%B %Y")
+day_root = month_root / TODAY
 day_root.mkdir(parents=True, exist_ok=True)
 existing_numbers = []
 for path in day_root.glob("episode-*"):
