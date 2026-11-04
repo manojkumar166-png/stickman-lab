@@ -64,6 +64,32 @@ def probe(path):
         raise RuntimeError("Could not read video duration.")
     return duration, audio
 
+def auto_edit(source, work, has_audio):
+    """Conservatively remove near-silence; return source unchanged on failure."""
+    if os.environ.get("AUTO_EDITOR_ENABLED", "1").lower() not in ("1", "true", "yes"):
+        print("Auto-Editor disabled; using original video.")
+        return source
+    if not has_audio:
+        print("No audio stream; skipping Auto-Editor to preserve screen-recording pauses.")
+        return source
+    edited = work / "auto-edited.mp4"
+    cmd = [
+        "auto-editor", str(source),
+        "--edit", "audio:threshold=0.02,stream=all",
+        "--margin", "0.35s,1.0s",
+        "--output", str(edited),
+    ]
+    try:
+        print("Running Auto-Editor with a conservative near-silence threshold...")
+        subprocess.run(cmd, check=True, timeout=2400)
+        if edited.is_file() and edited.stat().st_size > 0:
+            print(f"Auto-Editor output: {edited.stat().st_size} bytes")
+            return edited
+        print("Auto-Editor produced no usable output; using original video.")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        print(f"Auto-Editor skipped after error ({exc}); using original video.")
+    return source
+
 def scan(path, duration):
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
@@ -213,9 +239,11 @@ def main():
             size = download(token, file_id, source)
             say(token, chat, f"🎬 Video received ({size/1048576:.1f} MB). Editing a separate copy; original stays unchanged.")
         duration, has_audio = probe(source)
-        events = scan(source, duration)
+        working_source = auto_edit(source, work, has_audio)
+        duration, has_audio = probe(working_source)
+        events = scan(working_source, duration)
         output.parent.mkdir(parents=True, exist_ok=True)
-        render(source, output, events, duration, has_audio, work)
+        render(working_source, output, events, duration, has_audio, work)
         with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a", encoding="utf-8") as out:
             out.write(f"reaction_count={len(events)}\n")
         print(f"Rendered: {duration:.1f}s, {len(events)} reaction(s), {output.stat().st_size} bytes")
