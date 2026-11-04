@@ -54,10 +54,10 @@ jobs:
             sleep $((attempt * 10))
           done
           for attempt in 1 2 3; do
-  if sudo apt-get install -y ffmpeg fonts-dejavu-core; then break; fi
-  if [ "$attempt" -eq 3 ]; then exit 1; fi
-  sleep $((attempt * 10))
-done
+            if sudo apt-get install -y ffmpeg fonts-dejavu-core; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
       - name: Install Python dependencies
         run: |
           set -euo pipefail
