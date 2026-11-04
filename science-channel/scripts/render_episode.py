@@ -327,7 +327,7 @@ async def make_audio():
         detail = (exc.stderr or "").strip()
         print(f"FFmpeg narration assembly failed:\n{detail}")
         raise RuntimeError(
-            f"Could not combine {len(audio_parts)} valid Edge TTS chunks. "
+            f"Could not combine {len(audio_parts)} valid TTS chunks. "
             f"FFmpeg reported: {detail or 'no diagnostic output'}"
         ) from exc
     except subprocess.TimeoutExpired as exc:
