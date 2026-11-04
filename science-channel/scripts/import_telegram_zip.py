@@ -41,7 +41,7 @@ def order_image_entries(entries):
 
 def main():
     match = re.fullmatch(
-        r"science-channel/daily-episodes/(\d{4}-\d{2}-\d{2})/([A-Za-z0-9][A-Za-z0-9._-]*)",
+        r"science-channel/daily-episodes/([A-Za-z]+ \d{4})/(\d{4}-\d{2}-\d{2})/([A-Za-z0-9][A-Za-z0-9._-]*)",
         EPISODE_PATH,
     )
     if not match or ".." in Path(EPISODE_PATH).parts:
