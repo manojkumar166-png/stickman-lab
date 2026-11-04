@@ -6,6 +6,7 @@ const WORKFLOW_FILE = "science-channel-daily-planner.yml";
 const AI_VIDEO_WORKFLOW_FILE = "ai-video-test.yml";
 const IMPORT_WORKFLOW_FILE = "telegram-zip-import.yml";
 const RENDER_WORKFLOW_FILE = "free-science-visuals.yml";
+const ROAST_WORKFLOW_FILE = "ai-roast-studio.yml";
 
 const EPISODE_ROOT = "science-channel/daily-episodes";
 const UPLOAD_ROOT = "science-channel/telegram-uploads";
@@ -271,6 +272,29 @@ async function handleMessage(message, env, update) {
 
   const document = message.document || {};
   const documentName = String(document.file_name || "").toLowerCase();
+  const videoFile = message.video ||
+    (/\.(mp4|mov|m4v|mkv|webm)$/i.test(documentName) ||
+      String(document.mime_type || "").toLowerCase().startsWith("video/")
+      ? document
+      : null);
+
+  if (videoFile && videoFile.file_id) {
+    const fileSize = Number(videoFile.file_size || 0);
+    if (fileSize > 20 * 1024 * 1024) {
+      await sendTelegramMessage(
+        chatId,
+        "⚠️ This video is larger than 20 MB. The standard Telegram Bot API cannot download it for cloud editing. Your original remains untouched in this chat; no lower-quality copy was made.",
+        env,
+        { reply_markup: mainMenuKeyboard() }
+      );
+      return;
+    }
+    const filename = videoFile.file_name ||
+      (message.video ? "chat-recording.mp4" : document.file_name) ||
+      "chat-recording.mp4";
+    await dispatchRoastVideo(chatId, videoFile.file_id, filename, env);
+    return;
+  }
   const documentMime = String(document.mime_type || "").toLowerCase();
   const isZip = documentName.endsWith(".zip") ||
     ["application/zip", "application/x-zip-compressed"].includes(documentMime);
@@ -350,6 +374,7 @@ async function handleMessage(message, env, update) {
     "🎬 Generate": () => generate(chatId, env),
     "💡 Topic": () => showTopicKeyboard(chatId, env),
     "📤 Upload Images": () => sendUploadEpisodeKeyboard(chatId, env),
+    "🔥 AI Roast": () => sendTelegramMessage(chatId, "Send your recorded ChatGPT video as an MP4, MOV, MKV or WebM file. I will edit a separate copy and return it here. Standard Bot API source limit: 20 MB.", env, { reply_markup: mainMenuKeyboard() }),
     "📊 Status": () => showStatus(chatId, env),
     "🖼 Prompts": () => showPrompts(chatId, env),
     "📋 Runs": () => showRuns(chatId, env),
@@ -1328,6 +1353,43 @@ async function dispatchZipImporter(env, episodePath, zipPath) {
   );
 }
 
+/* ---------------- AI ROAST STUDIO DISPATCH ---------------- */
+
+async function dispatchRoastVideo(chatId, fileId, filename, env) {
+  try {
+    const workflow = await gh(env, workflowPath(ROAST_WORKFLOW_FILE));
+    if (workflow.state !== "active") {
+      throw new Error("AI Roast Studio workflow is not active. Check GitHub Actions.");
+    }
+    await gh(env, workflowPath(ROAST_WORKFLOW_FILE) + "/dispatches", {
+      method: "POST",
+      body: JSON.stringify({
+        ref: BRANCH,
+        inputs: {
+          telegram_file_id: fileId,
+          original_filename: String(filename || "chat-recording.mp4").slice(0, 120)
+        }
+      })
+    });
+    await sendTelegramMessage(
+      chatId,
+      [
+        "🔥 AI ROAST STUDIO STARTED",
+        "",
+        "Your video was accepted. GitHub Actions is downloading a temporary copy and will send the edited MP4 back here.",
+        "The original upload remains unchanged in this chat.",
+        "",
+        "Source limit: 20 MB with the standard Telegram Bot API."
+      ].join("\n"),
+      env,
+      { reply_markup: mainMenuKeyboard() }
+    );
+  } catch (error) {
+    console.error("AI Roast Studio dispatch failed:", error);
+    await sendTelegramMessage(chatId, "❌ Could not start AI Roast Studio: " + error.message, env);
+  }
+}
+
 /* ---------------- GENERATE WORKFLOW CHOOSER ---------------- */
 
 async function generate(chatId, env) {
@@ -1435,6 +1497,10 @@ const TRACKED_WORKFLOWS = [
   {
     label: "ZIP Importer",
     file: IMPORT_WORKFLOW_FILE
+  },
+  {
+    label: "AI Roast Studio",
+    file: ROAST_WORKFLOW_FILE
   }
 ];
 
@@ -1903,6 +1969,7 @@ function helpText() {
     "/cancel — Cancel a queued or running workflow",
     "/prompts — Retrieve latest episode prompts",
     "/upload — Select episode for ZIP upload",
+    "🔥 AI Roast — Send a recorded ChatGPT video for automatic editing (20 MB Bot API source limit)",
     "/help — Show this menu",
     "",
     "All manual workflow dispatches use the main branch."
