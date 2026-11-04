@@ -1,11 +1,15 @@
 name: 💡 AI Chat Videos
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "ai-chat-videos/uploads/**"
   workflow_dispatch:
     inputs:
       telegram_file_id:
         description: "Telegram file_id supplied by the private bot webhook"
-        required: true
+        required: false
         type: string
       original_filename:
         description: "Original uploaded filename"
@@ -14,7 +18,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ai-chat-videos-${{ github.run_id }}
@@ -27,6 +31,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Install FFmpeg, Tesseract and fonts
         run: |
@@ -43,13 +49,81 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r ai-chat-videos/requirements.txt
 
-      - name: Run automatic editor and send result to Telegram
+      - name: Select uploaded video
+        id: source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          TELEGRAM_FILE_ID: ${{ inputs.telegram_file_id }}
+          INPUT_FILENAME: ${{ inputs.original_filename }}
+        run: |
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            mapfile -t changed < <(git diff --diff-filter=AM --name-only "$BEFORE_SHA" "$AFTER_SHA" -- ai-chat-videos/uploads/ | grep -Ei '\.(mp4|mov|m4v|webm|mkv|avi)$' || true)
+            if [[ "${#changed[@]}" -ne 1 ]]; then
+              echo "Expected exactly one new/modified video per commit; found ${#changed[@]}. Upload one video per commit."
+              exit 1
+            fi
+            echo "local_video_path=${changed[0]}" >> "$GITHUB_OUTPUT"
+            basename "${changed[0]}" > "$RUNNER_TEMP/original-filename.txt"
+          else
+            if [[ -z "$TELEGRAM_FILE_ID" ]]; then
+              echo "Telegram dispatch requires telegram_file_id. GitHub uploads trigger automatically from ai-chat-videos/uploads/."
+              exit 1
+            fi
+            echo "telegram_file_id=$TELEGRAM_FILE_ID" >> "$GITHUB_OUTPUT"
+            printf '%s' "${INPUT_FILENAME:-chat-recording.mp4}" > "$RUNNER_TEMP/original-filename.txt"
+          fi
+          echo "original_filename=$(cat "$RUNNER_TEMP/original-filename.txt")" >> "$GITHUB_OUTPUT"
+
+      - name: Render edited video
+        id: render
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_FILE_ID: ${{ inputs.telegram_file_id }}
-          ORIGINAL_FILENAME: ${{ inputs.original_filename }}
+          TELEGRAM_FILE_ID: ${{ steps.source.outputs.telegram_file_id }}
+          LOCAL_VIDEO_PATH: ${{ steps.source.outputs.local_video_path }}
+          ORIGINAL_FILENAME: ${{ steps.source.outputs.original_filename }}
+          OUTPUT_VIDEO_PATH: ${{ runner.temp }}/ai-chat-videos/edited.mp4
         run: python -u ai-chat-videos/telegram_chat_video.py
+
+      - name: Save edited MP4 as workflow artifact
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-chat-video-edited-${{ github.run_number }}
+          path: ${{ runner.temp }}/ai-chat-videos/edited.mp4
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Send edited MP4 to Telegram
+        if: steps.artifact.outcome == 'success'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OUTPUT_VIDEO_PATH: ${{ runner.temp }}/ai-chat-videos/edited.mp4
+          ORIGINAL_FILENAME: ${{ steps.source.outputs.original_filename }}
+          REACTION_COUNT: ${{ steps.render.outputs.reaction_count }}
+          DELIVER_ONLY: "1"
+        run: python -u ai-chat-videos/telegram_chat_video.py
+
+      - name: Delete GitHub-uploaded source after artifact creation
+        if: always() && github.event_name == 'push' && steps.render.outcome == 'success' && steps.artifact.outcome == 'success'
+        env:
+          SOURCE_PATH: ${{ steps.source.outputs.local_video_path }}
+        run: |
+          if [[ -n "$SOURCE_PATH" && -f "$SOURCE_PATH" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git rm -- "$SOURCE_PATH"
+            git commit -m "Clean up processed AI Chat Videos source upload"
+            git push
+            echo "Removed source from the current main branch after artifact creation."
+          else
+            echo "No GitHub-uploaded source to clean up."
+          fi
 
       - name: Notify Telegram if the job fails
         if: failure()
@@ -59,8 +133,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          curl --fail --silent --show-error \
-            --connect-timeout 15 --max-time 30 \
+          curl --fail --silent --show-error --connect-timeout 15 --max-time 30 \
             -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=AI Chat Videos failed. Logs: ${RUN_URL}"
