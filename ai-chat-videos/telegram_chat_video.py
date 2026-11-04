@@ -19,7 +19,36 @@ RULES = [
     ("laugh", re.compile(r"\b(lol|lmao|haha|hilarious|funny|comedy)\b", re.I), "THAT'S ACTUALLY FUNNY"),
 ]
 
+def request_with_retry(method, url, *, attempts=4, **kwargs):
+    """Retry only safe/idempotent reads on transient network, 429 or 5xx errors."""
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code == 429 or response.status_code >= 500:
+                response.raise_for_status()
+            response.raise_for_status()
+            return response
+        except requests.RequestException as exc:
+            last_error = exc
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            transient = status == 429 or (status is not None and status >= 500) or status is None
+            if not transient or attempt == attempts:
+                raise
+            retry_after = getattr(exc.response, "headers", {}).get("Retry-After") if getattr(exc, "response", None) is not None else None
+            try:
+                delay = min(30, max(1, float(retry_after))) if retry_after else min(15, 2 ** attempt)
+            except (TypeError, ValueError):
+                delay = min(15, 2 ** attempt)
+            print(f"Transient {method} request failure ({exc}); retry {attempt}/{attempts - 1} in {delay:g}s.", flush=True)
+            import time
+            time.sleep(delay)
+    raise RuntimeError(f"Request failed after {attempts} attempts: {last_error}") from last_error
+
+
 def tg(token, method, **kwargs):
+    # Telegram writes (sendMessage, sendDocument, etc.) are deliberately not
+    # retried: a lost response can mean Telegram accepted the message already.
     r = requests.post(f"{API}/bot{token}/{method}", timeout=90, **kwargs)
     r.raise_for_status()
     data = r.json()
@@ -31,32 +60,46 @@ def say(token, chat, text):
     tg(token, "sendMessage", data={"chat_id": chat, "text": text})
 
 def download(token, file_id, dest):
-    info = tg(token, "getFile", json={"file_id": file_id})
+    info = request_with_retry(
+        "POST", f"{API}/bot{token}/getFile",
+        json={"file_id": file_id}, timeout=(15, 60),
+    ).json().get("result", {})
     size = int(info.get("file_size") or 0)
     if size > MAX_DOWNLOAD:
         raise RuntimeError(f"Source is {size/1048576:.1f} MB; standard Telegram Bot API downloads are limited to 20 MB. Original remains untouched in this chat.")
     path = info.get("file_path")
     if not path:
         raise RuntimeError("Telegram did not return a file path.")
-    total = 0
-    with requests.get(f"{API}/file/bot{token}/{path}", stream=True, timeout=(30, 180)) as r:
-        r.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(1024 * 1024):
-                if chunk:
-                    total += len(chunk)
-                    if total > MAX_DOWNLOAD:
-                        raise RuntimeError("Download exceeded Telegram's 20 MB Bot API limit.")
-                    f.write(chunk)
-    if not total:
+    # The file endpoint is a read-only GET and can be safely retried. Keep the
+    # 20 MB guard in place before writing anything to the destination.
+    response = request_with_retry(
+        "GET", f"{API}/file/bot{token}/{path}", attempts=4,
+        timeout=(30, 180),
+    )
+    if len(response.content) > MAX_DOWNLOAD:
+        raise RuntimeError("Download exceeded Telegram's 20 MB Bot API limit.")
+    if not response.content:
         raise RuntimeError("Telegram returned an empty file.")
-    return total
+    Path(dest).write_bytes(response.content)
+    return len(response.content)
 
 def probe(path):
     import json
-    p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                        "-show_entries", "stream=codec_type", "-of", "json", str(path)],
-                       check=True, capture_output=True, text=True)
+    command = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-show_entries", "stream=codec_type", "-of", "json", str(path)]
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            p = subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
+            break
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            print(f"ffprobe attempt {attempt}/3 failed: {exc}", flush=True)
+            if attempt < 3:
+                import time
+                time.sleep(attempt * 3)
+    else:
+        raise RuntimeError(f"ffprobe failed after 3 attempts: {last_error}") from last_error
     d = json.loads(p.stdout)
     duration = float(d.get("format", {}).get("duration", 0))
     audio = any(s.get("codec_type") == "audio" for s in d.get("streams", []))
@@ -197,7 +240,34 @@ def render(source, output, events, duration, has_audio, work):
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-r", "30",
             "-b:v", str(vbps), "-maxrate", str(vbps), "-bufsize", str(vbps*2),
             "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(output)]
-    subprocess.run(cmd, check=True)
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            subprocess.run(cmd, check=True, timeout=2400)
+            break
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            print(f"FFmpeg render attempt {attempt}/3 failed: {exc}", flush=True)
+            if attempt < 3:
+                import time
+                time.sleep(attempt * 5)
+    else:
+        fallback = []
+        skip_next = False
+        for arg in cmd:
+            if skip_next:
+                skip_next = False
+                continue
+            if arg in ("-preset",):
+                skip_next = True
+            elif arg == "libx264":
+                fallback.extend(["mpeg4", "-q:v", "5"])
+            else:
+                fallback.append(arg)
+        print("H.264 failed after 3 attempts; trying MPEG-4 fallback.", flush=True)
+        subprocess.run(fallback, check=True, timeout=2400)
+    if not output.is_file() or output.stat().st_size <= 0:
+        raise RuntimeError("FFmpeg did not produce a non-empty output file.")
     if output.stat().st_size > MAX_UPLOAD:
         raise RuntimeError("Edited output exceeds Telegram's 50 MB bot upload limit. Original remains untouched.")
 
