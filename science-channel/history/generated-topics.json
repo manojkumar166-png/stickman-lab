@@ -29,7 +29,8 @@
     "Why are planets round?",
     "How do electric eels generate high-voltage shocks?",
     "How do scientists find colors in fossilized feathers?",
-    "Why does the universe look different depending on which way you look?"
+    "Why does the universe look different depending on which way you look?",
+    "Why do sunflowers track the Sun?"
   ],
   "topic_details": [
     {
@@ -166,6 +167,11 @@
       "title": "Why does the universe look different depending on which way you look?",
       "angle": "Exploring the subtle cosmic asymmetries and large-scale structures that reveal how space is not entirely uniform in every direction.",
       "pillar": "Science of time and space"
+    },
+    {
+      "title": "Why do sunflowers track the Sun?",
+      "angle": "Explore the hidden internal clock and hydraulic pressure shifts that allow young sunflowers to effortlessly sweep across the sky every single day.",
+      "pillar": "Plants and the natural world"
     }
   ]
 }
