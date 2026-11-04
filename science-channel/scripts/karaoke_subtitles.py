@@ -99,19 +99,42 @@ def normalize_words(words):
     return result
 
 
-def make_groups(words, max_words=7, pause_seconds=0.42):
-    groups, current = [], []
+def make_groups(words, max_words=14, max_chars=84, pause_seconds=0.42):
+    """Build short caption phrases sized for no more than two display lines."""
+    groups, current, char_count = [], [], 0
     for word in words:
-        if current and word["start"] - current[-1]["end"] >= pause_seconds:
+        token = clean_word(word["word"])
+        added = len(token) + (1 if current else 0)
+        pause = bool(current and word["start"] - current[-1]["end"] >= pause_seconds)
+        sentence_end = bool(re.search(r"""[.!?]["')\]]*$""", token))
+        if current and (pause or len(current) >= max_words or char_count + added > max_chars):
             groups.append(current)
-            current = []
+            current, char_count = [], 0
+            added = len(token)
         current.append(word)
-        if len(current) >= max_words or re.search(r"""[.!?]["')\]]*$""", word["word"]):
+        char_count += added
+        if sentence_end:
             groups.append(current)
-            current = []
+            current, char_count = [], 0
     if current:
         groups.append(current)
     return groups
+
+
+def wrap_phrase(tokens, max_line_chars=42):
+    """Return token indexes after which ASS should start a second line."""
+    breaks, line_chars = set(), 0
+    for index, token in enumerate(tokens):
+        token_len = len(token)
+        added = token_len + (1 if line_chars else 0)
+        if line_chars and line_chars + added > max_line_chars:
+            # A group is capped at two lines; if needed, the group builder
+            # will have split it before it reaches this point.
+            breaks.add(index - 1)
+            line_chars = token_len
+        else:
+            line_chars += added
+    return breaks
 
 
 def transcribe_with_original_whisper(audio_path):
@@ -233,6 +256,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     groups = make_groups(words)
     for group in groups:
         phrase = [item["word"] for item in group]
+        line_breaks = wrap_phrase(phrase)
         for index, word in enumerate(group):
             start = word["start"]
             end = group[index + 1]["start"] if index + 1 < len(group) else word["end"]
@@ -242,6 +266,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 escaped = token.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
                 color = r"{\c&H0000FFFF&}" if j == index else r"{\c&H00FFFFFF&}"
                 rendered.append(color + escaped)
+                if j in line_breaks:
+                    rendered.append(r"\N")
             position = rf"{{\an2\pos({anchor_x},{anchor_y})}}"
             events.append(
                 f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Karaoke,,0,0,0,,"
