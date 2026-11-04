@@ -4,6 +4,7 @@ import json, re, sys, subprocess, zipfile, time
 from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
+from gtts import gTTS
 from karaoke_subtitles import generate_karaoke_ass
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,11 +220,19 @@ async def make_audio():
                     )
                     await asyncio.sleep(delay)
         if last_error is not None:
-            raise RuntimeError(
-                f"TTS failed for narration chunk {index}/{len(chunks)} "
-                f"after 5 attempts. Check Edge TTS availability, voice "
-                f"'{SETTINGS['voice']}', and network/rate limits. Last error: {last_error}"
-            ) from last_error
+            print(f"Edge TTS failed for chunk {index}/{len(chunks)} after 5 attempts: {last_error}. Trying Google TTS.", file=sys.stderr, flush=True)
+            try:
+                part.unlink(missing_ok=True)
+                gTTS(text=chunk, lang="en").save(str(part))
+                if not part.is_file() or part.stat().st_size < 1024:
+                    raise RuntimeError("Google TTS returned an empty audio file")
+                probe_part = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(part)], capture_output=True, text=True, timeout=30)
+                if probe_part.returncode != 0 or not probe_part.stdout.strip():
+                    raise RuntimeError("Google TTS output is not a readable audio stream")
+                print(f"Google TTS fallback completed chunk {index}/{len(chunks)}.", flush=True)
+            except Exception as fallback_error:
+                part.unlink(missing_ok=True)
+                raise RuntimeError(f"Edge TTS failed after 5 attempts ({last_error}); Google TTS fallback also failed: {fallback_error}") from fallback_error
         audio_parts.append(part)
 
     concat_list = work/"audio-chunks.txt"
@@ -272,7 +281,33 @@ async def make_audio():
 asyncio.run(make_audio())
 
 def run(cmd):
-    subprocess.run(cmd, check=True)
+    """Retry transient FFmpeg failures, then fall back from H.264 to MPEG-4."""
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last_error = exc
+            print(f"FFmpeg attempt {attempt}/3 failed: {exc}", file=sys.stderr, flush=True)
+            if attempt < 3:
+                time.sleep(attempt * 5)
+    if "-c:v" in cmd and "libx264" in cmd:
+        fallback, skip = [], False
+        for arg in cmd:
+            if skip:
+                skip = False
+                continue
+            if arg in ("-preset", "-crf", "-tune"):
+                skip = True
+            elif arg == "libx264":
+                fallback.extend(["mpeg4", "-q:v", "5"])
+            else:
+                fallback.append(arg)
+        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.", flush=True)
+        subprocess.run(fallback, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=900)
+        return
+    raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
 
 probe = subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(audio)], text=True)
 duration = float(probe.strip())
