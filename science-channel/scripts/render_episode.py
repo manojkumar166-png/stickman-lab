@@ -279,10 +279,7 @@ async def make_audio():
         "-ac", "1", "-write_xing", "0", str(audio)
     ]
     try:
-        subprocess.run(
-            combine_cmd, check=True, stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE, text=True, timeout=300
-        )
+        run(combine_cmd)
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip()
         print(f"FFmpeg narration assembly failed:\n{detail}")
