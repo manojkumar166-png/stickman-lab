@@ -15,7 +15,7 @@ CHAT_ID = str(os.environ["TELEGRAM_CHAT_ID"])
 API = f"https://api.telegram.org/bot{TOKEN}"
 STATE_PATH = Path("science-channel/telegram-bot-state.json")
 ROOT = Path("science-channel/daily-episodes")
-EPISODE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})[/ ](episode-\d{3}(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?)$")
+EPISODE_RE = re.compile(r"^([A-Za-z]+ \d{4})[/ ](\d{4}-\d{2}-\d{2})[/ ](episode-\d{3}(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?)$")
 
 def api(method, **kwargs):
     """Call Telegram with bounded retries for transient failures."""
@@ -123,12 +123,15 @@ def valid_episode(value):
 def newest_episode():
     episodes = []
     if ROOT.exists():
-        for date_dir in ROOT.iterdir():
-            if not date_dir.is_dir() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_dir.name):
+        for month_dir in ROOT.iterdir():
+            if not month_dir.is_dir():
                 continue
-            for episode_dir in date_dir.glob("episode-*"):
-                if episode_dir.is_dir() and (episode_dir / "episode.json").is_file():
-                    episodes.append(episode_dir)
+            for date_dir in month_dir.iterdir():
+                if not date_dir.is_dir() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_dir.name):
+                    continue
+                for episode_dir in date_dir.glob("episode-*"):
+                    if episode_dir.is_dir() and (episode_dir / "episode.json").is_file():
+                        episodes.append(episode_dir)
     return max(episodes, key=lambda p: (p.parent.name, p.parent.parent.name, p.name)) if episodes else None
 
 def image_payload(message):
