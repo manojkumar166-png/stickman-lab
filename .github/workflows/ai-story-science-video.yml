@@ -326,12 +326,37 @@ jobs:
       - name: Send final video to Telegram
         id: telegram
         continue-on-error: true
-        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
-        with:
-          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: ${{ steps.final_video.outputs.video }}
-          message: "🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator\nTitle: ${{ steps.final_video.outputs.title }}"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          VIDEO_PATH: ${{ steps.final_video.outputs.video }}
+          VIDEO_TITLE: ${{ steps.final_video.outputs.title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$VIDEO_PATH"
+          if [ "$(stat -c%s "$VIDEO_PATH")" -gt $((50 * 1024 * 1024)) ]; then
+            echo "::error::Telegram Bot API sendVideo limit is 50 MB; generated video is too large."
+            exit 1
+          fi
+          CAPTION="🎬 AI Story & Science Video Creator — created by workflow: AI Story & Science Video Creator | Title: $VIDEO_TITLE"
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+          curl --silent --show-error --fail-with-body \
+            --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 \
+            --form-string "chat_id=$TELEGRAM_CHAT_ID" \
+            --form "video=@$VIDEO_PATH;type=video/mp4" \
+            --form-string "caption=$CAPTION" \
+            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendVideo" \
+            --output "$RESPONSE_FILE"
+          python - "$RESPONSE_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          result = json.loads(Path(sys.argv[1]).read_text())
+          if not result.get("ok"):
+              raise SystemExit("Telegram rejected the video: " + str(result.get("description", "unknown error")))
+          print("Telegram accepted the generated video.")
+          PY
       - name: Require successful Telegram delivery
         if: steps.telegram.outcome != 'success'
         shell: bash
