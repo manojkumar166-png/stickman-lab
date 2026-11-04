@@ -47,7 +47,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/huggingface
-          key: whisper-small-${{ runner.os }}-v1
+          key: whisperx-large-v3-turbo-${{ runner.os }}-v1
       - name: Install FFmpeg and dependencies
         run: |
           set -euo pipefail
@@ -62,7 +62,7 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip install --retries 5 --timeout 60 --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS whisperx
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
