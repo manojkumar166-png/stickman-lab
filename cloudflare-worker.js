@@ -658,8 +658,8 @@ async function listEpisodeDates(env) {
 }
 
 async function listEpisodesForDate(env, datePath) {
-  if (!/^science-channel\\/daily-episodes\\/[A-Za-z]+ \\d{4}\\/\\d{4}-\\d{2}-\\d{2}$/.test(datePath)) {
-    throw new Error(`Invalid episode date folder: ${datePath}`);
+  if (!/^science-channel\/daily-episodes\/[A-Za-z]+ \d{4}\/\d{4}-\d{2}-\d{2}$/.test(datePath)) {
+    throw new Error(\`Invalid episode date folder: \${datePath}\`);
   }
 
   const encodedPath = datePath
@@ -669,7 +669,7 @@ async function listEpisodesForDate(env, datePath) {
 
   const result = await gh(
     env,
-    repoPath(`/contents/${encodedPath}?ref=${BRANCH}`)
+    repoPath(\`/contents/\${encodedPath}?ref=\${BRANCH}\`)
   );
 
   if (!Array.isArray(result)) return [];
@@ -677,7 +677,7 @@ async function listEpisodesForDate(env, datePath) {
   return result
     .filter(item =>
       item.type === "dir" &&
-      /^episode-\\d{3}(?:-|$)/i.test(item.name)
+      /^episode-\d{3}(?:-|$)/i.test(item.name)
     )
     .map(item => ({ name: item.name, path: item.path }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -1167,7 +1167,7 @@ function constantTimeEqual(a, b) {
 function isValidEpisodePath(path) {
   // Match the real repository layout:
   // daily-episodes/Month YYYY/YYYY-MM-DD/episode-NNN-name
-  return /^science-channel\\/daily-episodes\\/[A-Za-z]+ \\d{4}\\/\\d{4}-\\d{2}-\\d{2}\\/episode-\\d{3}(?:-|$)/.test(
+  return /^science-channel\/daily-episodes\/[A-Za-z]+ \d{4}\/\d{4}-\d{2}-\d{2}\/episode-\d{3}(?:-|$)/.test(
     path
   );
 }
@@ -2398,7 +2398,3 @@ async function handleCommand(chatId, text, env) {
         chatId,
         "I didn't recognise that command. Use /help to open the control centre.",
         env,
-        { reply_markup: mainMenuKeyboard() }
-      );
-  }
-}
