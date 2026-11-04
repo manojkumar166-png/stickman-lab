@@ -58,7 +58,7 @@ jobs:
           cache-dependency-path: ai-chat-videos/requirements.txt
 
       - name: Install Python dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r ai-chat-videos/requirements.txt
+        run: python -m pip install --upgrade pip && python -m pip install -r ai-chat-videos/requirements.txt auto-editor
 
       - name: Select uploaded video
         id: source
@@ -96,6 +96,7 @@ jobs:
           TELEGRAM_FILE_ID: ${{ steps.source.outputs.telegram_file_id }}
           LOCAL_VIDEO_PATH: ${{ steps.source.outputs.local_video_path }}
           ORIGINAL_FILENAME: ${{ steps.source.outputs.original_filename }}
+          AUTO_EDITOR_ENABLED: "1"
           OUTPUT_VIDEO_PATH: ${{ runner.temp }}/ai-chat-videos/edited.mp4
         run: python -u ai-chat-videos/telegram_chat_video.py
 
