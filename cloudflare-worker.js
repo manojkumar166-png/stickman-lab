@@ -7,6 +7,7 @@ const AI_VIDEO_WORKFLOW_FILE = "ai-video-test.yml";
 const IMPORT_WORKFLOW_FILE = "telegram-zip-import.yml";
 const RENDER_WORKFLOW_FILE = "free-science-visuals.yml";
 const ROAST_WORKFLOW_FILE = "ai-roast-studio.yml";
+const AI_STORY_WORKFLOW_FILE = "ai-story-science-video.yml";
 
 const EPISODE_ROOT = "science-channel/daily-episodes";
 const UPLOAD_ROOT = "science-channel/telegram-uploads";
@@ -539,6 +540,10 @@ async function handleCallback(callback, env) {
       freevisual: {
         file: RENDER_WORKFLOW_FILE,
         label: "FreeVisual Science"
+      },
+      ai_story: {
+        file: AI_STORY_WORKFLOW_FILE,
+        label: "AI Story & Science Video Creator"
       }
     };
 
@@ -1456,6 +1461,12 @@ async function generate(chatId, env) {
               text: "🔬 FreeVisual Science",
               callback_data: "generate:freevisual"
             }
+          ],
+          [
+            {
+              text: "📖 AI Story & Science Video",
+              callback_data: "generate:ai_story"
+            }
           ]
         ]
       }
@@ -1540,6 +1551,10 @@ const TRACKED_WORKFLOWS = [
   {
     label: "AI Chat Videos",
     file: ROAST_WORKFLOW_FILE
+  },
+  {
+    label: "AI Story & Science Video Creator",
+    file: AI_STORY_WORKFLOW_FILE
   }
 ];
 
