@@ -8,6 +8,7 @@ on:
       - "cloudflare-worker.js"
       - "science-channel/scripts/**"
       - "scripts/**"
+      - "ai-roast-studio/**"
       - "main_ai.py"
   pull_request:
     paths:
@@ -47,6 +48,7 @@ jobs:
           python -m compileall -q \
             science-channel/scripts \
             scripts \
+            ai-roast-studio \
             main_ai.py
       - name: Check Cloudflare Worker JavaScript syntax
         run: node --check cloudflare-worker.js
