@@ -176,7 +176,7 @@ def render(source, output, events, duration, has_audio, work):
         raise RuntimeError("Edited output exceeds Telegram's 50 MB bot upload limit. Original remains untouched.")
 
 def send_result(token, chat, output, filename, count):
-    caption = f"🔥 AI Chat Videos finished — {count} reaction(s). Original upload was not modified."
+    caption = f"🔥 AI Chat Videos finished — {count} reaction(s)."
     with open(output, "rb") as f:
         r = requests.post(f"{API}/bot{token}/sendDocument",
                           data={"chat_id": chat, "caption": caption},
