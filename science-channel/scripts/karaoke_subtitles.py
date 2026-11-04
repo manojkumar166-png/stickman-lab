@@ -17,6 +17,26 @@ def clean_word(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+def normalize_words(words):
+    """Sort Whisper output and eliminate duplicate/overlapping VAD-boundary words."""
+    ordered = sorted(words, key=lambda item: (item["start"], item["end"]))
+    result = []
+    for item in ordered:
+        word = dict(item)
+        if result:
+            previous = result[-1]
+            if (word["word"].casefold() == previous["word"].casefold()
+                    and word["start"] <= previous["end"] + 0.35):
+                previous["end"] = max(previous["end"], word["end"])
+                continue
+            if word["start"] < previous["end"]:
+                previous["end"] = max(previous["start"] + 0.03, word["start"])
+        if word["end"] <= word["start"]:
+            word["end"] = word["start"] + 0.03
+        result.append(word)
+    return result
+
+
 def make_groups(words, max_words=7):
     groups, current = [], []
     for word in words:
@@ -40,6 +60,7 @@ def generate_karaoke_ass(audio_path, output_path, width=1920, height=1080):
                 words.append({"word": token, "start": float(item.start), "end": float(item.end)})
     if not words:
         raise RuntimeError("Whisper returned no word timestamps; cannot create synchronized captions.")
+    words = normalize_words(words)
 
     # Center-anchor every cue at the exact same canvas coordinate. Bottom-aligned
     # captions move their top edge whenever a phrase wraps to another line.
@@ -62,13 +83,17 @@ Style: Karaoke,DejaVu Sans,{int(height * 0.052)},&H00FFFFFF,&H00FFFFFF,&H0000000
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     events = []
-    for group in make_groups(words):
-        phrase_end = max(group[-1]["end"], group[0]["start"] + 0.12) + 0.18
+    groups = make_groups(words)
+    for group_index, group in enumerate(groups):
+        # No trailing hold: it made the outgoing phrase overlap the next phrase.
+        phrase_end = max(group[-1]["end"], group[0]["start"] + 0.12)
         phrase = [w["word"] for w in group]
         for index, word in enumerate(group):
             start = word["start"]
             end = group[index + 1]["start"] if index + 1 < len(group) else phrase_end
-            end = max(end, start + 0.08)
+            end = max(end, start + 0.03)
+            if index == len(group) - 1 and group_index + 1 < len(groups):
+                end = min(end, groups[group_index + 1][0]["start"])
             rendered = []
             for j, token in enumerate(phrase):
                 escaped = token.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
@@ -109,6 +134,7 @@ def generate_karaoke_srt(audio_path, output_path):
                 })
     if not words:
         raise RuntimeError("Whisper returned no word timestamps; cannot create synchronized subtitles.")
+    words = normalize_words(words)
 
     entries = []
     for group in make_groups(words, max_words=9):
