@@ -26,7 +26,8 @@
     "Why do pinecones open and close?",
     "Why do we yawn?",
     "Why do clouds float?",
-    "Why are planets round?"
+    "Why are planets round?",
+    "How do electric eels generate high-voltage shocks?"
   ],
   "topic_details": [
     {
@@ -148,6 +149,11 @@
       "title": "Why are planets round?",
       "angle": "An exploration of how gravity relentlessly pulls matter from all directions toward a center of mass, and why smaller space rocks manage to stay lumpy.",
       "pillar": "Space and astronomy"
+    },
+    {
+      "title": "How do electric eels generate high-voltage shocks?",
+      "angle": "Exploring the specialized cellular machinery that allows electric fish to combine thousands of living batteries into a powerful biological taser.",
+      "pillar": "Animal senses and abilities"
     }
   ]
 }
