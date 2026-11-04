@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Render one READY episode from either a ZIP archive or individual scene images."""
-import json, re, sys, subprocess, zipfile, time
+import json, re, sys, subprocess, zipfile, time, random
 from pathlib import Path, PurePosixPath
 import asyncio
 import edge_tts
@@ -181,8 +181,8 @@ for i, (num, body) in enumerate(blocks, 1):
 
 audio = work/"narration.mp3"
 
-def split_narration(text, max_chars=2400):
-    """Keep TTS requests short enough to avoid oversized/fragile single requests."""
+def split_narration(text, max_chars=1200):
+    """Use smaller requests to reduce transient Edge TTS empty-audio responses."""
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     chunks, current = [], ""
     for sentence in sentences:
@@ -215,53 +215,96 @@ async def make_audio():
     chunk_dir = work/"audio-chunks"
     chunk_dir.mkdir(parents=True, exist_ok=True)
     audio_parts = []
-    print(f"Generating narration in {len(chunks)} short TTS chunks.")
+    print(f"Generating narration in {len(chunks)} short TTS chunks (max 1,200 characters).", flush=True)
+
+    def validate_audio(path, provider):
+        if not path.is_file() or path.stat().st_size < 1024:
+            raise RuntimeError(f"{provider} returned an empty or incomplete audio file")
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=30
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            detail = (probe.stderr or "").strip()
+            raise RuntimeError(f"{provider} output is not a readable audio stream: {detail[:300]}")
+        return float(probe.stdout.strip())
+
     for index, chunk in enumerate(chunks, 1):
         part = chunk_dir/f"narration-{index:03d}.mp3"
         last_error = None
-        for attempt in range(1, 6):
+
+        # A new Communicate instance is deliberately created on every attempt.
+        # Jitter prevents repeated requests from synchronizing against a busy service.
+        edge_attempts = 6
+        for attempt in range(1, edge_attempts + 1):
             part.unlink(missing_ok=True)
             try:
                 communicate = edge_tts.Communicate(
                     chunk, SETTINGS["voice"], rate=SETTINGS["speech_rate"]
                 )
                 await asyncio.wait_for(communicate.save(str(part)), timeout=180)
-                if not part.is_file() or part.stat().st_size < 1024:
-                    raise RuntimeError("TTS returned an empty or incomplete audio file")
-                probe_part = subprocess.run(
-                    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                     "-of", "default=noprint_wrappers=1:nokey=1", str(part)],
-                    capture_output=True, text=True, timeout=30
-                )
-                if probe_part.returncode != 0 or not probe_part.stdout.strip():
-                    raise RuntimeError("TTS output is not a readable audio stream")
+                duration = validate_audio(part, "Edge TTS")
                 last_error = None
-                print(f"TTS chunk {index}/{len(chunks)} completed.")
+                print(
+                    f"Edge TTS chunk {index}/{len(chunks)} completed "
+                    f"({duration:.1f}s, attempt {attempt}/{edge_attempts}).",
+                    flush=True
+                )
                 break
             except Exception as exc:
                 last_error = exc
                 part.unlink(missing_ok=True)
-                if attempt < 5:
-                    delay = min(30, 2 ** attempt)
+                if attempt < edge_attempts:
+                    base_delay = min(30, 2 ** attempt)
+                    delay = base_delay + random.uniform(0.5, min(5.0, base_delay * 0.25))
                     print(
-                        f"TTS chunk {index}/{len(chunks)} failed "
-                        f"(attempt {attempt}/5): {exc}. Retrying in {delay}s."
+                        f"Edge TTS chunk {index}/{len(chunks)} failed "
+                        f"(attempt {attempt}/{edge_attempts}, {type(exc).__name__}: {exc}). "
+                        f"Retrying in {delay:.1f}s.",
+                        file=sys.stderr, flush=True
                     )
                     await asyncio.sleep(delay)
+
         if last_error is not None:
-            print(f"Edge TTS failed for chunk {index}/{len(chunks)} after 5 attempts: {last_error}. Trying Google TTS.", file=sys.stderr, flush=True)
-            try:
+            print(
+                f"Edge TTS failed for chunk {index}/{len(chunks)} after "
+                f"{edge_attempts} attempts ({type(last_error).__name__}: {last_error}). "
+                "Trying Google TTS fallback.",
+                file=sys.stderr, flush=True
+            )
+            fallback_error = None
+            for fallback_attempt in range(1, 4):
                 part.unlink(missing_ok=True)
-                gTTS(text=chunk, lang="en").save(str(part))
-                if not part.is_file() or part.stat().st_size < 1024:
-                    raise RuntimeError("Google TTS returned an empty audio file")
-                probe_part = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(part)], capture_output=True, text=True, timeout=30)
-                if probe_part.returncode != 0 or not probe_part.stdout.strip():
-                    raise RuntimeError("Google TTS output is not a readable audio stream")
-                print(f"Google TTS fallback completed chunk {index}/{len(chunks)}.", flush=True)
-            except Exception as fallback_error:
-                part.unlink(missing_ok=True)
-                raise RuntimeError(f"Edge TTS failed after 5 attempts ({last_error}); Google TTS fallback also failed: {fallback_error}") from fallback_error
+                try:
+                    gTTS(text=chunk, lang="en", timeout=(15, 90)).save(str(part))
+                    duration = validate_audio(part, "Google TTS")
+                    print(
+                        f"Google TTS fallback completed chunk {index}/{len(chunks)} "
+                        f"({duration:.1f}s, attempt {fallback_attempt}/3).",
+                        flush=True
+                    )
+                    fallback_error = None
+                    break
+                except Exception as exc:
+                    fallback_error = exc
+                    part.unlink(missing_ok=True)
+                    if fallback_attempt < 3:
+                        delay = fallback_attempt * 4 + random.uniform(0.5, 2.5)
+                        print(
+                            f"Google TTS fallback chunk {index}/{len(chunks)} failed "
+                            f"(attempt {fallback_attempt}/3, {type(exc).__name__}: {exc}). "
+                            f"Retrying in {delay:.1f}s.",
+                            file=sys.stderr, flush=True
+                        )
+                        await asyncio.sleep(delay)
+            if fallback_error is not None:
+                raise RuntimeError(
+                    f"Edge TTS failed after {edge_attempts} attempts "
+                    f"({last_error}); Google TTS fallback failed after 3 attempts "
+                    f"({fallback_error})"
+                ) from fallback_error
+
         audio_parts.append(part)
 
     concat_list = work/"audio-chunks.txt"
