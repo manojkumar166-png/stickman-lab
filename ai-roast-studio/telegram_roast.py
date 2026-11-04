@@ -192,7 +192,10 @@ def main():
     filename = os.environ.get("ORIGINAL_FILENAME", "chat-recording.mp4")
     with tempfile.TemporaryDirectory(prefix="ai-roast-") as td:
         work = Path(td)
-        source, output = work / "source.bin", work / "roast.mp4"
+        safe_name = Path(filename).name or "chat-recording.mp4"
+        if not Path(safe_name).suffix:
+            safe_name += ".mp4"
+        source, output = work / safe_name, work / "roast.mp4"
         size = download(token, file_id, source)
         say(token, chat, f"🎬 Video received ({size/1048576:.1f} MB). Editing a separate copy; original stays unchanged.")
         duration, has_audio = probe(source)
