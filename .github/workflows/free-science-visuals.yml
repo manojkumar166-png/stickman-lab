@@ -89,7 +89,8 @@ jobs:
             fi
             P="${EPISODES[0]}"
           fi
-          EPISODE_PATH_REGEX='^science-channel/daily-episodes/[A-Za-z]+ [0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*
+          EPISODE_PATH_REGEX='^science-channel/daily-episodes/[A-Za-z]+ [0-9]{4}/[0-9]{4}-[0-9]{2}-[0-9]{2}/episode-[A-Za-z0-9][A-Za-z0-9._-]*$'
+          if [[ ! "$P" =~ $EPISODE_PATH_REGEX ]]; then
             echo "Invalid episode path: $P"
             exit 1
           fi
