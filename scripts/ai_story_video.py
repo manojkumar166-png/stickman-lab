@@ -9,6 +9,8 @@ from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"ai-story-video-output"
 KEY=os.getenv("GEMINI_API_KEY","").strip()
+GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
+GROQ_MODEL=os.getenv("GROQ_MODEL","llama-3.3-70b-versatile").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
 # Paid or unknown model IDs supplied through Actions variables are ignored.
 FREE_GEMINI_MODELS=(
@@ -68,7 +70,37 @@ def gemini(prompt):
             except Exception as e:
                 errors.append(f"{model} try {attempt+1}: {e}")
                 if attempt==0: time.sleep(3)
-    raise RuntimeError("All Gemini models failed: "+" | ".join(errors))
+    gemini_error="All Gemini models failed: "+" | ".join(errors)
+    if not GROQ_KEY:
+        raise RuntimeError(gemini_error+" | Open-source backup not configured: add GROQ_API_KEY as a GitHub Actions repository secret (Groq offers a free API tier for supported open-weight models).")
+    # Groq-hosted Llama 3.3 is an open-weight backup; use JSON mode to keep
+    # the same planner contract and validate it in plan_story().
+    groq_url="https://api.groq.com/openai/v1/chat/completions"
+    groq_errors=[]
+    for attempt in range(1,4):
+        try:
+            response=requests.post(groq_url,
+                headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
+                json={"model":GROQ_MODEL,"messages":[
+                    {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
+                    {"role":"user","content":prompt}],
+                    "response_format":{"type":"json_object"},"temperature":0.8},
+                timeout=TIMEOUT)
+            if response.status_code in (408,429,500,502,503,504):
+                raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
+            response.raise_for_status()
+            choices=response.json().get("choices") or []
+            content=choices[0].get("message",{}).get("content","") if choices else ""
+            result=parse_json(content)
+            print(f"Open-source planner backup active: Groq {GROQ_MODEL}",flush=True)
+            return result
+        except Exception as exc:
+            groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
+            if attempt<3:
+                delay=min(20,2**attempt)
+                print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
+                time.sleep(delay)
+    raise RuntimeError(gemini_error+" | Groq open-source backup failed: "+" | ".join(groq_errors))
 
 def plan_story(topic,count):
     topics_file=ROOT/"topics.txt"
