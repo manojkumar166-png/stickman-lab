@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"ai-story-video-output"
 KEY=os.getenv("GEMINI_API_KEY","").strip()
 GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
-GROQ_MODEL=os.getenv("GROQ_MODEL","llama-3.3-70b-versatile").strip()
+GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
 OVH_MODEL=os.getenv("OVH_MODEL","Qwen3.5-397B-A17B").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
@@ -129,7 +129,7 @@ def gemini(prompt):
             if isinstance(content,list):
                 content="".join(part.get("text","") for part in content if isinstance(part,dict))
             result=parse_json(content)
-            print(f"Free open-weight planner backup active: Kilo {KILO_MODEL} (anonymous access)",flush=True)
+            print(f"Free planner backup active: Kilo {KILO_MODEL} (anonymous access)",flush=True)
             return result
         except Exception as exc:
             kilo_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
