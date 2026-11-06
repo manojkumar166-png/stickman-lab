@@ -92,32 +92,54 @@ def valid_png(raw):
         return output.getvalue()
 
 def rewrite_flagged_prompt(original_visual, attempt):
-    """Ask Gemini to safely rephrase one flagged visual while preserving its meaning."""
+    """Rewrite a flagged scene into a safe depiction of the same story beat."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is missing; cannot rewrite flagged scene prompt.")
-    import json
     model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+    strategies = {
+        1: (
+            "Rewrite the description from scratch in simple, neutral, family-friendly language. "
+            "Keep the same subject, scientific concept, characters, setting, and narrative purpose. "
+            "Remove ambiguous or unnecessarily intense wording; do not just swap synonyms."
+        ),
+        2: (
+            "Re-stage the same story moment as a clearly safe educational 3D illustration. "
+            "Preserve the central science concept and what the viewer needs to understand, "
+            "but replace any potentially sensitive physical action with a harmless symbolic "
+            "visual metaphor, demonstration model, or non-contact interaction."
+        ),
+        3: (
+            "Create a substantially different but meaning-equivalent visual composition for "
+            "the same scene. Focus on the scientific idea and narrative beat using benign "
+            "objects, a classroom or laboratory demonstration, and calm character poses. "
+            "Avoid depicting injury, violence, weapons, dangerous acts, or graphic detail."
+        ),
+    }
+    strategy = strategies.get(attempt, strategies[3])
     instruction = (
-        "Rewrite this harmless educational cartoon image description so it is clear, "
-        "family-friendly, and unlikely to trigger an automated image safety filter. "
-        "Preserve the original subject, stick-figure character, action, and intended meaning. "
-        "Avoid ambiguous words, injury, smoke, danger, or alarming phrasing unless essential. "
-        "Return only the revised visual description, with no explanation.\n\n"
-        f"Original visual: {original_visual}\nRewrite attempt: {attempt}"
+        "You are revising a visual prompt because an image-generation safety filter rejected "
+        "the previous wording. Your job is to make a genuinely safer depiction, not to bypass "
+        "or trick the safety system.\n"
+        f"{strategy}\n"
+        "Keep it suitable for a general-audience educational science video. "
+        "Describe only visible image content. Do not include text, captions, labels, logos, "
+        "or instructions. Return one concise visual description only, with no explanation.\n\n"
+        f"Original scene description:\n{original_visual}"
     )
     response = requests.post(
         url, params={"key": api_key},
         json={"contents": [{"parts": [{"text": instruction}]}],
-              "generationConfig": {"temperature": 0.4}},
+              "generationConfig": {"temperature": 0.65}},
         timeout=(20, 90)
     )
     response.raise_for_status()
-    text = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-    if not text:
+    revised = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    if not revised:
         raise RuntimeError("Gemini returned an empty revised visual prompt.")
-    return text[:1000]
+    return revised[:1000]
 
 
 async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None):
@@ -170,30 +192,15 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                     print(f"  Scene {i}: revised prompt was still flagged.", flush=True)
                 except Exception as exc:
                     print(f"  Scene {i}: prompt rewrite/retry failed: {exc}", flush=True)
-            # If scene-specific wording is repeatedly rejected, use a neutral,
-            # non-sensitive educational visual so the final video has no gaps.
+            # Never substitute an unrelated generic image: the scene must retain
+            # its story meaning. Stop with a clear error if all meaning-preserving
+            # Gemini rewrites are rejected; saved scenes remain checkpointed.
             if image_data is None:
-                safe_fallbacks = [
-                    "A calm colorful 3D educational still life of a small solar system model with planets orbiting a glowing sun, in a bright science classroom, no people, no text",
-                    "A peaceful colorful 3D science museum display with a glass globe, simple geometric models and soft glowing lights, no people, no text",
-                    "A clean abstract 3D educational background with softly glowing blue and gold spheres connected by thin light trails, no people, no text"
-                ]
-                for fallback_attempt, fallback_visual in enumerate(safe_fallbacks, 1):
-                    try:
-                        print(f"  Scene {i}: trying neutral educational fallback ({fallback_attempt}/{len(safe_fallbacks)}).", flush=True)
-                        image_data = valid_png(cf_image_cheap(build_prompt(fallback_visual)))
-                        break
-                    except CloudflareRateLimited:
-                        raise
-                    except CloudflarePromptFlagged:
-                        print(f"  Scene {i}: neutral fallback {fallback_attempt} was flagged.", flush=True)
-                    except Exception as exc:
-                        print(f"  Scene {i}: neutral fallback {fallback_attempt} failed: {exc}", flush=True)
-                if image_data is None:
-                    raise RuntimeError(
-                        f"Scene {i}: Cloudflare rejected the scene and all neutral fallback visuals. "
-                        "Completed scene images are preserved; rerun later to retry this scene."
-                    )
+                raise RuntimeError(
+                    f"Scene {i}: Cloudflare rejected the original prompt and all three "
+                    "meaning-preserving Gemini rewrites. Review this scene's visual description; "
+                    "all previously generated scene images are preserved."
+                )
         except CloudflareRateLimited:
             print(f"Cloudflare quota/rate limit reached at scene {i}; completed scenes are preserved.", flush=True)
             raise
