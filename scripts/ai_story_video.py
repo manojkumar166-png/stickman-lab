@@ -11,6 +11,7 @@ OUT=ROOT/"ai-story-video-output"
 KEY=os.getenv("GEMINI_API_KEY","").strip()
 GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
 GROQ_MODEL=os.getenv("GROQ_MODEL","llama-3.3-70b-versatile").strip()
+KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
 # Paid or unknown model IDs supplied through Actions variables are ignored.
 FREE_GEMINI_MODELS=(
@@ -36,7 +37,7 @@ def parse_json(raw):
         raw=raw.split("\n",1)[-1]
         if raw.endswith(fence): raw=raw[:-3]
     start=raw.find("{")
-    if start<0: raise ValueError("Gemini returned no JSON object")
+    if start<0: raise ValueError("LLM returned no JSON object")
     depth=0; quoted=False; escaped=False
     for i,ch in enumerate(raw[start:],start):
         if quoted:
@@ -48,59 +49,99 @@ def parse_json(raw):
         elif ch=="}":
             depth-=1
             if depth==0: return json.loads(raw[start:i+1])
-    raise ValueError("Gemini returned incomplete JSON")
+    raise ValueError("LLM returned incomplete JSON")
 
 def gemini(prompt):
-    if not KEY: raise RuntimeError("Add GEMINI_API_KEY in repository Actions secrets.")
     errors=[]
-    for model in dict.fromkeys([MODEL]+FALLBACK):
-        url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        for attempt in range(2):
-            try:
-                r=requests.post(url,params={"key":KEY},json={"contents":[{"parts":[{"text":prompt}]}],
-                    "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},timeout=90)
-                if r.status_code in (400,403,404,408,429,500,502,503,504):
-                    raise RuntimeError(f"Gemini {model} HTTP {r.status_code}: {r.text[:700]}")
-                r.raise_for_status()
-                candidates=r.json().get("candidates") or []
-                parts=candidates[0].get("content",{}).get("parts",[]) if candidates else []
-                result=parse_json("".join(p.get("text","") for p in parts if isinstance(p,dict)))
-                print(f"Gemini planner active: {model}",flush=True)
-                return result
-            except Exception as e:
-                errors.append(f"{model} try {attempt+1}: {e}")
-                if attempt==0: time.sleep(3)
-    gemini_error="All Gemini models failed: "+" | ".join(errors)
-    if not GROQ_KEY:
-        raise RuntimeError(gemini_error+" | Open-source backup not configured: add GROQ_API_KEY as a GitHub Actions repository secret (Groq offers a free API tier for supported open-weight models).")
-    # Groq-hosted Llama 3.3 is an open-weight backup; use JSON mode to keep
-    # the same planner contract and validate it in plan_story().
-    groq_url="https://api.groq.com/openai/v1/chat/completions"
+    if KEY:
+        for model in dict.fromkeys([MODEL]+FALLBACK):
+            url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            for attempt in range(2):
+                try:
+                    r=requests.post(url,params={"key":KEY},json={"contents":[{"parts":[{"text":prompt}]}],
+                        "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},timeout=90)
+                    if r.status_code in (400,403,404,408,429,500,502,503,504):
+                        raise RuntimeError(f"Gemini {model} HTTP {r.status_code}: {r.text[:700]}")
+                    r.raise_for_status()
+                    candidates=r.json().get("candidates") or []
+                    parts=candidates[0].get("content",{}).get("parts",[]) if candidates else []
+                    result=parse_json("".join(p.get("text","") for p in parts if isinstance(p,dict)))
+                    print(f"Gemini planner active: {model}",flush=True)
+                    return result
+                except Exception as exc:
+                    errors.append(f"{model} try {attempt+1}: {type(exc).__name__}: {exc}")
+                    if attempt==0: time.sleep(3)
+    else:
+        errors.append("GEMINI_API_KEY is not configured; skipped Gemini.")
+        print("Gemini skipped: GEMINI_API_KEY is not configured.",flush=True)
+
+    # Groq is the first open-weight backup. It is optional; the no-key Kilo
+    # free-model gateway below remains available when this secret is absent.
     groq_errors=[]
+    if GROQ_KEY:
+        groq_url="https://api.groq.com/openai/v1/chat/completions"
+        for attempt in range(1,4):
+            try:
+                response=requests.post(groq_url,
+                    headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
+                    json={"model":GROQ_MODEL,"messages":[
+                        {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
+                        {"role":"user","content":prompt}],
+                        "response_format":{"type":"json_object"},"temperature":0.8,"max_tokens":32768},
+                    timeout=TIMEOUT)
+                if response.status_code in (408,429,500,502,503,504):
+                    raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
+                response.raise_for_status()
+                choices=response.json().get("choices") or []
+                content=choices[0].get("message",{}).get("content","") if choices else ""
+                result=parse_json(content)
+                print(f"Open-weight planner backup active: Groq {GROQ_MODEL}",flush=True)
+                return result
+            except Exception as exc:
+                groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
+                if attempt<3:
+                    delay=min(20,2**attempt)
+                    print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
+                    time.sleep(delay)
+    else:
+        print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
+
+    # Kilo's free auto-router is OpenAI-compatible and supports anonymous
+    # requests for free models, so no KILO_API_KEY is required here.
+    kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
+    kilo_errors=[]
     for attempt in range(1,4):
         try:
-            response=requests.post(groq_url,
-                headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
-                json={"model":GROQ_MODEL,"messages":[
-                    {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
+            response=requests.post(kilo_url,
+                headers={"Content-Type":"application/json"},
+                json={"model":KILO_MODEL,"messages":[
+                    {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
                     {"role":"user","content":prompt}],
                     "response_format":{"type":"json_object"},"temperature":0.8,"max_tokens":32768},
                 timeout=TIMEOUT)
-            if response.status_code in (408,429,500,502,503,504):
-                raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
+            if response.status_code in (408,425,429,500,502,503,504):
+                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:500]}")
             response.raise_for_status()
             choices=response.json().get("choices") or []
-            content=choices[0].get("message",{}).get("content","") if choices else ""
+            message=choices[0].get("message",{}) if choices else {}
+            content=message.get("content","")
+            if isinstance(content,list):
+                content="".join(part.get("text","") for part in content if isinstance(part,dict))
             result=parse_json(content)
-            print(f"Open-source planner backup active: Groq {GROQ_MODEL}",flush=True)
+            print(f"Free open-weight planner backup active: Kilo {KILO_MODEL} (anonymous access)",flush=True)
             return result
         except Exception as exc:
-            groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
+            kilo_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
             if attempt<3:
-                delay=min(20,2**attempt)
-                print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
+                delay=attempt*5
+                print(f"Kilo free backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
                 time.sleep(delay)
-    raise RuntimeError(gemini_error+" | Groq open-source backup failed: "+" | ".join(groq_errors))
+
+    raise RuntimeError(
+        "All planner providers failed. Gemini: "+" | ".join(errors)
+        +" | Groq: "+(" | ".join(groq_errors) if groq_errors else "not configured")
+        +" | Kilo: "+" | ".join(kilo_errors)
+    )
 
 def plan_story(topic,count):
     topics_file=ROOT/"topics.txt"
