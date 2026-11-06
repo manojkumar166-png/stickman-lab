@@ -34,7 +34,8 @@
     "Why do bamboo stalks grow so fast?",
     "Why do pine needles stay green all winter?",
     "Why do our fingers prune in water?",
-    "Why do we blush?"
+    "Why do we blush?",
+    "Why do fluorescent lights hum?"
   ],
   "topic_details": [
     {
@@ -196,6 +197,11 @@
       "title": "Why do we blush?",
       "angle": "Exploring the involuntary nervous system response that floods our face with blood when we feel social embarrassment or exposure, and why humans evolved this visible signal.",
       "pillar": "Human body and mind"
+    },
+    {
+      "title": "Why do fluorescent lights hum?",
+      "angle": "Exploring how alternating electrical current makes gas-discharge tubes and their magnetic ballasts vibrate at specific audio frequencies.",
+      "pillar": "Light, sound and vision"
     }
   ]
 }
