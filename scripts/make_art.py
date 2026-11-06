@@ -170,12 +170,30 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                     print(f"  Scene {i}: revised prompt was still flagged.", flush=True)
                 except Exception as exc:
                     print(f"  Scene {i}: prompt rewrite/retry failed: {exc}", flush=True)
-            # Cloudflare only: if revised prompts are still flagged, skip this
-            # scene for now and continue with later scenes. The missing scene is
-            # checkpointed and will be retried on the next workflow attempt.
+            # If scene-specific wording is repeatedly rejected, use a neutral,
+            # non-sensitive educational visual so the final video has no gaps.
             if image_data is None:
-                print(f"  Scene {i}: Cloudflare rejected all prompt versions; continuing to the next scene.", flush=True)
-                continue
+                safe_fallbacks = [
+                    "A calm colorful 3D educational still life of a small solar system model with planets orbiting a glowing sun, in a bright science classroom, no people, no text",
+                    "A peaceful colorful 3D science museum display with a glass globe, simple geometric models and soft glowing lights, no people, no text",
+                    "A clean abstract 3D educational background with softly glowing blue and gold spheres connected by thin light trails, no people, no text"
+                ]
+                for fallback_attempt, fallback_visual in enumerate(safe_fallbacks, 1):
+                    try:
+                        print(f"  Scene {i}: trying neutral educational fallback ({fallback_attempt}/{len(safe_fallbacks)}).", flush=True)
+                        image_data = valid_png(cf_image_cheap(build_prompt(fallback_visual)))
+                        break
+                    except CloudflareRateLimited:
+                        raise
+                    except CloudflarePromptFlagged:
+                        print(f"  Scene {i}: neutral fallback {fallback_attempt} was flagged.", flush=True)
+                    except Exception as exc:
+                        print(f"  Scene {i}: neutral fallback {fallback_attempt} failed: {exc}", flush=True)
+                if image_data is None:
+                    raise RuntimeError(
+                        f"Scene {i}: Cloudflare rejected the scene and all neutral fallback visuals. "
+                        "Completed scene images are preserved; rerun later to retry this scene."
+                    )
         except CloudflareRateLimited:
             print(f"Cloudflare quota/rate limit reached at scene {i}; completed scenes are preserved.", flush=True)
             raise
