@@ -117,8 +117,19 @@ def rewrite_flagged_prompt(original_visual, attempt):
             "objects, a classroom or laboratory demonstration, and calm character poses. "
             "Avoid depicting injury, violence, weapons, dangerous acts, or graphic detail."
         ),
+        4: (
+            "Show the same story beat through a close-up educational science exhibit or "
+            "hands-on demonstration. Preserve the key subject and concept, but communicate "
+            "the action through objects, physical models, and visual cause and effect."
+        ),
+        5: (
+            "Use a wide establishing shot of the same setting and moment, preserving the "
+            "important characters or scientific subject. Communicate the same narrative "
+            "purpose through calm poses, safe distance, and a clear visual metaphor. "
+            "Use a noticeably different camera angle and composition."
+        ),
     }
-    strategy = strategies.get(attempt, strategies[3])
+    strategy = strategies.get(attempt, strategies[5])
     instruction = (
         "You are revising a visual prompt because an image-generation safety filter rejected "
         "the previous wording. Your job is to make a genuinely safer depiction, not to bypass "
@@ -166,11 +177,11 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
         except CloudflarePromptFlagged:
             image_data = None
             # Ask Gemini to rephrase only this scene, then retry Cloudflare.
-            for rewrite_attempt in range(1, 4):
+            for rewrite_attempt in range(1, 6):
                 try:
                     revised_visual = rewrite_flagged_prompt(original_visual, rewrite_attempt)
                     revised_prompt = build_prompt(revised_visual)
-                    print(f"  Scene {i}: Gemini revised flagged prompt ({rewrite_attempt}/3); retrying Cloudflare.", flush=True)
+                    print(f"  Scene {i}: Gemini revised flagged prompt ({rewrite_attempt}/5); retrying Cloudflare.", flush=True)
                     image_data = valid_png(cf_image_cheap(revised_prompt))
                     scene["visual"] = revised_visual
                     if story_path:
@@ -197,7 +208,7 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
             # Gemini rewrites are rejected; saved scenes remain checkpointed.
             if image_data is None:
                 raise RuntimeError(
-                    f"Scene {i}: Cloudflare rejected the original prompt and all three "
+                    f"Scene {i}: Cloudflare rejected the original prompt and all five "
                     "meaning-preserving Gemini rewrites. Review this scene's visual description; "
                     "all previously generated scene images are preserved."
                 )
