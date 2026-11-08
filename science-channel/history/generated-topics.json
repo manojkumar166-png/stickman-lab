@@ -36,7 +36,8 @@
     "Why do our fingers prune in water?",
     "Why do we blush?",
     "Why do fluorescent lights hum?",
-    "Why do rings form around planets?"
+    "Why do rings form around planets?",
+    "Why does copper turn green?"
   ],
   "topic_details": [
     {
@@ -208,6 +209,11 @@
       "title": "Why do rings form around planets?",
       "angle": "Explore the gravitational tipping points and cosmic collisions that turn orbiting debris into stunning planetary rings.",
       "pillar": "Space and astronomy"
+    },
+    {
+      "title": "Why does copper turn green?",
+      "angle": "We explore the chemical reaction between copper, oxygen, water, and atmospheric pollutants that builds a protective patina over time.",
+      "pillar": "Chemistry and materials around us"
     }
   ]
 }
