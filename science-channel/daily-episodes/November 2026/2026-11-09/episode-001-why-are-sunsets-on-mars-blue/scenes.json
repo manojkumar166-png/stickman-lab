@@ -1,0 +1,242 @@
+[
+  {
+    "scene_number": 1,
+    "narration": "Every evening on Earth, the sky puts on a breathtaking show. Golden light turns to brilliant orange, vivid magenta, and deep crimson as the sun dips below the horizon.",
+    "visual_beat": "Timelapse of a serene golden beach sunset on Earth with vibrant orange and magenta clouds."
+  },
+  {
+    "scene_number": 2,
+    "narration": "It is a sight so deeply familiar to humanity that we often assume sunsets look warm and reddish across every world in our cosmic neighborhood.",
+    "visual_beat": "Silhouettes of people watching a brilliant red sunset over calm ocean waves."
+  },
+  {
+    "scene_number": 3,
+    "narration": "But if you were standing on the cold, barren surface of Mars watching the sun go down, you would witness something surprisingly alien and eerie.",
+    "visual_beat": "Camera transitions across space to a wide shot of the rusty, desolate Martian landscape at twilight."
+  },
+  {
+    "scene_number": 4,
+    "narration": "Instead of burning red, the Martian sun casts a cool, ghostly blue glow across the dusty sky right near the horizon.",
+    "visual_beat": "A dramatic view of a small, bright sun sinking into a pale cyan-blue sky over Martian hills."
+  },
+  {
+    "scene_number": 5,
+    "narration": "This uncanny color swap isn't a digital effect or an optical glitch. It is real physics recorded by NASA rovers exploring the Red Planet.",
+    "visual_beat": "Pan across Perseverance rover capturing high-resolution photos of the horizon with its robotic eye."
+  },
+  {
+    "scene_number": 6,
+    "narration": "How can the famously Red Planet produce a pale blue sunset, while our blue planet gets glowing red sunsets every single night?",
+    "visual_beat": "Split screen comparing Earth's blue sky and red sunset with Mars' rusty sky and blue sunset."
+  },
+  {
+    "scene_number": 7,
+    "narration": "The answer lies in the subtle interplay between sunlight, atmospheric pressure, and tiny particles of floating cosmic dust.",
+    "visual_beat": "Conceptual animation showing a beam of white sunlight hitting microscopic dust grains floating in space."
+  },
+  {
+    "scene_number": 8,
+    "narration": "Join us today as we unlock the optical secrets of Mars and discover why light behaves so differently on another world.",
+    "visual_beat": "Title card appears over a sweeping 3D landscape of Gale Crater under twilight: 'Why are sunsets on Mars blue?'."
+  },
+  {
+    "scene_number": 9,
+    "narration": "To understand the blue sunsets of Mars, we first need to travel back home and ask why Earth’s sky behaves the way it does.",
+    "visual_beat": "Satellite view of Earth showing the thin, bright blue glowing layer of atmosphere against dark space."
+  },
+  {
+    "scene_number": 10,
+    "narration": "Sunlight appears white to our eyes, but it is actually a rainbow mixture containing every color of the visible spectrum.",
+    "visual_beat": "Prism splitting a bright white laser beam into a vivid rainbow of red, green, and blue light."
+  },
+  {
+    "scene_number": 11,
+    "narration": "Each color travels as a wave of electromagnetic energy, with red light having long wavelengths and blue light having much shorter wavelengths.",
+    "visual_beat": "Animated sine waves showing long red waves alongside tight, short blue waves."
+  },
+  {
+    "scene_number": 12,
+    "narration": "Earth’s atmosphere is packed with billions of tiny air molecules, primarily nitrogen and oxygen, which are far smaller than visible light wavelengths.",
+    "visual_beat": "3D microscopic visualization of nitrogen and oxygen molecules floating in Earth's dense air."
+  },
+  {
+    "scene_number": 13,
+    "narration": "When sunlight hits these tiny gas molecules, the short blue wavelengths bounce off them in every direction in a process called Rayleigh scattering.",
+    "visual_beat": "Short blue light waves bouncing wildly off gas molecules, scattering in all directions while red waves pass through."
+  },
+  {
+    "scene_number": 14,
+    "narration": "Because blue light is scattered all across the upper atmosphere throughout the daytime, Earth's sky appears bright, vivid blue from the ground.",
+    "visual_beat": "Daytime view of a lush green meadow looking up at a clear, bright blue sky."
+  },
+  {
+    "scene_number": 15,
+    "narration": "At sunset, however, sunlight must travel through a much longer path of air to reach your eyes compared to midday.",
+    "visual_beat": "Geometric diagram showing sunlight path passing straight down vs hitting the atmosphere at a long oblique angle."
+  },
+  {
+    "scene_number": 16,
+    "narration": "By the time the sunlight completes this long journey, almost all of its blue light has been scattered away into space.",
+    "visual_beat": "Animation showing blue light fading out of a sunlight beam as it travels through a dense atmosphere slab."
+  },
+  {
+    "scene_number": 17,
+    "narration": "Only the unscattered longer wavelengths—reds, oranges, and deep yellows—make it directly into your eyes, creating our iconic evening hues.",
+    "visual_beat": "Warm golden and red light filling the frame as the sun touches the horizon behind mountains."
+  },
+  {
+    "scene_number": 18,
+    "narration": "So on Earth, Rayleigh scattering makes the day sky blue and the sunset red. But Mars operates under completely different environmental rules.",
+    "visual_beat": "Fast transition from Earth's warm sunset fading into the cold, dusty environment of Mars."
+  },
+  {
+    "scene_number": 19,
+    "narration": "Mars has an atmosphere that is extremely thin—less than one percent as dense as the air we breathe here on Earth.",
+    "visual_beat": "Graphic comparing atmospheric pressure gauges: 100% on Earth versus 0.6% on Mars."
+  },
+  {
+    "scene_number": 20,
+    "narration": "Because gas molecules are so sparse on Mars, normal Rayleigh scattering by carbon dioxide molecules is far too weak to dominate the sky color.",
+    "visual_beat": "Microscopic view showing very few carbon dioxide molecules widely spaced out in thin Martian air."
+  },
+  {
+    "scene_number": 21,
+    "narration": "Instead, the Martian atmosphere is filled with massive amounts of fine dust, blown high into the air by perpetual global winds.",
+    "visual_beat": "Dust devils and wind swirls kicking up fine reddish powder across vast rocky plains."
+  },
+  {
+    "scene_number": 22,
+    "narration": "This dust is rich in iron oxide—the exact chemical compound commonly known as rust—giving Mars its famous reddish, butterscotch daytime sky.",
+    "visual_beat": "Macro shot of rust particles glowing reddish-brown under ambient light, shifting to daytime Mars sky."
+  },
+  {
+    "scene_number": 23,
+    "narration": "During the daytime, these dust grains absorb blue light and scatter warm red light everywhere, making the air look brownish-red.",
+    "visual_beat": "Daytime panorama from Curiosity rover showing a hazy, yellowish-red sky over a rocky desert basin."
+  },
+  {
+    "scene_number": 24,
+    "narration": "However, the dust particles hanging in the Martian sky are not tiny like gas molecules. They are relatively large.",
+    "visual_beat": "3D scale comparison of tiny nitrogen molecule versus microscopic Martian dust particle."
+  },
+  {
+    "scene_number": 25,
+    "narration": "On average, Martian dust grains are roughly equal in size to the wavelength of visible light—around zero point five micrometers across.",
+    "visual_beat": "Measurement graphic showcasing dust grain measuring 500 nanometers alongside a wave of light."
+  },
+  {
+    "scene_number": 26,
+    "narration": "When light encounters particles that are roughly the same size as its wavelength, a totally different physics mechanism takes over.",
+    "visual_beat": "Title overlay 'Mie Scattering' appearing as light rays hit a mid-sized spherical dust particle."
+  },
+  {
+    "scene_number": 27,
+    "narration": "This phenomenon is known as Mie scattering, named after the German physicist Gustav Mie who mathematically described it in 1908.",
+    "visual_beat": "Historical portrait illustration of Gustav Mie next to optical ray diagrams."
+  },
+  {
+    "scene_number": 28,
+    "narration": "Unlike Rayleigh scattering which scatters light in all directions equally, Mie scattering concentrates light forward along the beam's original path.",
+    "visual_beat": "Comparison diagram showing Rayleigh uniform sphere scatter pattern versus Mie elongated forward-focused cone pattern."
+  },
+  {
+    "scene_number": 29,
+    "narration": "Mie scattering is also slightly selective about which colors pass through forward, favoring shorter wavelengths like blue light.",
+    "visual_beat": "Animation showing blue light passing straight through a dust cloud while red light spreads outward at wider angles."
+  },
+  {
+    "scene_number": 30,
+    "narration": "When the Martian sun sits high in the sky at noon, sunlight travels through a relatively short column of dusty atmosphere.",
+    "visual_beat": "Sun overhead on Mars, rays taking a short vertical path down through thin dusty atmosphere layer."
+  },
+  {
+    "scene_number": 31,
+    "narration": "The subtle blue forward scattering is overwhelmed by the ambient rusty red light bounced around by all the dust across the wide sky.",
+    "visual_beat": "Broad horizon view on Mars showing bright yellowish midday sky stretching into distant reddish haze."
+  },
+  {
+    "scene_number": 32,
+    "narration": "As evening approaches and the sun drops toward the Martian horizon, the geometric angle changes dramatically.",
+    "visual_beat": "Timelapse diagram showing sun sinking low, extending the atmospheric light path through dust."
+  },
+  {
+    "scene_number": 33,
+    "narration": "Sunlight must now pass through nearly six times more dusty atmosphere than it did at midday to reach an observer's line of sight.",
+    "visual_beat": "Cutaway of Mars globe showing light rays slicing through a thick horizontal wedge of atmosphere."
+  },
+  {
+    "scene_number": 34,
+    "narration": "As this dense sunbeam passes through miles of dust, Mie scattering channels the blue wavelengths straight forward toward the sun’s disk.",
+    "visual_beat": "Beam of light filtering through dust layer with blue rays bending inward into a forward cone as red rays scatter away."
+  },
+  {
+    "scene_number": 35,
+    "narration": "The red and yellow light gets scattered away sideways into wider angles, leaving a vibrant concentration of blue light right around the sun.",
+    "visual_beat": "Simulation showing reddish light spreading wide into surrounding sky while blue light focuses around the sun center."
+  },
+  {
+    "scene_number": 36,
+    "narration": "If you look directly toward the setting sun on Mars, you see the direct, concentrated blue light that passed straight through the dust.",
+    "visual_beat": "Close-up on the small Martian solar disk surrounded by a glowing cyan halo against a dusk sky."
+  },
+  {
+    "scene_number": 37,
+    "narration": "This creates a striking halo of cool, pale blue light radiating up to ten degrees around the sun.",
+    "visual_beat": "Angular measurement visual overlay showing 10-degree blue dome surrounding the sun on Mars."
+  },
+  {
+    "scene_number": 38,
+    "narration": "Further away from the sun, the sky retains its warm, rusty tint, creating a mesmerizing gradient between red and blue.",
+    "visual_beat": "High dynamic range view showing pale blue center softly transitioning into salmon-pink and reddish-brown outer sky."
+  },
+  {
+    "scene_number": 39,
+    "narration": "Humanity got its first real glimpse of this otherworldly phenomenon back in 1976 when NASA’s Viking 1 lander touched down.",
+    "visual_beat": "Archival photos and computer reconstruction of Viking 1 lander resting on reddish Martian soil."
+  },
+  {
+    "scene_number": 40,
+    "narration": "Viking sent back historical photos showing a surprisingly bright twilight glow with distinct bluish tones near the horizon.",
+    "visual_beat": "Grainy vintage color photo from Viking 1 showing early evening sky with blue hue."
+  },
+  {
+    "scene_number": 41,
+    "narration": "Decades later, the Spirit, Opportunity, and Curiosity rovers captured high-resolution color sequences of Martian sunsets in astonishing detail.",
+    "visual_beat": "Sequence of high-def images from Curiosity rover showing dusk progressing in vivid blue hues."
+  },
+  {
+    "scene_number": 42,
+    "narration": "To ensure color accuracy, these robotic explorers carry color calibration targets on their decks—essentially tiny artist palettes for space.",
+    "visual_beat": "Extreme close-up of Curiosity's MASTCAM color calibration target with chips of known color values."
+  },
+  {
+    "scene_number": 43,
+    "narration": "By imaging these targets under Martian sunlight, scientists can adjust camera settings to reveal the exact colors a human eye would see.",
+    "visual_beat": "Computer split-screen adjusting raw image data using calibration targets to true-color rendered image."
+  },
+  {
+    "scene_number": 44,
+    "narration": "In 2021, the Perseverance rover captured breathtaking video frames of a Martian sunset, confirming the eerie blue glow once again.",
+    "visual_beat": "Smooth motion clip of sun setting behind Jezero Crater ridge taken by Perseverance."
+  },
+  {
+    "scene_number": 45,
+    "narration": "What makes these images so profound is how they flip our terrestrial expectations of nature completely on their head.",
+    "visual_beat": "Dual viewer perspective comparing standing on Earth seeing warm red with standing on Mars seeing cool blue."
+  },
+  {
+    "scene_number": 46,
+    "narration": "On Earth, we have blue skies by day and red sunsets by night. On Mars, it is a rusty red sky by day and a blue sunset by night.",
+    "visual_beat": "Side-by-side comparison animation contrasting day and night atmospheric colors of both planets."
+  },
+  {
+    "scene_number": 47,
+    "narration": "It reminds us that even familiar experiences like sunset are shaped entirely by the unique physics of the world we stand upon.",
+    "visual_beat": "Wide cinematic shot of a future astronaut standing on a Martian ridge watching the blue twilight fall."
+  },
+  {
+    "scene_number": 48,
+    "narration": "Someday, human explorers will stand on the red soil of Mars, look west, and marvel at a serene blue sun dipping below an alien horizon.",
+    "visual_beat": "Slow zoom back from the astronaut silhouette as the pale blue sun fades behind the dark rocky horizon into black."
+  }
+]
