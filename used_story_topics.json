@@ -143,5 +143,10 @@
     "title": "Why Metals Expand in the Heat: The Thermal Jitter of Atomic Lattices",
     "topic": "The exact thermodynamic mechanism of atomic vibrational amplitude expansion and anharmonic potential wells that causes solid metals to expand when heated.",
     "description": "An in-depth scientific documentary exploring the microscopic vibrational choreography of solid metals. We investigate how thermal energy increases atomic oscillation amplitudes within asymmetric potential wells, forcing the average interatomic distance to grow and macroscopically expanding the material."
+  },
+  {
+    "title": "Why Water Bends Toward a Comb: The Electrostatic Deflection of Polar Molecules",
+    "topic": "The exact molecular mechanism of electrostatic induction and dipole orientation that causes a steady stream of liquid water to bend toward a statically charged comb.",
+    "description": "An in-depth scientific documentary exploring the fascinating interaction between static electric fields and molecular polarity. We investigate how the permanent dipole moment of water molecules causes them to align and be physically pulled toward a charged object."
   }
 ]
