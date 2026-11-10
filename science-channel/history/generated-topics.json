@@ -38,7 +38,8 @@
     "Why do fluorescent lights hum?",
     "Why do rings form around planets?",
     "Why does copper turn green?",
-    "Why are sunsets on Mars blue?"
+    "Why are sunsets on Mars blue?",
+    "Why do cats purr?"
   ],
   "topic_details": [
     {
@@ -220,6 +221,11 @@
       "title": "Why are sunsets on Mars blue?",
       "angle": "Exploring how the unique scattering of light by fine Martian dust particles flips our familiar warm sunset colors into an eerie, pale blue glow.",
       "pillar": "Space and astronomy"
+    },
+    {
+      "title": "Why do cats purr?",
+      "angle": "Explore the surprising evolutionary mechanics behind feline purring, examining how this rhythmic low-frequency vocalization goes far beyond simple contentment to act as a physical self-healing mechanism and a tool for social bonding.",
+      "pillar": "Animals and animal behaviour"
     }
   ]
 }
