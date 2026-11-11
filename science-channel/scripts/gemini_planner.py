@@ -88,7 +88,7 @@ def gemini(prompt, temperature=0.7):
         request_prompt = prompt
         last_error = None
 
-        # Two attempts per model for transient errors or malformed model output,
+        # Three bounded attempts per model for transient errors or malformed output,
         # then move to the next configured model instead of stalling the workflow.
         for attempt in range(3):
             payload = {
@@ -166,7 +166,7 @@ def gemini(prompt, temperature=0.7):
             except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError) as exc:
                 last_error = exc
                 print(
-                    f"Gemini model {model} failed (attempt {attempt + 1}/2): {exc}",
+                    f"Gemini model {model} failed (attempt {attempt + 1}/3): {exc}",
                     flush=True
                 )
                 if attempt < 2:
