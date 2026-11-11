@@ -33,8 +33,9 @@ TIMEOUT=(20,180)
 _OVH_LAST_CALL=0.0
 
 def parse_json(raw):
+    """Parse a full JSON object, or recover complete scenes from a truncated story."""
     fence=chr(96)*3
-    raw=raw.strip()
+    raw=str(raw or "").strip()
     if raw.startswith(fence):
         raw=raw.split("\n",1)[-1]
         if raw.endswith(fence): raw=raw[:-3]
@@ -50,8 +51,118 @@ def parse_json(raw):
         elif ch=="{": depth+=1
         elif ch=="}":
             depth-=1
-            if depth==0: return json.loads(raw[start:i+1])
-    raise ValueError("LLM returned incomplete JSON")
+            if depth==0:
+                try:
+                    return json.loads(raw[start:i+1])
+                except json.JSONDecodeError:
+                    break
+
+    decoder=json.JSONDecoder()
+    recovered={}
+    for field in ("mode","title","topic","description","visual_style","continuity_bible"):
+        match=re.search(r'"'+field+r'"\\s*:\\s*',raw)
+        if match:
+            try:
+                recovered[field],_=decoder.raw_decode(raw,match.end())
+            except (ValueError,json.JSONDecodeError):
+                pass
+    scene_match=re.search(r'"scenes"\\s*:\\s*\\[',raw)
+    if scene_match:
+        cursor=scene_match.end()
+        scenes=[]
+        while cursor<len(raw):
+            while cursor<len(raw) and (raw[cursor].isspace() or raw[cursor]==","):
+                cursor+=1
+            if cursor>=len(raw) or raw[cursor]=="]":
+                break
+            try:
+                item,next_cursor=decoder.raw_decode(raw,cursor)
+            except (ValueError,json.JSONDecodeError):
+                break
+            if not isinstance(item,dict):
+                break
+            scenes.append(item)
+            cursor=next_cursor
+        if scenes and (recovered.get("topic") or recovered.get("title")):
+            recovered["scenes"]=scenes
+            print(
+                f"Recovered {len(scenes)} complete scenes from a truncated planner response; "
+                "the missing scenes will be regenerated.",
+                flush=True,
+            )
+            return recovered
+    raise ValueError("LLM returned malformed or incomplete JSON without recoverable scenes")
+
+
+def repair_story_scenes(story,count):
+    """Generate missing scenes in small batches while retaining valid scenes."""
+    scenes=story.get("scenes")
+    if not isinstance(scenes,list):
+        scenes=[]
+    if len(scenes)>count:
+        del scenes[count:]
+    batch=0
+    while len(scenes)<count:
+        batch+=1
+        needed=min(6,count-len(scenes))
+        prompt=f"""
+Continue this exact story. Do not change its topic, format, characters, style or established facts.
+Mode: {story.get("mode","science")}
+Title: {story.get("title","")}
+Topic: {story.get("topic","")}
+Description: {story.get("description","")}
+Visual style: {story.get("visual_style","")}
+Continuity bible: {story.get("continuity_bible","")}
+The story already contains {len(scenes)} complete scenes. Create exactly {needed} NEW scenes, numbered {len(scenes)+1} through {len(scenes)+needed}.
+The last existing scenes are:
+{json.dumps(scenes[-4:],ensure_ascii=False)}
+Return JSON only in this shape:
+{{"scenes":[{{"scene_number":{len(scenes)+1},"heading":"short heading","narration":"2-4 natural spoken sentences","visual_description":"concrete visible action and composition","image_prompt":"standalone detailed polished 3D CGI image prompt; specify camera, composition, lighting, materials, depth and 16:9; no text, logo or watermark"}}]}}
+Every field must be non-empty. Preserve continuity, avoid repeating prior scenes and move the story forward. Finish the story with a memorable conclusion in the final batch.
+"""
+        added=False
+        for attempt in range(1,4):
+            try:
+                result=gemini(prompt)
+                new_scenes=result.get("scenes",[])
+                if not isinstance(new_scenes,list):
+                    raise ValueError("scene repair response has no scenes array")
+                accepted=[]
+                for item in new_scenes:
+                    if not isinstance(item,dict):
+                        continue
+                    if not all(isinstance(item.get(key),str) and item[key].strip()
+                               for key in ("heading","narration","image_prompt")):
+                        continue
+                    if not isinstance(item.get("visual_description"),str) or not item["visual_description"].strip():
+                        item["visual_description"]=item["image_prompt"].strip()
+                    accepted.append(item)
+                if not accepted:
+                    raise ValueError("scene repair returned no complete scenes")
+                for item in accepted[:needed]:
+                    item["scene_number"]=len(scenes)+1
+                    scenes.append(item)
+                story["scenes"]=scenes
+                print(
+                    f"Scene repair batch {batch}: added {min(len(accepted),needed)}; "
+                    f"{len(scenes)}/{count} scenes complete.",
+                    flush=True,
+                )
+                added=True
+                break
+            except Exception as exc:
+                print(
+                    f"Scene repair batch {batch}, attempt {attempt}/3 failed: "
+                    f"{type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+                if attempt<3:
+                    time.sleep(attempt*4)
+        if not added:
+            raise RuntimeError(
+                f"Could not repair story to {count} scenes; {len(scenes)} valid scenes are retained."
+            )
+    return scenes
 
 def gemini(prompt):
     errors=[]
@@ -266,9 +377,24 @@ Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
 "scenes":[{{"scene_number":1,"heading":"short heading","narration":"2-4 natural spoken sentences",
 "visual_description":"concrete visible action/composition","image_prompt":"standalone detailed prompt for a polished 3D CGI render; specify camera, composition, lighting, materials, depth and visual style; 16:9; no text, logo or watermark"}}]}}
 Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. For every scene, ALWAYS include all four non-empty fields: heading, narration, visual_description, and image_prompt. visual_description must be a short plain-language description and must not be omitted. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design. The title and story must be based on a newly invented topic, not an existing topics.txt entry or a previously used core topic."""
-    data=gemini(prompt); scenes=data.get("scenes")
-    if data.get("mode") not in ("science","animated"): raise ValueError("Gemini must classify mode as science or animated")
-    if not isinstance(scenes,list) or len(scenes)!=count: raise ValueError(f"Expected {count} scenes")
+    data=gemini(prompt)
+    if not isinstance(data,dict):
+        raise ValueError("Planner returned a non-object response.")
+    if not data.get("topic") and data.get("title"):
+        data["topic"]=data["title"]
+    if not data.get("title") and data.get("topic"):
+        data["title"]=str(data["topic"])[:100]
+    if not data.get("topic") or not data.get("title"):
+        raise ValueError("Planner response did not contain a usable title/topic.")
+    if data.get("mode") not in ("science","animated"):
+        data["mode"]="science"
+        print("Planner omitted the format; defaulting safely to science documentary.",flush=True)
+    data.setdefault("description",f"An accessible exploration of {data['topic']}.")
+    data.setdefault("visual_style","Polished cinematic 3D CGI with consistent lighting, materials and depth.")
+    data.setdefault("continuity_bible","Maintain a consistent visual style and continuity throughout every scene.")
+    scenes=repair_story_scenes(data,count)
+    if not isinstance(scenes,list) or len(scenes)!=count:
+        raise ValueError(f"Expected exactly {count} scenes after repair; got {len(scenes) if isinstance(scenes,list) else 'invalid'}.")
     for i,s in enumerate(scenes,1):
         if not isinstance(s,dict) or s.get("scene_number")!=i: raise ValueError(f"Scene {i} out of order")
         # Gemini occasionally omits the redundant visual_description field even
