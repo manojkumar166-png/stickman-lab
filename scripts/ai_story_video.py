@@ -346,7 +346,7 @@ def generation_prompt(scene):
 def generate_all(scenes,folder):
     folder.mkdir(parents=True,exist_ok=True)
     failures=[]
-    providers=(("OVHcloud anonymous",ovh,5),("AI Horde anonymous",ai_horde,1),
+    providers=(("OVHcloud anonymous",ovh,2),("AI Horde anonymous",ai_horde,1),
                ("Vexa/DeepAI+Flux anonymous",vexa,1),("Pollinations direct",pollinations,1))
     for s in scenes:
         n=s["scene_number"]
