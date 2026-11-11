@@ -7,7 +7,7 @@ import requests
 GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
-KILO_FALLBACK_MODELS = [x.strip() for x in os.getenv("KILO_FALLBACK_MODELS", "nvidia/nemotron-3.5-lightning:free,openrouter/free").split(",") if x.strip()]
+KILO_FALLBACK_MODELS = [x.strip() for x in os.getenv("KILO_FALLBACK_MODELS", "nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
 
 class PermanentProviderError(RuntimeError):
     """A non-retryable provider response such as HTTP 400 or 404."""
@@ -64,10 +64,13 @@ def _call_gemini(api_key, model, prompt, attempts=3):
 
 
 def _call_openai_compatible(provider, model, prompt, attempts=3):
-    """Call an OpenAI-compatible free inference endpoint and normalize its response."""
+    """Call an OpenAI-compatible inference endpoint with compatibility fallbacks."""
     if provider == "Groq":
         url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {GROQ_KEY}",
+            "Content-Type": "application/json",
+        }
         max_tokens = 16000
     elif provider == "Kilo":
         url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
@@ -76,44 +79,75 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
     else:
         raise ValueError(f"Unsupported backup provider: {provider}")
 
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Return exactly one valid JSON object matching the requested schema. "
+                "Do not use Markdown fences or add commentary."
+            ),
+        },
+        {"role": "user", "content": prompt},
+    ]
+    base_body = {"model": model, "messages": messages}
+    if provider == "Groq":
+        full_body = {
+            **base_body,
+            "temperature": 0.8,
+            "max_completion_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        request_bodies = [full_body]
+    else:
+        # Some free routed models reject optional sampling/token controls.
+        # Retry one time with the strict minimum OpenAI-compatible payload.
+        request_bodies = [
+            {**base_body, "max_tokens": max_tokens},
+            base_body,
+        ]
+
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
-            body = {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return exactly one valid JSON object matching the requested schema. "
-                            "Do not use Markdown fences or add commentary."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.8,
-                ("max_completion_tokens" if provider == "Groq" else "max_tokens"): max_tokens,
-            }
-            # Kilo's anonymous free router is more compatible without JSON-mode
-            # constraints; the prompt itself requires strict JSON.
-            if provider == "Groq":
-                body["response_format"] = {"type": "json_object"}
-            response = requests.post(url, headers=headers, json=body, timeout=(20, 180))
-            if response.status_code in (408, 425, 429, 500, 502, 503, 504):
-                raise RuntimeError(
-                    f"{provider} HTTP {response.status_code}: {response.text[:900]}"
+            response = None
+            for variant_index, body in enumerate(request_bodies):
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json=body,
+                    timeout=(20, 240),
                 )
-            if not response.ok:
-                error = f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
-                if 400 <= response.status_code < 500 and response.status_code not in (408, 425, 429):
-                    raise PermanentProviderError(error)
-                raise RuntimeError(error)
+                if response.status_code == 400 and variant_index + 1 < len(request_bodies):
+                    print(
+                        f"{provider} model {model} rejected optional parameters; "
+                        "retrying with the minimal request body.",
+                        flush=True,
+                    )
+                    continue
+                if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                    raise RuntimeError(
+                        f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
+                    )
+                if not response.ok:
+                    error = (
+                        f"{provider} HTTP {response.status_code}: "
+                        f"{response.text[:1400]}"
+                    )
+                    if 400 <= response.status_code < 500:
+                        raise PermanentProviderError(error)
+                    raise RuntimeError(error)
+                break
+
+            if response is None:
+                raise RuntimeError(f"{provider} returned no HTTP response.")
             choices = response.json().get("choices") or []
             message = choices[0].get("message", {}) if choices else {}
             content = message.get("content", "")
             if isinstance(content, list):
                 content = "".join(
-                    part.get("text", "") for part in content if isinstance(part, dict)
+                    part.get("text", "")
+                    for part in content
+                    if isinstance(part, dict)
                 )
             if not isinstance(content, str) or not content.strip():
                 raise RuntimeError(f"{provider} returned an empty completion.")
@@ -121,7 +155,10 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
             return {"candidates": [{"content": {"parts": [{"text": content}]}}]}
         except PermanentProviderError as exc:
             last_error = exc
-            print(f"{provider} rejected this model/request; skipping retries: {exc}", flush=True)
+            print(
+                f"{provider} rejected model {model}; advancing to another model: {exc}",
+                flush=True,
+            )
             break
         except Exception as exc:
             last_error = exc
@@ -131,8 +168,10 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
                 flush=True,
             )
             if attempt < attempts:
-                time.sleep(min(20, attempt * 5))
-    raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
+                time.sleep(min(30, attempt * 7))
+    raise RuntimeError(
+        f"{provider} failed after {attempts} attempts: {last_error}"
+    ) from last_error
 
 
 def _call_story_model(api_key, model, prompt):
