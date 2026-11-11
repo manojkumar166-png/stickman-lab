@@ -1,0 +1,152 @@
+name: Free 3D Explainer Video Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_minutes:
+        description: "Approximate narration length (3–8 minutes)"
+        required: true
+        default: "6"
+        type: choice
+        options:
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+          - "7"
+          - "8"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-3d-explainer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Generate a free 3D-style explainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install free rendering tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg blender fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install requests Pillow edge-tts gTTS
+
+      - name: Generate story, original 3D scenes, narration and MP4
+        env:
+          TARGET_MINUTES: ${{ inputs.target_minutes }}
+          PYTHONUNBUFFERED: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import shutil
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from scripts.generate_story import generate_story
+          from scripts.make_voice import make_voice
+          from scripts.free_visuals import choose_style
+          from scripts.render_3d_stills import render_3d_stills
+          from scripts.render_video import render_video
+
+          root = Path.cwd()
+          output = root / "output"
+          output.mkdir(exist_ok=True)
+
+          config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+          config["target_minutes"] = int(os.environ.get("TARGET_MINUTES", "6"))
+          # About 30–32 spoken words per scene gives roughly six minutes at 36 scenes.
+          config["scene_count"] = max(18, config["target_minutes"] * 6)
+          config["topic_history_file"] = "free_3d_topic_history.json"
+
+          # No paid API key is required. The existing planner tries anonymous
+          # free Kilo-hosted models when Gemini/Groq credentials are absent.
+          story = generate_story(root, config)
+          scenes = story.get("scenes", [])
+          if not isinstance(scenes, list) or len(scenes) != config["scene_count"]:
+              raise RuntimeError(
+                  f"Expected {config['scene_count']} scenes; got "
+                  f"{len(scenes) if isinstance(scenes, list) else 'invalid'}."
+              )
+
+          stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+          topic = str(story.get("topic") or "Science explainer")
+          story["visual_style"] = choose_style(topic)
+          story["visual_rendering"] = "Blender procedural 3D stills with Pillow fallback"
+
+          story_path = output / f"story-{stamp}.json"
+          story_path.write_text(
+              json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+
+          scene_dir = output / f"scenes-{stamp}"
+          scene_dir.mkdir(parents=True, exist_ok=True)
+          width = int(config.get("width", 1280))
+          height = int(config.get("height", 720))
+
+          print(f"Topic: {topic}", flush=True)
+          print(f"Scenes: {len(scenes)} | target: {config['target_minutes']} minutes", flush=True)
+          credits = render_3d_stills(story, scene_dir, width, height)
+          (output / f"image-credits-{stamp}.json").write_text(
+              json.dumps(credits, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+
+          narration = "\n\n".join(
+              str(scene.get("narration", "")).strip()
+              for scene in scenes if scene.get("narration")
+          )
+          if not narration.strip():
+              raise RuntimeError("The generated story has no narration.")
+          audio_path = output / f"narration-{stamp}.mp3"
+          make_voice(narration, audio_path, config)
+
+          video_path = output / f"free-3d-explainer-{stamp}.mp4"
+          render_video(scene_dir, audio_path, video_path, story, config)
+          if not video_path.is_file() or video_path.stat().st_size < 100_000:
+              raise RuntimeError("The final MP4 is missing or unexpectedly small.")
+
+          summary = {
+              "topic": topic,
+              "target_minutes": config["target_minutes"],
+              "scene_count": len(scenes),
+              "visual_style": story["visual_style"],
+              "video": video_path.name,
+              "image_credits": f"image-credits-{stamp}.json",
+          }
+          (output / f"summary-{stamp}.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(f"VIDEO_READY={video_path}", flush=True)
+          PY
+
+      - name: Upload MP4 and production files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: free-3d-explainer-${{ github.run_number }}
+          path: |
+            output/free-3d-explainer-*.mp4
+            output/story-*.json
+            output/image-credits-*.json
+            output/summary-*.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
