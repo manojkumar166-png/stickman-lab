@@ -6,7 +6,16 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT / "settings.json").read_text())
-API_KEY = os.environ["GEMINI_API_KEY"]
+API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
+KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
+KILO_FALLBACK_MODELS = [
+    item.strip() for item in os.getenv(
+        "KILO_FALLBACK_MODELS",
+        "nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free",
+    ).split(",") if item.strip()
+]
 MODEL = os.getenv("GEMINI_MODEL") or SETTINGS["gemini_model"]
 API = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 HISTORY = ROOT / "history/generated-topics.json"
@@ -64,7 +73,10 @@ def gemini(prompt, temperature=0.7):
     succeeds, it becomes the preferred model for the remaining calls in this process.
     """
     global MODEL, API
-    configured = [MODEL] + SETTINGS.get("gemini_fallback_models", [])
+    configured = ([MODEL] + SETTINGS.get("gemini_fallback_models", [])) if API_KEY else []
+    if not API_KEY:
+        failures_note = "GEMINI_API_KEY is not configured; skipped Gemini."
+        print(failures_note, flush=True)
     # Preserve order while removing duplicates and empty entries.
     model_candidates = list(dict.fromkeys(
         str(model).strip() for model in configured if str(model).strip()
@@ -78,16 +90,18 @@ def gemini(prompt, temperature=0.7):
 
         # Two attempts per model for transient errors or malformed model output,
         # then move to the next configured model instead of stalling the workflow.
-        for attempt in range(2):
+        for attempt in range(3):
             payload = {
                 "contents": [{"parts": [{"text": request_prompt}]}],
                 "generationConfig": {
-                    "responseMimeType": "application/json"
+                    "responseMimeType": "application/json",
+                    "maxOutputTokens": 16000,
+                    "temperature": temperature,
                 }
             }
             try:
                 response = requests.post(
-                    model_api, params={"key": API_KEY}, json=payload, timeout=90
+                    model_api, params={"key": API_KEY}, json=payload, timeout=(20, 180)
                 )
                 if not response.ok:
                     detail = response.text[:2000]
@@ -142,15 +156,20 @@ def gemini(prompt, temperature=0.7):
                     print(f"Gemini model active: {model}", flush=True)
                 return result
 
-            except requests.HTTPError:
-                raise
+            except requests.HTTPError as exc:
+                last_error = exc
+                print(
+                    f"Gemini model {model} rejected the request; moving to the next provider/model: {exc}",
+                    flush=True,
+                )
+                break
             except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError) as exc:
                 last_error = exc
                 print(
                     f"Gemini model {model} failed (attempt {attempt + 1}/2): {exc}",
                     flush=True
                 )
-                if attempt == 0:
+                if attempt < 2:
                     request_prompt = (
                         prompt +
                         "\n\nAUTOMATIC RETRY: The previous request on model " + model +
@@ -158,7 +177,8 @@ def gemini(prompt, temperature=0.7):
                         ". Return one complete valid JSON object only. Correct the issue, " +
                         "escape all strings correctly, and do not include Markdown or commentary."
                     )
-                    time.sleep(3)
+                    delay = min(30, 2 ** (attempt + 1))
+                    time.sleep(delay)
 
         failures.append(f"{model}: {last_error}")
         if model_index < len(model_candidates) - 1:
@@ -167,8 +187,122 @@ def gemini(prompt, temperature=0.7):
                 flush=True
             )
 
+    # Try Groq when its optional secret is configured.
+    if GROQ_API_KEY:
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        for attempt in range(1, 4):
+            try:
+                response = requests.post(
+                    groq_url,
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": GROQ_MODEL,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "max_completion_tokens": 16000,
+                        "temperature": temperature,
+                    },
+                    timeout=(20, 180),
+                )
+                if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                    raise RuntimeError(
+                        f"Groq HTTP {response.status_code}: {response.text[:1200]}"
+                    )
+                response.raise_for_status()
+                choices = response.json().get("choices") or []
+                result_text = (
+                    choices[0].get("message", {}).get("content", "")
+                    if choices else ""
+                )
+                result = parse_gemini_json(result_text)
+                print(f"Groq planner fallback active: {GROQ_MODEL}", flush=True)
+                return result
+            except Exception as exc:
+                failures.append(f"Groq attempt {attempt}/3: {type(exc).__name__}: {exc}")
+                if attempt < 3:
+                    time.sleep(min(30, attempt * 5))
+    else:
+        print("Groq planner fallback skipped: GROQ_API_KEY is not configured.", flush=True)
+
+    # Kilo Auto Free works without an API key. Try its current free catalogue
+    # after Gemini/Groq, using a minimal body if a routed model rejects max_tokens.
+    kilo_url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
+    kilo_models = list(dict.fromkeys([KILO_MODEL] + KILO_FALLBACK_MODELS))
+    kilo_errors = []
+    for kilo_model in kilo_models:
+        messages = [
+            {
+                "role": "system",
+                "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+        request_bodies = [
+            {"model": kilo_model, "messages": messages, "max_tokens": 16000},
+            {"model": kilo_model, "messages": messages},
+        ]
+        for attempt in range(1, 3):
+            try:
+                response = None
+                for variant_index, body in enumerate(request_bodies):
+                    response = requests.post(
+                        kilo_url,
+                        headers={"Content-Type": "application/json"},
+                        json=body,
+                        timeout=(20, 240),
+                    )
+                    if response.status_code == 400 and variant_index + 1 < len(request_bodies):
+                        print(
+                            f"Kilo model {kilo_model} rejected optional token limits; retrying minimal payload.",
+                            flush=True,
+                        )
+                        continue
+                    if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                        raise RuntimeError(
+                            f"Kilo HTTP {response.status_code}: {response.text[:1200]}"
+                        )
+                    if not response.ok:
+                        error = f"Kilo model {kilo_model} HTTP {response.status_code}: {response.text[:1400]}"
+                        kilo_errors.append(error)
+                        print(error, flush=True)
+                        if 400 <= response.status_code < 500:
+                            break
+                        raise RuntimeError(error)
+                    break
+                if response is None or not response.ok:
+                    break
+                choices = response.json().get("choices") or []
+                result_text = (
+                    choices[0].get("message", {}).get("content", "")
+                    if choices else ""
+                )
+                if isinstance(result_text, list):
+                    result_text = "".join(
+                        part.get("text", "") for part in result_text if isinstance(part, dict)
+                    )
+                result = parse_gemini_json(result_text)
+                print(f"Kilo anonymous planner fallback active: {kilo_model}", flush=True)
+                return result
+            except Exception as exc:
+                kilo_errors.append(
+                    f"{kilo_model} attempt {attempt}/2: {type(exc).__name__}: {exc}"
+                )
+                if attempt < 2:
+                    time.sleep(attempt * 7)
+
     raise RuntimeError(
-        "All configured Gemini models failed. " + " | ".join(failures)
+        "All configured story-planning providers failed. "
+        + "Gemini: " + (" | ".join(failures) if failures else "skipped")
+        + " | Kilo: " + (" | ".join(kilo_errors) if kilo_errors else "no model response")
     )
 
 def gemini_validated(prompt, validator, stage, temperature=0.7, attempts=3):
