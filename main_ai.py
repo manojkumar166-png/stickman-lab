@@ -58,9 +58,6 @@ def main():
             story_path = OUT / f"story-{day}-{run_number}.json"
         scene_day = day if run_number == 1 else f"{day}-{run_number}"
 
-    if not os.getenv("GEMINI_API_KEY"):
-        raise RuntimeError("GEMINI_API_KEY is missing.")
-
     if not pending_story:
         story = generate_story(ROOT, config)
         story["completed"] = False
