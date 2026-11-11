@@ -86,7 +86,6 @@ jobs:
           GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
           KILO_MODEL: ${{ vars.KILO_MODEL || 'kilo-auto/free' }}
           KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-lightning:free,openrouter/free' }}
-          KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-lightning:free,openrouter/free' }}
         run: python -u main_ai.py
 
       - name: Generate and burn karaoke subtitles
