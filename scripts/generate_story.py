@@ -88,7 +88,7 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.8,
-                "max_tokens": max_tokens,
+                ("max_completion_tokens" if provider == "Groq" else "max_tokens"): max_tokens,
             }
             # Kilo's anonymous free router is more compatible without JSON-mode
             # constraints; the prompt itself requires strict JSON.
