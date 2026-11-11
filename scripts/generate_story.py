@@ -322,7 +322,7 @@ def _read_history(path):
     return []
 
 
-def _local_story_fallback(niche, desired_scene_count):
+def _local_story_fallback(niche, desired_scene_count, history=None):
     """Deterministic offline story: keep rendering possible when every API is down."""
     banks = {
         "science": [
@@ -357,7 +357,13 @@ def _local_story_fallback(niche, desired_scene_count):
         ],
     }
     options = banks.get(str(niche).lower(), banks["general education"])
-    topic, concept = random.choice(options)
+    history = history or []
+    fresh_options = [item for item in options if not _is_repeat(item[0], history)]
+    if fresh_options:
+        topic, concept = random.choice(fresh_options)
+    else:
+        topic, concept = random.choice(options)
+        topic = f"How can we understand {concept} through a fresh everyday example?"
     beats = [
         ("Start with a question", f"Everyday experience gives us clues about {concept}, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.", "A curious stick figure studies a simple everyday example", "home", "think"),
         ("Notice the key parts", f"First identify the main parts involved in {concept}. Each part has a role, and understanding those roles makes the larger process easier to follow.", "A character points to three simple illustrated components", "lab", "point"),
@@ -550,15 +556,13 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         break
 
     if story is None:
-        if last_scene_count is not None:
-            raise RuntimeError(
-                f"Gemini could not produce exactly {desired_scene_count} scenes after 5 story attempts "
-                f"(last response contained {last_scene_count}). No story or topic history was saved; rerun to try again."
-            )
-        raise RuntimeError(
-            "Gemini could not produce a sufficiently new topic after 5 category attempts. "
-            f"Last rejected topic: {last_duplicate!r}. No history was changed; rerun to try again."
+        print(
+            "Remote providers did not produce a valid, complete, non-repeated story after "
+            "five attempts; switching to the offline story generator.",
+            flush=True,
         )
+        story = _local_story_fallback(niche, desired_scene_count, history)
+        used_model = "offline:template"
 
     print(f"Story generated with {used_model}: {story['topic']}")
     scenes = story.get("scenes", [])
