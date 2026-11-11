@@ -3,7 +3,7 @@
 This repository contains **two related but separate video pipelines**:
 
 1. **Science Channel (episode workflow):** Gemini plans a new 48-scene episode, you review the narration and create its 48 images, and GitHub Actions renders the finished 8–10 minute video. Telegram can deliver prompts, receive images, and deliver the final MP4.
-2. **AI Video Experiment:** a separate generator creates a narrated video using Gemini for the story and a resilient image-provider chain (Cloudflare, AI Horde and OVHcloud) for scene artwork.
+2. **AI Video Experiment:** a separate generator creates a narrated video using Gemini/Groq/Kilo story-planning fallbacks and a resilient image-provider chain (Cloudflare, OVHcloud, AI Horde, Vexa and Pollinations) for scene artwork.
 
 The Science Channel pipeline is the current episode-based workflow. Its planning, Telegram upload, ZIP import, rendering and cleanup workflows operate on **main only**. Do not use the adaptive-cinematic-effects branch for Science Channel episodes or uploads.
 
@@ -218,7 +218,7 @@ Make changes on **main** unless you are deliberately working on a separate exper
 | Legacy AI experiment topic ideas | Root `topics.txt` | Separate from `science-channel/topics.txt`. |
 | Legacy AI experiment illustration style | `scripts/make_art.py` | Edit the `STYLE` string. The active Cloudflare model URL is also in this file. |
 | Legacy AI experiment narration and scene-generation instructions | `scripts/generate_story.py` | Edit the prompt and model fallback list. |
-| AI Video Experiment image providers and fallback order | `scripts/make_art.py` | Cloudflare primary, AI Horde backup and OVHcloud final fallback. |
+| AI Video Experiment image providers and fallback order | `scripts/make_art.py` | Cloudflare primary; OVHcloud, AI Horde, Vexa and Pollinations are independent fallbacks. Cloudflare 429 disables Cloudflare for the rest of the run so quota exhaustion does not block all scenes. |
 
 **Important:** Science Channel is a fixed 48-scene pipeline. Do not change `scene_count` or `required_uploaded_images` from 48 in settings alone. The planner, Telegram receiver, ZIP importer, render validation, READY logic and image prompts also assume 48. Changing the count requires a coordinated code/workflow update and testing.
 
