@@ -62,14 +62,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/huggingface
           key: whisperx-large-v3-turbo-${{ runner.os }}-v1
-      - name: Install FFmpeg 7 shared libraries for TorchCodec
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba
-          ./bin/micromamba create -y -p "$RUNNER_TEMP/ffmpeg7" -c conda-forge "ffmpeg=7.1.1"
-          echo "$RUNNER_TEMP/ffmpeg7/bin" >> "$GITHUB_PATH"
-          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/ffmpeg7/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
       - name: Install FFmpeg and dependencies
         run: |
           set -euo pipefail
@@ -84,31 +76,7 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip install --retries 5 --timeout 60 --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS whisperx faster-whisper
-      - name: Pin TorchCodec for PyTorch 2.8 and verify audio decoding
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --retries 5 --timeout 60 --force-reinstall --no-deps "torchcodec==0.7.0"
-          python - <<'PY'
-          import subprocess
-          import tempfile
-          from pathlib import Path
-          import torch
-          from torchcodec.decoders import AudioDecoder
-
-          print("PyTorch:", torch.__version__)
-          with tempfile.TemporaryDirectory() as directory:
-              sample = Path(directory) / "torchcodec-smoke-test.wav"
-              subprocess.run([
-                  "ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-                  "-i", "sine=frequency=440:duration=1", "-c:a", "pcm_s16le",
-                  str(sample),
-              ], check=True)
-              decoded = AudioDecoder(str(sample)).get_all_samples()
-              assert decoded.data.numel() > 0, "TorchCodec decoded no audio samples"
-              print("TorchCodec audio decode OK:", tuple(decoded.data.shape))
-          PY
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -127,7 +95,7 @@ jobs:
         id: final_video
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
-          KARAOKE_WHISPER_BACKEND: whisperx
+          KARAOKE_WHISPER_BACKEND: faster-whisper
         shell: bash
         run: |
           set -euo pipefail
