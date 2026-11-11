@@ -18,12 +18,13 @@ The Science Channel pipeline is the current episode-based workflow. Its planning
 | Import a ZIP uploaded into the repository's staging folder | **Telegram ZIP Import** | Manual; you provide the episode folder and ZIP path |
 | Turn an episode's 48 images into a final MP4 | **Free Science Visuals — Render Ready Episode** | Push of incoming files / READY marker, or manual |
 | Run the separate Cloudflare AI-art experiment | **AI Video Experiment** | Daily schedule or manual |
-| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Generate a 3–8 minute explainer with procedural Blender 3D scenes and free-service fallbacks | **Free 3D Explainer Video Factory** | Manual; choose target duration |
+| Create a standalone 48-scene Gemini story/science video with free anonymous image providers | **AI Story & Science Video Creator** | Manual; one click, no inputs |\n| Generate a 3–8 minute explainer with procedural Blender 3D scene stills | **Free 3D Explainer Video Factory** | Manual; choose target duration |
+| Create a 3–8 minute animated explainer with moving 3D characters, captions, transitions and free narration | **Free Animated 3D Explainer (Three.js + Remotion)** | Manual; choose niche and duration |
 | Edit a recorded ChatGPT conversation video | **💡 AI Chat Videos** | Telegram bot upload or commit one video to `ai-chat-videos/uploads/` on main |
 | Check workflow YAML, Python entry points and Cloudflare Worker syntax | **Validate Workflows** | Repository code/workflow changes |
 | Get a Telegram message when a monitored workflow fails | **Telegram Failed Workflow Alerts** | Automatically after a monitored workflow completes with failure |
 
-There are **ten workflow files** in `.github/workflows/`. Each has an individual operating guide linked from [`.github/workflows/README.md`](.github/workflows/README.md), including the Telegram failure-alert workflow. The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
+There are **eleven workflow files** in `.github/workflows/`. Each has an individual operating guide linked from [`.github/workflows/README.md`](.github/workflows/README.md), including the Telegram failure-alert workflow. The AI Video Experiment's dedicated setup and customization guide is in [ai-video-experiment/README.md](ai-video-experiment/README.md). The old README references to daily-video.yml and gemini-video.yml were incorrect; those files are not the active workflows in this repository.
 
 ## Workflow map and detailed behavior
 
