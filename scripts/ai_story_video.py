@@ -83,7 +83,7 @@ def parse_json(raw):
                 break
             scenes.append(item)
             cursor=next_cursor
-        if scenes and (recovered.get("topic") or recovered.get("title")):
+        if scenes:
             recovered["scenes"]=scenes
             print(
                 f"Recovered {len(scenes)} complete scenes from a truncated planner response; "
