@@ -367,6 +367,21 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                 )
                 image_data, provider_used = generate_fallback_ai_image(prompt, i)
 
+            # Persist an approved rewritten visual prompt even when an
+            # independent provider, rather than Cloudflare, generated the image.
+            if scene.get("visual") != original_visual and story_path:
+                import json
+                from pathlib import Path
+                story_file = Path(story_path)
+                saved_story = json.loads(story_file.read_text(encoding="utf-8"))
+                saved_story["scenes"][i - 1]["visual"] = scene["visual"]
+                temporary_story = story_file.with_name(story_file.name + ".tmp")
+                temporary_story.write_text(
+                    json.dumps(saved_story, ensure_ascii=False, indent=2) + "\\n",
+                    encoding="utf-8",
+                )
+                os.replace(temporary_story, story_file)
+
             if not image_data:
                 raise RuntimeError(
                     f"Scene {i}: image providers returned an empty result."
