@@ -35,8 +35,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "Original workflow attempt $RUN_ATTEMPT has completed. Requesting retry $((RUN_ATTEMPT + 1))/3."
-          gh api --silent --method POST \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/rerun-failed-jobs"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/rerun-failed-jobs" >/dev/null
           echo "GitHub accepted the automatic failed-job retry."
 
   notify:
