@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Generate fixed-position, word-highlighted karaoke captions using WhisperX alignment."""
+"""Generate fixed-position, word-highlighted karaoke captions using speech alignment."""
 import re
 from pathlib import Path
 
-import whisperx
 
 
 def ass_time(seconds):
