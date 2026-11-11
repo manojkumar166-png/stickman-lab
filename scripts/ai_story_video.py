@@ -88,7 +88,7 @@ def gemini(prompt):
                     json={"model":GROQ_MODEL,"messages":[
                         {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
                         {"role":"user","content":prompt}],
-                        "response_format":{"type":"json_object"},"temperature":0.8,"max_tokens":32768},
+                        "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
                     timeout=TIMEOUT)
                 if response.status_code in (408,429,500,502,503,504):
                     raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
