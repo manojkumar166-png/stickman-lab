@@ -1,0 +1,174 @@
+name: Free Animated 3D Explainer (Three.js + Remotion)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_minutes:
+        description: "Approximate video length"
+        required: true
+        default: "6"
+        type: choice
+        options: ["3", "4", "5", "6", "7", "8"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-animated-3d-explainer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Generate animated 3D explainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 # v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: remotion/package.json
+
+      - name: Install system and free voice tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade pip
+          python -m pip install requests Pillow edge-tts gTTS
+
+      - name: Generate story, voiceover and original background sound
+        env:
+          TARGET_MINUTES: ${{ inputs.target_minutes }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math, os, shutil, subprocess, wave
+          from array import array
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          from scripts.generate_story import generate_story
+          from scripts.make_voice import make_voice
+
+          root = Path.cwd()
+          output = root / "output"
+          public = root / "remotion" / "public"
+          output.mkdir(exist_ok=True)
+          public.mkdir(parents=True, exist_ok=True)
+
+          config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+          minutes = int(os.environ.get("TARGET_MINUTES", "6"))
+          config["target_minutes"] = minutes
+          config["scene_count"] = max(15, minutes * 5)
+          config["topic_history_file"] = "free_animated_3d_topic_history.json"
+
+          # Uses the repository's anonymous free Kilo model route when available.
+          # No Gemini, Groq, Claude or other paid API key is required.
+          story = generate_story(root, config)
+          scenes = story.get("scenes", [])
+          if not isinstance(scenes, list) or not scenes:
+              raise RuntimeError("The free story planner returned no scenes.")
+
+          stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+          story_path = output / f"animated-story-{stamp}.json"
+          story_path.write_text(json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8")
+
+          narration = "\n\n".join(
+              str(scene.get("narration", "")).strip()
+              for scene in scenes if scene.get("narration")
+          )
+          if not narration.strip():
+              raise RuntimeError("Generated story has no narration.")
+
+          voice_path = output / f"narration-{stamp}.mp3"
+          make_voice(narration, voice_path, config)
+          shutil.copy2(voice_path, public / "narration.mp3")
+
+          probe = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", str(voice_path)],
+              check=True, capture_output=True, text=True
+          )
+          duration = max(1.0, float(probe.stdout.strip()))
+          fps = 30
+          total_frames = max(len(scenes), round(duration * fps))
+          weights = [max(1, len(str(s.get("narration", "")).split())) for s in scenes]
+          weight_sum = sum(weights)
+          durations = [max(1, round(total_frames * w / weight_sum)) for w in weights]
+          durations[-1] += total_frames - sum(durations)
+
+          # Create an original, royalty-free ambient bed and small scene-change chimes.
+          sample_rate = 22050
+          total_samples = int(duration * sample_rate)
+          samples = array("h")
+          for i in range(total_samples):
+              t = i / sample_rate
+              fade_in = min(1.0, t / 2.5)
+              fade_out = min(1.0, (duration - t) / 3.0)
+              bed = (
+                  0.42 * math.sin(2 * math.pi * 110.0 * t) +
+                  0.22 * math.sin(2 * math.pi * 164.81 * t) +
+                  0.12 * math.sin(2 * math.pi * 220.0 * t)
+              )
+              pulse = 0.5 + 0.5 * math.sin(2 * math.pi * 0.08 * t)
+              chime = 0.0
+              for boundary in [sum(durations[:j]) / fps for j in range(1, len(durations))]:
+                  delta = t - boundary
+                  if 0 <= delta < 0.42:
+                      chime += 0.18 * math.sin(2 * math.pi * 660 * delta) * math.exp(-8 * delta)
+              value = (bed * (0.045 + 0.018 * pulse) + chime * 0.10) * fade_in * fade_out
+              samples.append(max(-32767, min(32767, int(value * 32767))))
+          with wave.open(str(public / "ambient.wav"), "wb") as wav:
+              wav.setnchannels(1)
+              wav.setsampwidth(2)
+              wav.setframerate(sample_rate)
+              wav.writeframes(samples.tobytes())
+
+          props = {
+              "topic": story.get("topic", "Animated explainer"),
+              "scenes": scenes,
+              "sceneDurations": durations,
+              "audioFile": "narration.mp3",
+              "musicFile": "ambient.wav"
+          }
+          (public / "props.json").write_text(json.dumps(props, ensure_ascii=False), encoding="utf-8")
+          print(f"TOPIC={props['topic']}")
+          print(f"SCENES={len(scenes)}")
+          print(f"VOICE_SECONDS={duration:.1f}")
+          print(f"TOTAL_FRAMES={sum(durations)}")
+          PY
+
+      - name: Install Remotion, React and Three.js
+        working-directory: remotion
+        run: npm install --no-audit --no-fund
+
+      - name: Render animated 3D video with Remotion
+        working-directory: remotion
+        run: |
+          set -euo pipefail
+          mkdir -p ../output
+          npx remotion render src/index.ts Main ../output/free-animated-3d-explainer.mp4 \
+            --props=public/props.json --codec=h264 --gl=angle --concurrency=2
+
+      - name: Upload finished video and project files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: free-animated-3d-explainer-${{ github.run_number }}
+          path: |
+            output/free-animated-3d-explainer.mp4
+            output/animated-story-*.json
+            output/narration-*.mp3
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
