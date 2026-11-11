@@ -63,123 +63,93 @@ def _call_gemini(api_key, model, prompt, attempts=3):
 
 
 
-def _call_openai_compatible(provider, model, prompt, attempts=3):
-    """Call an OpenAI-compatible inference endpoint with compatibility fallbacks."""
-    if provider == "Groq":
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {GROQ_KEY}",
-            "Content-Type": "application/json",
-        }
-        max_tokens = 16000
-    elif provider == "Kilo":
-        url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
-        headers = {"Content-Type": "application/json"}
-        max_tokens = 12000
-    else:
-        raise ValueError(f"Unsupported backup provider: {provider}")
+PROVIDER_CONFIG = {
+    # provider: (base URL, API-key environment variable, default model)
+    "LLM7": ("https://api.llm7.io/v1", "LLM7_API_KEY", "gpt-oss:20b"),
+    "Kilo": ("https://api.kilo.ai/api/gateway", "", "kilo-auto/free"),
+    "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
+    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
+    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-lightning:free"),
+    "Mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY", "ministral-3b-latest"),
+    "Cohere": ("https://api.cohere.ai/compatibility/v1", "COHERE_API_KEY", "command-r7b-12-2024"),
+    "NVIDIA": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "openai/gpt-oss-20b"),
+    "ZAI": ("https://api.z.ai/api/paas/v4", "ZAI_API_KEY", "glm-4.7-flash"),
+    "ModelScope": ("https://api-inference.modelscope.cn/v1", "MODELSCOPE_API_KEY", "Qwen/Qwen3.5-35B-A3B"),
+    "SiliconFlow": ("https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY", "tencent/Hunyuan-MT-7B"),
+}
 
+
+def _call_openai_compatible(provider, model, prompt, attempts=2):
+    """Call a configured OpenAI-compatible provider with bounded retries."""
+    if provider not in PROVIDER_CONFIG:
+        raise ValueError(f"Unsupported backup provider: {provider}")
+    base_url, key_env, _ = PROVIDER_CONFIG[provider]
+    api_key = os.getenv(key_env, "").strip() if key_env else ""
+    if key_env and not api_key:
+        raise PermanentProviderError(f"{provider} API key is not configured")
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if provider == "OpenRouter":
+        headers["HTTP-Referer"] = "https://github.com/manojkumar166-png/stickman-lab"
+        headers["X-Title"] = "Free Animated 3D Explainer"
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "Return exactly one valid JSON object matching the requested schema. "
-                "Do not use Markdown fences or add commentary."
-            ),
-        },
+        {"role": "system", "content": (
+            "Return exactly one valid JSON object matching the requested schema. "
+            "Do not use Markdown fences or add commentary."
+        )},
         {"role": "user", "content": prompt},
     ]
-    base_body = {"model": model, "messages": messages}
-    if provider == "Groq":
-        full_body = {
-            **base_body,
-            "temperature": 0.8,
-            "max_completion_tokens": max_tokens,
-            "response_format": {"type": "json_object"},
-        }
-        request_bodies = [full_body]
-    else:
-        # Some free routed models reject optional sampling/token controls.
-        # Retry one time with the strict minimum OpenAI-compatible payload.
-        request_bodies = [
-            {**base_body, "max_tokens": max_tokens},
-            base_body,
-        ]
-
+    url = base_url.rstrip("/") + "/chat/completions"
+    request_bodies = [
+        {"model": model, "messages": messages, "temperature": 0.7, "max_tokens": 12000},
+        {"model": model, "messages": messages},
+    ]
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
             response = None
             for variant_index, body in enumerate(request_bodies):
-                response = requests.post(
-                    url,
-                    headers=headers,
-                    json=body,
-                    timeout=(20, 240),
-                )
-                if response.status_code == 400 and variant_index + 1 < len(request_bodies):
-                    print(
-                        f"{provider} model {model} rejected optional parameters; "
-                        "retrying with the minimal request body.",
-                        flush=True,
-                    )
+                response = requests.post(url, headers=headers, json=body, timeout=(12, 90))
+                if response.status_code == 400 and variant_index == 0:
+                    # Some free-tier models reject optional sampling parameters.
                     continue
                 if response.status_code in (408, 425, 429, 500, 502, 503, 504):
-                    raise RuntimeError(
-                        f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
-                    )
+                    raise RuntimeError(f"{provider} HTTP {response.status_code}: {response.text[:700]}")
                 if not response.ok:
-                    error = (
-                        f"{provider} HTTP {response.status_code}: "
-                        f"{response.text[:1400]}"
-                    )
+                    message = f"{provider} HTTP {response.status_code}: {response.text[:700]}"
                     if 400 <= response.status_code < 500:
-                        raise PermanentProviderError(error)
-                    raise RuntimeError(error)
+                        raise PermanentProviderError(message)
+                    raise RuntimeError(message)
                 break
-
-            if response is None:
-                raise RuntimeError(f"{provider} returned no HTTP response.")
-            choices = response.json().get("choices") or []
+            if response is None or not response.ok:
+                raise RuntimeError(f"{provider} returned no successful response")
+            payload = response.json()
+            choices = payload.get("choices") or []
             message = choices[0].get("message", {}) if choices else {}
             content = message.get("content", "")
             if isinstance(content, list):
-                content = "".join(
-                    part.get("text", "")
-                    for part in content
-                    if isinstance(part, dict)
-                )
+                content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
             if not isinstance(content, str) or not content.strip():
-                raise RuntimeError(f"{provider} returned an empty completion.")
-            print(f"{provider} story planner active: {model}", flush=True)
+                raise RuntimeError(f"{provider} returned an empty completion")
+            print(f"Story planner active: {provider}/{model}", flush=True)
             return {"candidates": [{"content": {"parts": [{"text": content}]}}]}
-        except PermanentProviderError as exc:
-            last_error = exc
-            print(
-                f"{provider} rejected model {model}; advancing to another model: {exc}",
-                flush=True,
-            )
-            break
+        except PermanentProviderError:
+            raise
         except Exception as exc:
             last_error = exc
-            print(
-                f"{provider} planner attempt {attempt}/{attempts} failed: "
-                f"{type(exc).__name__}: {exc}",
-                flush=True,
-            )
+            print(f"{provider} attempt {attempt}/{attempts} failed: {type(exc).__name__}: {exc}", flush=True)
             if attempt < attempts:
-                time.sleep(min(30, attempt * 7))
-    raise RuntimeError(
-        f"{provider} failed after {attempts} attempts: {last_error}"
-    ) from last_error
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
 
 
 def _call_story_model(api_key, model, prompt):
     """Call the selected provider again when a partial story needs repair."""
-    if model.startswith("groq:"):
-        return _call_openai_compatible("Groq", model.split(":", 1)[1], prompt)
-    if model.startswith("kilo:"):
-        return _call_openai_compatible("Kilo", model.split(":", 1)[1], prompt)
+    if ":" in model and model.split(":", 1)[0] in PROVIDER_CONFIG:
+        provider, provider_model = model.split(":", 1)
+        return _call_openai_compatible(provider, provider_model, prompt)
     return _call_gemini(api_key, model, prompt)
 
 
@@ -352,6 +322,73 @@ def _read_history(path):
     return []
 
 
+def _local_story_fallback(niche, desired_scene_count):
+    """Deterministic offline story: keep rendering possible when every API is down."""
+    banks = {
+        "science": [
+            ("Why does the Moon seem to change shape?", "moon phases"),
+            ("How do plants turn sunlight into food?", "photosynthesis"),
+            ("Why does lightning happen before thunder?", "storms"),
+            ("How do vaccines help the immune system?", "immune memory"),
+        ],
+        "technology": [
+            ("How does the internet move information around the world?", "internet routing"),
+            ("How do computers learn patterns from examples?", "machine learning"),
+            ("How does a battery store and release energy?", "battery chemistry"),
+        ],
+        "history": [
+            ("How did ancient trade routes connect distant societies?", "trade routes"),
+            ("How did the printing press change the spread of ideas?", "printing press"),
+        ],
+        "psychology": [
+            ("Why does the brain remember some moments better than others?", "memory"),
+            ("How do habits become automatic?", "habit formation"),
+        ],
+        "finance": [
+            ("How does compound growth make money change over time?", "compound growth"),
+            ("Why do prices rise when demand outpaces supply?", "supply and demand"),
+        ],
+        "self-improvement": [
+            ("How can small daily actions build lasting skills?", "deliberate practice"),
+            ("Why does breaking a big goal into steps help?", "goal setting"),
+        ],
+        "general education": [
+            ("How do simple systems create surprising results?", "complex systems"),
+        ],
+    }
+    options = banks.get(str(niche).lower(), banks["general education"])
+    topic, concept = random.choice(options)
+    beats = [
+        ("Start with a question", f"Everyday experience gives us clues about {concept}, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.", "A curious stick figure studies a simple everyday example", "home", "think"),
+        ("Notice the key parts", f"First identify the main parts involved in {concept}. Each part has a role, and understanding those roles makes the larger process easier to follow.", "A character points to three simple illustrated components", "lab", "point"),
+        ("Follow the first change", f"When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding {concept}.", "Connected objects respond one after another", "lab", "observe"),
+        ("Look for a pattern", f"Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.", "A character compares several clear visual examples", "city", "explain"),
+        ("Test the explanation", f"A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.", "A simple experiment with one changing variable", "lab", "observe"),
+        ("Avoid a common mix-up", f"It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.", "Two parallel timelines are compared by a character", "lab", "think"),
+        ("Connect the bigger picture", f"Now connect the individual parts. Their interactions explain why {concept} can produce an outcome that no single part could create alone.", "Small pieces combine into one larger system", "space", "explain"),
+        ("See it in daily life", f"This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.", "A stick figure spots the concept in daily surroundings", "home", "surprised"),
+        ("Remember the limits", f"Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.", "A simple model gains additional surrounding details", "lab", "observe"),
+        ("Take away the main idea", f"The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.", "The character celebrates as the complete visual system comes together", "sky", "celebrate"),
+    ]
+    scenes = []
+    for index in range(desired_scene_count):
+        title, narration, visual, background, action = beats[index % len(beats)]
+        scenes.append({
+            "title": f"{title} ({index + 1})",
+            "narration": narration,
+            "visual": visual + "; clean colorful educational cartoon, no written words",
+            "background": background,
+            "action": action,
+        })
+    print("WARNING: All remote LLM providers failed; using deterministic offline explainer fallback.", flush=True)
+    return {
+        "topic": topic,
+        "description": f"A simple step-by-step visual introduction to {concept}.",
+        "scenes": scenes,
+        "generation_mode": "offline_fallback",
+    }
+
+
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -434,41 +471,48 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
+        # Try Gemini when configured, then independent gateways/providers.
+        # LLM7 accepts an optional free token; Kilo and OVH also have keyless tiers.
         for model in models:
-            print(f"Trying Gemini model: {model}")
+            print(f"Trying Gemini model: {model}", flush=True)
             try:
-                data = _call_gemini(api_key, model, prompt)
+                data = _call_gemini(api_key, model, prompt, attempts=2)
                 used_model = model
                 break
             except Exception as exc:
-                print(f"  {model} failed: {type(exc).__name__}: {str(exc)[:400]}", flush=True)
+                print(f"Gemini {model} unavailable: {type(exc).__name__}: {str(exc)[:350]}", flush=True)
 
-        if data is None and GROQ_KEY:
+        provider_models = [
+            ("LLM7", os.getenv("LLM7_MODEL", "gpt-oss:20b").strip()),
+            ("Kilo", os.getenv("KILO_MODEL", "kilo-auto/free").strip()),
+            ("Kilo", "nvidia/nemotron-3.5-lightning:free"),
+            ("Kilo", "openrouter/free"),
+            ("OVH", os.getenv("OVH_MODEL", "gpt-oss-20b").strip()),
+            ("Groq", os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()),
+            ("OpenRouter", os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free").strip()),
+            ("Mistral", os.getenv("MISTRAL_MODEL", "ministral-3b-latest").strip()),
+            ("Cohere", os.getenv("COHERE_MODEL", "command-r7b-12-2024").strip()),
+            ("NVIDIA", os.getenv("NVIDIA_MODEL", "openai/gpt-oss-20b").strip()),
+            ("ZAI", os.getenv("ZAI_MODEL", "glm-4.7-flash").strip()),
+            ("ModelScope", os.getenv("MODELSCOPE_MODEL", "Qwen/Qwen3.5-35B-A3B").strip()),
+            ("SiliconFlow", os.getenv("SILICONFLOW_MODEL", "tencent/Hunyuan-MT-7B").strip()),
+        ]
+        for provider, provider_model in provider_models:
+            if data is not None:
+                break
+            if not provider_model:
+                continue
             try:
-                data = _call_openai_compatible("Groq", GROQ_MODEL, prompt)
-                used_model = "groq:" + GROQ_MODEL
+                data = _call_openai_compatible(provider, provider_model, prompt)
+                used_model = provider + ":" + provider_model
+                break
             except Exception as exc:
-                print(f"Groq story fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
+                print(f"{provider}/{provider_model} unavailable: {type(exc).__name__}: {str(exc)[:450]}", flush=True)
 
         if data is None:
-            kilo_models = list(dict.fromkeys([KILO_MODEL] + KILO_FALLBACK_MODELS))
-            for kilo_model in kilo_models:
-                try:
-                    data = _call_openai_compatible("Kilo", kilo_model, prompt)
-                    used_model = "kilo:" + kilo_model
-                    break
-                except Exception as exc:
-                    print(
-                        f"Kilo anonymous model {kilo_model} unavailable: "
-                        f"{type(exc).__name__}: {exc}",
-                        flush=True,
-                    )
-
-        if data is None:
-            raise RuntimeError(
-                "All Gemini models and configured open-weight fallbacks failed. "
-                "Check the provider-specific errors above and rerun; no story was saved."
-            )
+            story = _local_story_fallback(niche, desired_scene_count)
+            used_model = "offline:template"
+            break
 
         try:
             raw = _response_text(data)
