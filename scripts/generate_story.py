@@ -459,9 +459,11 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         if api_key:
             provider_models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
         provider_models.extend([
+            # Second choice: anonymous OVH inference (no API key required).
+            ("OVH", "gpt-oss-20b"),
+            # Third choice: anonymous Kilo, followed by its free model fallbacks.
             ("Kilo", KILO_MODEL),
             *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
-            ("OVH", "gpt-oss-20b"),
         ])
         for provider, provider_model in provider_models:
             if data is not None:
