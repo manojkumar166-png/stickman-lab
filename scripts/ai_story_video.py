@@ -58,12 +58,22 @@ def gemini(prompt):
     if KEY:
         for model in dict.fromkeys([MODEL]+FALLBACK):
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            for attempt in range(2):
+            for attempt in range(1,4):
                 try:
-                    r=requests.post(url,params={"key":KEY},json={"contents":[{"parts":[{"text":prompt}]}],
-                        "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},timeout=90)
-                    if r.status_code in (400,403,404,408,429,500,502,503,504):
-                        raise RuntimeError(f"Gemini {model} HTTP {r.status_code}: {r.text[:700]}")
+                    r=requests.post(
+                        url,
+                        params={"key":KEY},
+                        json={"contents":[{"parts":[{"text":prompt}]}],
+                              "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},
+                        timeout=(20,180),
+                    )
+                    if r.status_code in (400,403,404):
+                        error=f"Gemini {model} permanent HTTP {r.status_code}: {r.text[:900]}"
+                        errors.append(error)
+                        print(error,flush=True)
+                        break
+                    if r.status_code in (408,429,500,502,503,504):
+                        raise RuntimeError(f"Gemini {model} HTTP {r.status_code}: {r.text[:900]}")
                     r.raise_for_status()
                     candidates=r.json().get("candidates") or []
                     parts=candidates[0].get("content",{}).get("parts",[]) if candidates else []
@@ -71,8 +81,11 @@ def gemini(prompt):
                     print(f"Gemini planner active: {model}",flush=True)
                     return result
                 except Exception as exc:
-                    errors.append(f"{model} try {attempt+1}: {type(exc).__name__}: {exc}")
-                    if attempt==0: time.sleep(3)
+                    errors.append(f"{model} try {attempt}/3: {type(exc).__name__}: {exc}")
+                    if attempt<3:
+                        delay=min(30,2**(attempt+1))
+                        print(f"Gemini {model} transient failure; retrying in {delay}s ({attempt}/3).",flush=True)
+                        time.sleep(delay)
     else:
         errors.append("GEMINI_API_KEY is not configured; skipped Gemini.")
         print("Gemini skipped: GEMINI_API_KEY is not configured.",flush=True)
