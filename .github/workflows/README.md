@@ -1,6 +1,6 @@
 # GitHub Actions workflow index
 
-This directory contains the ten workflows currently present in `.github/workflows/`. Each production workflow has its own operating guide. Read the guide before changing triggers, secrets, inputs, concurrency, artifacts, publishing, or cleanup behavior.
+This directory contains the eleven workflows currently present in `.github/workflows/`. Each production workflow has its own operating guide. Read the guide before changing triggers, secrets, inputs, concurrency, artifacts, publishing, or cleanup behavior.
 
 ## Individual workflows
 
@@ -10,6 +10,7 @@ This directory contains the ten workflows currently present in `.github/workflow
 | AI Story & Science Video Creator | [ai-story-science-video.yml](ai-story-science-video.yml) | Daily schedule and manual | Standalone Gemini story/science video: 48 scenes, anonymous image-provider fallbacks, Edge TTS, word-level karaoke captions and MP4 delivery. | [AI Story & Science Video Creator](../../ai-story-science-video/README.md) |
 | AI Video Experiment | [ai-video-test.yml](ai-video-test.yml) | Daily schedule and manual | Separate Gemini/Cloudflare image experiment with AI Horde and OVH fallbacks, narration and FFmpeg rendering. | [AI Video Experiment](../../ai-video-experiment/README.md) |
 | Free Science Visuals — Render Ready Episode | [free-science-visuals.yml](free-science-visuals.yml) | Incoming image/READY marker push or manual | Validates a Science Channel episode's 48 images, generates narration, renders karaoke subtitles, delivers the MP4 and performs post-delivery cleanup. | [Free Science Visuals renderer](guides/free-science-visuals.md) |\n| Free 3D Explainer Video Factory | [free-3d-explainer.yml](free-3d-explainer.yml) | Manual | Generates a 3–8 minute science explainer using free anonymous LLM fallback, procedural Blender 3D stills, free TTS and FFmpeg; uploads MP4 and production metadata. | This workflow index |
+| Free Animated 3D Explainer (Three.js + Remotion) | [free-animated-3d-explainer.yml](free-animated-3d-explainer.yml) | Manual | Generates 3–8 minute animated explainer videos with Three.js characters/objects, Remotion captions/transitions/rendering, free TTS and original synthesized background audio; no paid API key. | This workflow index |
 | Science Channel — Daily Gemini Planner | [science-channel-daily-planner.yml](science-channel-daily-planner.yml) | Daily schedule and manual | Creates a fresh Science Channel episode package with metadata, narration, 48 scene records and image prompts. | [Daily Gemini Planner](guides/science-channel-daily-planner.md) |
 | Telegram Image Receiver | [telegram-image-receiver.yml](telegram-image-receiver.yml) | Cloudflare Worker inbox push or manual maintenance run | Downloads and validates Telegram image/ZIP uploads, fills episode image slots and dispatches the renderer when an episode becomes ready. | [Telegram Image Receiver](guides/telegram-image-receiver.md) |
 | Telegram ZIP Import | [telegram-zip-import.yml](telegram-zip-import.yml) | Manual with `episode_path` and `zip_path` | Safely imports a ZIP already staged in the repository into one episode and creates its READY marker. | [Telegram ZIP Import](guides/telegram-zip-import.md) |
@@ -19,7 +20,8 @@ This directory contains the ten workflows currently present in `.github/workflow
 ## Choose the right pipeline
 
 - **Science Channel:** planner → create/review images → Telegram Image Receiver or Telegram ZIP Import → Free Science Visuals renderer. These episode and upload workflows operate on `main`.
-- **AI Story & Science Video Creator:** standalone one-click story/science generation. It does not create a Science Channel episode package.\n- **Free 3D Explainer Video Factory:** independent manual generator using procedural Blender scenes and free-service fallbacks; it does not use the 48-image Telegram episode pipeline.
+- **AI Story & Science Video Creator:** standalone one-click story/science generation. It does not create a Science Channel episode package.\n- **Free Animated 3D Explainer (Three.js + Remotion):** independent manual generator with moving 3D character/object scenes, scene captions, transitions, free TTS and synthesized background audio. Choose science, finance, psychology, history, technology, self-improvement or general education. It does not use the 48-image Telegram episode pipeline.
+- **Free 3D Explainer Video Factory:** older independent manual generator using procedural Blender stills and free-service fallbacks; it does not use the 48-image Telegram episode pipeline.
 - **AI Video Experiment:** a separate legacy experiment with its own root-level configuration and topic history.
 - **AI Chat Videos:** a separate recorded-conversation editor.
 - **Telegram Failed Workflow Alerts:** notification-only; it does not rerun or repair failed jobs.
