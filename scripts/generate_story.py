@@ -389,21 +389,23 @@ def generate_story(root: Path, config: dict) -> dict:
     last_scene_count = None
     desired_scene_count = int(config.get("scene_count", 48))
 
-    # Each retry selects a fresh category and asks Gemini for a different
-    # question. This avoids a fixed topic rotation and rejects repeated titles.
+    # The original default remains science. The animated explainer workflow can
+    # select another broad niche without changing existing science workflows.
+    niche = str(config.get("content_niche", "science")).strip() or "science"
+    niche = niche[:80]
     for generation_attempt in range(5):
-        category = random.choice(TOPIC_CATEGORIES)
-        print(f"Random science category ({generation_attempt + 1}/5): {category}")
+        category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
+        print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
         prompt = f"""
-Create an original, factually careful educational science explainer for a colorful stickman cartoon video.
+Create an original, factually careful educational {niche} explainer for a colorful animated-character video.
 
 TOPIC STYLE REFERENCE — read these examples from the repository's topics.txt:
 {examples}
 
-Choose ONE fresh, specific science question in this randomly selected category: {category}.
-Use topics.txt only as a guide to its simple, curiosity-driven question style and broad variety.
+Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.
+Use topics.txt only as a guide to concise, accessible storytelling style, not as a subject list when the selected niche is not science.
 Do not simply copy a seed topic or make a minor wording change to one.
-Generate a different subject/question each time, drawing from the selected category.
+Generate a different subject/question each time, drawing from the selected niche.
 Do NOT repeat or closely rephrase any previously used topic in this history:
 {json.dumps(recent_history, ensure_ascii=False)}
 
