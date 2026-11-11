@@ -4,6 +4,10 @@ from pathlib import Path
 
 import requests
 
+GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
+KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
+
 MODEL_FALLBACKS = [
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
@@ -32,7 +36,7 @@ def _call_gemini(api_key, model, prompt, attempts=3):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9, "maxOutputTokens": 12000},
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9, "maxOutputTokens": 16000},
     }
     last_err = None
     for attempt in range(attempts):
@@ -55,8 +59,153 @@ def _call_gemini(api_key, model, prompt, attempts=3):
 
 
 
+def _call_openai_compatible(provider, model, prompt, attempts=3):
+    """Call an OpenAI-compatible free inference endpoint and normalize its response."""
+    if provider == "Groq":
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+        max_tokens = 16000
+    elif provider == "Kilo":
+        url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        max_tokens = 12000
+    else:
+        raise ValueError(f"Unsupported backup provider: {provider}")
+
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            body = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Return exactly one valid JSON object matching the requested schema. "
+                            "Do not use Markdown fences or add commentary."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.8,
+                "max_tokens": max_tokens,
+            }
+            # Kilo's anonymous free router is more compatible without JSON-mode
+            # constraints; the prompt itself requires strict JSON.
+            if provider == "Groq":
+                body["response_format"] = {"type": "json_object"}
+            response = requests.post(url, headers=headers, json=body, timeout=(20, 180))
+            if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                raise RuntimeError(
+                    f"{provider} HTTP {response.status_code}: {response.text[:900]}"
+                )
+            if not response.ok:
+                raise RuntimeError(
+                    f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
+                )
+            choices = response.json().get("choices") or []
+            message = choices[0].get("message", {}) if choices else {}
+            content = message.get("content", "")
+            if isinstance(content, list):
+                content = "".join(
+                    part.get("text", "") for part in content if isinstance(part, dict)
+                )
+            if not isinstance(content, str) or not content.strip():
+                raise RuntimeError(f"{provider} returned an empty completion.")
+            print(f"{provider} story planner active: {model}", flush=True)
+            return {"candidates": [{"content": {"parts": [{"text": content}]}}]}
+        except Exception as exc:
+            last_error = exc
+            print(
+                f"{provider} planner attempt {attempt}/{attempts} failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            if attempt < attempts:
+                time.sleep(min(20, attempt * 5))
+    raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
+
+
+def _call_story_model(api_key, model, prompt):
+    """Call the selected provider again when a partial story needs repair."""
+    if model.startswith("groq:"):
+        return _call_openai_compatible("Groq", model.split(":", 1)[1], prompt)
+    if model.startswith("kilo:"):
+        return _call_openai_compatible("Kilo", model.split(":", 1)[1], prompt)
+    return _call_gemini(api_key, model, prompt)
+
+
+def _response_text(data):
+    candidates = data.get("candidates") or []
+    parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+    return "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+
+
+def _decode_json_object(raw):
+    """Decode a JSON object even when a provider wraps it in a Markdown fence."""
+    raw = str(raw or "").strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+    start = raw.find("{")
+    if start < 0:
+        raise ValueError("completion did not contain a JSON object")
+    value, _ = json.JSONDecoder().raw_decode(raw, start)
+    if not isinstance(value, dict):
+        raise ValueError("completion JSON root was not an object")
+    return value
+
+
+def _parse_story_json(raw):
+    """Parse a full story or salvage every complete scene from a truncated JSON reply."""
+    try:
+        return _decode_json_object(raw)
+    except (ValueError, json.JSONDecodeError):
+        decoder = json.JSONDecoder()
+        text = str(raw or "")
+        recovered = {}
+        for field in ("topic", "description"):
+            match = re.search(r'"' + field + r'"\\s*:\\s*', text)
+            if match:
+                try:
+                    value, _ = decoder.raw_decode(text, match.end())
+                    recovered[field] = value
+                except (ValueError, json.JSONDecodeError):
+                    pass
+
+        scene_match = re.search(r'"scenes"\\s*:\\s*\\[', text)
+        if scene_match:
+            cursor = scene_match.end()
+            scenes = []
+            while cursor < len(text):
+                while cursor < len(text) and (text[cursor].isspace() or text[cursor] == ','):
+                    cursor += 1
+                if cursor >= len(text) or text[cursor] == ']':
+                    break
+                try:
+                    item, next_cursor = decoder.raw_decode(text, cursor)
+                except (ValueError, json.JSONDecodeError):
+                    break
+                if not isinstance(item, dict):
+                    break
+                scenes.append(item)
+                cursor = next_cursor
+            if scenes:
+                recovered["scenes"] = scenes
+                if recovered.get("topic"):
+                    print(
+                        f"Recovered {len(scenes)} complete scenes from a truncated model response; "
+                        "the missing scenes will be regenerated.",
+                        flush=True,
+                    )
+                    return recovered
+        raise ValueError("model response was malformed or truncated and contained no recoverable story") from None
+
+
+
 def _repair_missing_scenes(api_key, model, story, desired_count):
-    """Ask Gemini to continue a short story instead of discarding a nearly complete response."""
+    """Repair a partial story in small batches; never discard its completed scenes."""
     scenes = story.get("scenes")
     if not isinstance(scenes, list):
         return False
@@ -64,35 +213,58 @@ def _repair_missing_scenes(api_key, model, story, desired_count):
         story["scenes"] = scenes[:desired_count]
         return True
 
-    for repair_attempt in range(1, 4):
-        missing = desired_count - len(scenes)
-        if missing <= 0:
-            return True
+    batch_number = 0
+    while len(scenes) < desired_count:
+        batch_number += 1
+        missing = min(8, desired_count - len(scenes))
         prompt = f"""
 Continue this educational science explainer as a seamless continuation.
 Topic: {story.get("topic", "")}
 Description: {story.get("description", "")}
-The story currently has {len(scenes)} scenes and needs exactly {missing} additional scenes.
+The story currently has {len(scenes)} complete scenes and needs exactly {missing} additional scenes in this batch.
 The final existing scenes are:
 {json.dumps(scenes[-5:], ensure_ascii=False)}
 Return ONLY valid JSON in this shape: {{"scenes":[{{"title":"short heading","narration":"28-32 spoken words","visual":"drawable cartoon scene without text","background":"sky, lab, space, ocean, forest, city, home, cave, desert, or mountain","action":"explain, walk, point, run, think, surprised, celebrate, observe"}}]}}
-Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep the narration factually careful and make the final added scene a memorable conclusion.
+Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep the narration factually careful and make the final scene of the whole story a memorable conclusion.
 """
-        try:
-            data = _call_gemini(api_key, model, prompt)
-            raw = data["candidates"][0]["content"]["parts"][0]["text"]
-            addition = json.loads(raw)
-            new_scenes = addition.get("scenes", []) if isinstance(addition, dict) else addition
-            if not isinstance(new_scenes, list) or not new_scenes:
-                raise ValueError("repair response contained no scene list")
-            accepted = [item for item in new_scenes if isinstance(item, dict)]
-            scenes.extend(accepted[:missing])
-            story["scenes"] = scenes
-            print(f"Scene-count repair {repair_attempt}/3 added {min(len(accepted), missing)} scenes; {len(scenes)}/{desired_count} now available.", flush=True)
-        except Exception as exc:
-            print(f"Scene-count repair {repair_attempt}/3 failed: {exc}", flush=True)
-            time.sleep(repair_attempt * 2)
+        batch_added = False
+        for attempt in range(1, 4):
+            try:
+                data = _call_story_model(api_key, model, prompt)
+                addition = _decode_json_object(_response_text(data))
+                new_scenes = addition.get("scenes", [])
+                if not isinstance(new_scenes, list) or not new_scenes:
+                    raise ValueError("repair response contained no scene list")
+                accepted = [
+                    item for item in new_scenes
+                    if isinstance(item, dict)
+                    and isinstance(item.get("narration"), str)
+                    and item.get("narration", "").strip()
+                    and isinstance(item.get("visual"), str)
+                    and item.get("visual", "").strip()
+                ]
+                if not accepted:
+                    raise ValueError("repair response contained no complete scene records")
+                scenes.extend(accepted[:missing])
+                story["scenes"] = scenes
+                print(
+                    f"Scene repair batch {batch_number}: added {min(len(accepted), missing)} "
+                    f"scenes; {len(scenes)}/{desired_count} complete.",
+                    flush=True,
+                )
+                batch_added = True
+                break
+            except Exception as exc:
+                print(
+                    f"Scene repair batch {batch_number}, attempt {attempt}/3 failed: {exc}",
+                    flush=True,
+                )
+                if attempt < 3:
+                    time.sleep(attempt * 3)
+        if not batch_added:
+            return False
     return len(story.get("scenes", [])) == desired_count
+
 
 def _normalise_topic(value):
     value = re.sub(r"[^a-z0-9 ]+", " ", str(value).lower())
@@ -214,16 +386,39 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 data = _call_gemini(api_key, model, prompt)
                 used_model = model
                 break
-            except RuntimeError as exc:
-                print(f"  {model} failed: {str(exc)[:200]}")
+            except Exception as exc:
+                print(f"  {model} failed: {type(exc).__name__}: {str(exc)[:400]}", flush=True)
+
+        if data is None and GROQ_KEY:
+            try:
+                data = _call_openai_compatible("Groq", GROQ_MODEL, prompt)
+                used_model = "groq:" + GROQ_MODEL
+            except Exception as exc:
+                print(f"Groq story fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
+
         if data is None:
-            raise RuntimeError("All Gemini models failed. Check network/quota and retry later.")
+            try:
+                data = _call_openai_compatible("Kilo", KILO_MODEL, prompt)
+                used_model = "kilo:" + KILO_MODEL
+            except Exception as exc:
+                print(f"Kilo anonymous story fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
+
+        if data is None:
+            raise RuntimeError(
+                "All Gemini models and configured open-weight fallbacks failed. "
+                "Check the provider-specific errors above and rerun; no story was saved."
+            )
 
         try:
-            raw = data["candidates"][0]["content"]["parts"][0]["text"]
-            candidate_story = json.loads(raw)
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Could not parse AI story response: {exc}; response was {str(data)[:1200]}") from exc
+            raw = _response_text(data)
+            candidate_story = _parse_story_json(raw)
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                f"Planner response was malformed/truncated on generation attempt "
+                f"{generation_attempt + 1}/5: {exc}. Requesting a fresh complete story.",
+                flush=True,
+            )
+            continue
 
         returned_scenes = candidate_story.get("scenes", [])
         if not isinstance(returned_scenes, list):
