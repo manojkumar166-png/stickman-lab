@@ -82,7 +82,7 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
           KILO_MODEL: ${{ vars.KILO_MODEL || 'kilo-auto/free' }}
-          KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-lightning:free,openrouter/free' }}
+          KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free' }}
           OVH_MODEL: ${{ vars.OVH_MODEL || 'Qwen3.5-397B-A17B' }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite' }}
