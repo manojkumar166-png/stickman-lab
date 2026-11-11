@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/huggingface
-          key: whisperx-large-v3-turbo-${{ runner.os }}-v1
+          key: faster-whisper-small-${{ runner.os }}-v1
       - name: Install FFmpeg and subtitle fonts
         run: |
           set -euo pipefail
