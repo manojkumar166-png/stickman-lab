@@ -12,6 +12,7 @@ KEY=os.getenv("GEMINI_API_KEY","").strip()
 GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
 GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
+KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-lightning:free,openrouter/free").split(",") if x.strip()]
 OVH_MODEL=os.getenv("OVH_MODEL","Qwen3.5-397B-A17B").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
 # Paid or unknown model IDs supplied through Actions variables are ignored.
@@ -111,33 +112,42 @@ def gemini(prompt):
     # requests for free models, so no KILO_API_KEY is required here.
     kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
     kilo_errors=[]
-    for attempt in range(1,4):
-        try:
-            response=requests.post(kilo_url,
-                headers={"Content-Type":"application/json"},
-                json={"model":KILO_MODEL,"messages":[
-                    {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
-                    {"role":"user","content":prompt}],
-                    "temperature":0.8,"max_tokens":32768},
-                timeout=TIMEOUT)
-            if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:900]}")
-            if not response.ok:
-                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:1200]}")
-            choices=response.json().get("choices") or []
-            message=choices[0].get("message",{}) if choices else {}
-            content=message.get("content","")
-            if isinstance(content,list):
-                content="".join(part.get("text","") for part in content if isinstance(part,dict))
-            result=parse_json(content)
-            print(f"Free planner backup active: Kilo {KILO_MODEL} (anonymous access)",flush=True)
-            return result
-        except Exception as exc:
-            kilo_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-            if attempt<3:
-                delay=attempt*5
-                print(f"Kilo free backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
-                time.sleep(delay)
+    kilo_models=list(dict.fromkeys([KILO_MODEL]+KILO_FALLBACK_MODELS))
+    for kilo_model in kilo_models:
+        for attempt in range(1,3):
+            try:
+                response=requests.post(kilo_url,
+                    headers={"Content-Type":"application/json"},
+                    json={"model":kilo_model,"messages":[
+                        {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
+                        {"role":"user","content":prompt}],
+                        "temperature":0.8,"max_tokens":32768},
+                    timeout=TIMEOUT)
+                if response.status_code in (408,425,429,500,502,503,504):
+                    raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:900]}")
+                if not response.ok:
+                    error=f"Kilo model {kilo_model} HTTP {response.status_code}: {response.text[:1200]}"
+                    kilo_errors.append(error)
+                    print(error,flush=True)
+                    # A client error is usually a model/payload/entitlement issue;
+                    # retrying it unchanged wastes the free-model request budget.
+                    if 400 <= response.status_code < 500:
+                        break
+                    raise RuntimeError(error)
+                choices=response.json().get("choices") or []
+                message=choices[0].get("message",{}) if choices else {}
+                content=message.get("content","")
+                if isinstance(content,list):
+                    content="".join(part.get("text","") for part in content if isinstance(part,dict))
+                result=parse_json(content)
+                print(f"Free planner backup active: Kilo {kilo_model} (anonymous access)",flush=True)
+                return result
+            except Exception as exc:
+                kilo_errors.append(f"{kilo_model} try {attempt}: {type(exc).__name__}: {exc}")
+                if attempt<2:
+                    delay=attempt*5
+                    print(f"Kilo model {kilo_model} attempt {attempt}/2 failed: {exc}. Retrying in {delay}s.",flush=True)
+                    time.sleep(delay)
 
     # Last-resort anonymous endpoint from OVHcloud. Its public tier is
     # limited to two requests per minute per IP and model, so retry slowly.
