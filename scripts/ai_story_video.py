@@ -60,13 +60,13 @@ def parse_json(raw):
     decoder=json.JSONDecoder()
     recovered={}
     for field in ("mode","title","topic","description","visual_style","continuity_bible"):
-        match=re.search(r'"'+field+r'"\\s*:\\s*',raw)
+        match=re.search(r'"'+field+r'"\s*:\s*',raw)
         if match:
             try:
                 recovered[field],_=decoder.raw_decode(raw,match.end())
             except (ValueError,json.JSONDecodeError):
                 pass
-    scene_match=re.search(r'"scenes"\\s*:\\s*\\[',raw)
+    scene_match=re.search(r'"scenes"\s*:\s*\[',raw)
     if scene_match:
         cursor=scene_match.end()
         scenes=[]
