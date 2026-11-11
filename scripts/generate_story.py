@@ -388,6 +388,9 @@ def generate_story(root: Path, config: dict) -> dict:
     last_duplicate = None
     last_scene_count = None
     desired_scene_count = int(config.get("scene_count", 48))
+    target_minutes = max(1, int(config.get("target_minutes", 8)))
+    target_words_low = target_minutes * 140
+    target_words_high = target_minutes * 160
 
     # The original default remains science. The animated explainer workflow can
     # select another broad niche without changing existing science workflows.
@@ -412,7 +415,7 @@ Do NOT repeat or closely rephrase any previously used topic in this history:
 The title must be a concise natural question in an approachable style.
 Return the selected topic in the JSON "topic" field and make the entire explainer answer that exact question.
 
-Target narration duration: about {config.get('target_minutes', 8)} minutes, approximately 1200-1350 spoken words.
+Target narration duration: about {target_minutes} minutes, approximately {target_words_low}-{target_words_high} spoken words.
 Return ONLY valid JSON with this schema:
 {{
  "topic": "a concise title",
@@ -427,7 +430,7 @@ Return ONLY valid JSON with this schema:
    }}
  ]
 }}
-CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the scenes array — not {desired_scene_count - 1}, not {desired_scene_count + 1}. Count the objects before returning JSON. The final array must contain {desired_scene_count} complete objects. Do not stop early to save tokens; keep each narration within the requested 28-32 words. Create exactly {desired_scene_count} scenes. The total narration should be close to 8 minutes at 125-145 words per minute. Begin with a surprising hook, build curiosity, explain the subject accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
+CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the scenes array — not {desired_scene_count - 1}, not {desired_scene_count + 1}. Count the objects before returning JSON. The final array must contain {desired_scene_count} complete objects. Do not stop early to save tokens; keep each narration within the requested 28-32 words. Create exactly {desired_scene_count} scenes. The total narration should match approximately {target_minutes} minutes at 140-160 words per minute. Begin with a surprising hook, build curiosity, explain the subject accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
 """
 
         data = None
