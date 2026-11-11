@@ -305,9 +305,9 @@ def _read_history(path):
 
 
 def generate_story(root: Path, config: dict) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("Set GEMINI_API_KEY.")
+        print("GEMINI_API_KEY is not set; skipping Gemini and using configured free LLM fallbacks.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -326,12 +326,13 @@ def generate_story(root: Path, config: dict) -> dict:
     examples = "\n".join(f"- {topic}" for topic in topics)
     recent_history = history[-150:]
     models = []
-    preferred = config.get("gemini_model", "").strip()
-    if preferred:
-        models.append(preferred)
-    for model in MODEL_FALLBACKS:
-        if model not in models:
-            models.append(model)
+    if api_key:
+        preferred = config.get("gemini_model", "").strip()
+        if preferred:
+            models.append(preferred)
+        for model in MODEL_FALLBACKS:
+            if model not in models:
+                models.append(model)
 
     data = None
     used_model = None
