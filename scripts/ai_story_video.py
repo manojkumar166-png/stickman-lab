@@ -118,11 +118,12 @@ def gemini(prompt):
                 json={"model":KILO_MODEL,"messages":[
                     {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
                     {"role":"user","content":prompt}],
-                    "response_format":{"type":"json_object"},"temperature":0.8,"max_tokens":32768},
+                    "temperature":0.8,"max_tokens":32768},
                 timeout=TIMEOUT)
             if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:500]}")
-            response.raise_for_status()
+                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:900]}")
+            if not response.ok:
+                raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:1200]}")
             choices=response.json().get("choices") or []
             message=choices[0].get("message",{}) if choices else {}
             content=message.get("content","")
@@ -156,11 +157,12 @@ def gemini(prompt):
                 json={"model":OVH_MODEL,"messages":[
                     {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
                     {"role":"user","content":prompt}],
-                    "response_format":{"type":"json_object"},"temperature":0.8,"max_tokens":32768},
-                timeout=TIMEOUT)
+                    "temperature":0.8,"max_tokens":32768},
+                timeout=(20,240))
             if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:500]}")
-            response.raise_for_status()
+                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:900]}")
+            if not response.ok:
+                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:1200]}")
             choices=response.json().get("choices") or []
             message=choices[0].get("message",{}) if choices else {}
             content=message.get("content","")
