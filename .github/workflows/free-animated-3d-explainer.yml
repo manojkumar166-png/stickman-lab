@@ -172,7 +172,7 @@ jobs:
           set -euo pipefail
           mkdir -p ../output
           npx remotion render src/index.ts Main ../output/free-animated-3d-explainer.mp4 \
-            --props=public/props.json --codec=h264 --gl=angle --concurrency=2
+            --props=public/props.json --codec=h264 --gl=swangle --concurrency=2
 
       - name: Upload finished video and project files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
