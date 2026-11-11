@@ -26,8 +26,8 @@ Edit the repository-root topics.txt to control the subject areas and curiosity-d
 
 There are no input fields. Every run automatically asks Gemini for a fresh topic, creates 48 scenes/images and uses the default voice `en-US-AndrewMultilingualNeural`.
 
-## Required secret
-Add GEMINI_API_KEY under repository Settings, Secrets and variables, Actions. No Zhipu, Stability, OVH token, Cloudflare or payment secret is used.
+## Required secrets
+Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` under repository Settings → Secrets and variables → Actions for delivery. `GEMINI_API_KEY` is optional: Gemini is the preferred planner, but if it is absent or unavailable the workflow tries Groq when `GROQ_API_KEY` is configured, then anonymous Kilo free models and anonymous OVHcloud. No Zhipu, Stability, OVH token, Cloudflare or payment secret is needed.
 
 ## No-card safeguards
 - OVHcloud is called anonymously; no OVH API token is read.
