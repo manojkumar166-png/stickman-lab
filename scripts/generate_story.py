@@ -419,13 +419,6 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         data = None
         # Public keyless endpoints only; offline story is the final fallback.
         provider_models = [
-            ("LLM7", os.getenv("LLM7_MODEL", "gpt-oss:20b").strip()),
-            ("Kilo", os.getenv("KILO_MODEL", "kilo-auto/free").strip()),
-            ("Kilo", "nvidia/nemotron-3.5-lightning:free"),
-            ("Kilo", "openrouter/free"),
-            ("OVH", os.getenv("OVH_MODEL", "gpt-oss-20b").strip()),
-            ("Groq", os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()),
-            ("OpenRouter", os.getenv("OPENROU        provider_models = [
             ("Kilo", KILO_MODEL),
             *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
             ("OVH", "gpt-oss-20b"),
