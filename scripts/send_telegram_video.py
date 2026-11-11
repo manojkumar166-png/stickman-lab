@@ -14,6 +14,10 @@ MAX_UPLOAD_BYTES = 48_000_000
 AUDIO_BITRATE = 96_000
 
 
+class PermanentTelegramError(RuntimeError):
+    """An API rejection that should not be retried unchanged."""
+
+
 def probe_duration(path: Path) -> float:
     result = subprocess.run(
         [
@@ -96,20 +100,25 @@ def send_video(path: Path, caption: str, token: str, chat_id: str) -> None:
                     print(f"Telegram rate-limited the upload; retrying in {delay}s.", flush=True)
                     time.sleep(delay)
                     continue
-            if response.status_code in (500, 502, 503, 504):
+            if response.status_code in (408, 425, 500, 502, 503, 504):
                 raise RuntimeError(
-                    f"Telegram HTTP {response.status_code}: {response.text[:800]}"
+                    f"Temporary Telegram HTTP {response.status_code}: {response.text[:800]}"
                 )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                raise PermanentTelegramError(
+                    f"Telegram HTTP {response.status_code}: {response.text[:1000]}"
+                )
             payload = response.json()
             if not payload.get("ok"):
-                raise RuntimeError(
+                raise PermanentTelegramError(
                     "Telegram rejected the video: "
                     + str(payload.get("description", "unknown API error"))
                 )
             message_id = (payload.get("result") or {}).get("message_id", "unknown")
             print(f"Telegram accepted the video (message_id={message_id}).", flush=True)
             return
+        except PermanentTelegramError:
+            raise
         except (requests.RequestException, RuntimeError, ValueError) as exc:
             last_error = exc
             if attempt < 4:
