@@ -166,7 +166,7 @@ def _parse_story_json(raw):
         text = str(raw or "")
         recovered = {}
         for field in ("topic", "description"):
-            match = re.search(r'"' + field + r'"\\s*:\\s*', text)
+            match = re.search(r'"' + field + r'"\s*:\s*', text)
             if match:
                 try:
                     value, _ = decoder.raw_decode(text, match.end())
@@ -174,7 +174,7 @@ def _parse_story_json(raw):
                 except (ValueError, json.JSONDecodeError):
                     pass
 
-        scene_match = re.search(r'"scenes"\\s*:\\s*\\[', text)
+        scene_match = re.search(r'"scenes"\s*:\s*\[', text)
         if scene_match:
             cursor = scene_match.end()
             scenes = []
