@@ -48,14 +48,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/huggingface
           key: whisperx-large-v3-turbo-${{ runner.os }}-v1
-      - name: Install FFmpeg 7 shared libraries for TorchCodec
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba
-          ./bin/micromamba create -y -p "$RUNNER_TEMP/ffmpeg7" -c conda-forge "ffmpeg=7.1.1"
-          echo "$RUNNER_TEMP/ffmpeg7/bin" >> "$GITHUB_PATH"
-          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/ffmpeg7/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
       - name: Install rendering tools
         run: |
           set -euo pipefail
@@ -70,7 +62,7 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip --retries 5 --timeout 60 install --upgrade pip
-          python -m pip install --upgrade --retries 5 --timeout 60 edge-tts gTTS whisperx faster-whisper
+          python -m pip install --retries 5 --timeout 60 edge-tts gTTS faster-whisper
       - name: Verify TTS clients and compile episode renderer
         shell: bash
         run: |
@@ -85,30 +77,6 @@ jobs:
           PY
           python -m compileall -q science-channel/scripts
           echo "Science-channel Python syntax check passed."
-      - name: Pin TorchCodec for PyTorch 2.8 and verify audio decoding
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --retries 5 --timeout 60 --force-reinstall --no-deps "torchcodec==0.7.0"
-          python - <<'PY'
-          import subprocess
-          import tempfile
-          from pathlib import Path
-          import torch
-          from torchcodec.decoders import AudioDecoder
-
-          print("PyTorch:", torch.__version__)
-          with tempfile.TemporaryDirectory() as directory:
-              sample = Path(directory) / "torchcodec-smoke-test.wav"
-              subprocess.run([
-                  "ffmpeg", "-y", "-v", "error", "-f", "lavfi",
-                  "-i", "sine=frequency=440:duration=1", "-c:a", "pcm_s16le",
-                  str(sample),
-              ], check=True)
-              decoded = AudioDecoder(str(sample)).get_all_samples()
-              assert decoded.data.numel() > 0, "TorchCodec decoded no audio samples"
-              print("TorchCodec audio decode OK:", tuple(decoded.data.shape))
-          PY
       - name: Resolve exact episode path
         id: episode
         shell: bash
@@ -159,7 +127,7 @@ jobs:
         if: steps.episode.outputs.skip != 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
-          KARAOKE_WHISPER_BACKEND: whisperx
+          KARAOKE_WHISPER_BACKEND: faster-whisper
           EPISODE_PATH: ${{ steps.episode.outputs.path }}
         run: |
           set -euo pipefail
@@ -210,12 +178,16 @@ jobs:
         if: steps.episode.outputs.skip != 'true'
         id: telegram
         continue-on-error: true
-        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
-        with:
-          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: ${{ steps.episode.outputs.path }}/output/${{ steps.artifact.outputs.filename }}
-          message: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CAPTION: "🎬 Episode rendered: ${{ steps.episode.outputs.path }}"
+          EPISODE_PATH: ${{ steps.episode.outputs.path }}
+          VIDEO_FILENAME: ${{ steps.artifact.outputs.filename }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -u scripts/send_telegram_video.py "$EPISODE_PATH/output/$VIDEO_FILENAME"
       - name: Require successful Telegram delivery
         if: steps.episode.outputs.skip != 'true' && steps.telegram.outcome != 'success'
         shell: bash
