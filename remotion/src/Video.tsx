@@ -71,10 +71,15 @@ const Character: React.FC<{frame: number; action: string}> = ({frame, action}) =
   );
 };
 
-const SceneWorld: React.FC<{index: number; frame: number; action: string}> = ({index, frame, action}) => {
+const SceneWorld: React.FC<{index: number; frame: number; action: string; visual: string}> = ({index, frame, action, visual}) => {
   const palette = palettes[index % palettes.length];
   const spin = frame * 0.012;
-  const mode = index % 4;
+  const description = visual.toLowerCase();
+  const kind = /money|coin|cash|dollar|wealth|salary|bank/.test(description) ? "coin"
+    : /planet|earth|moon|space|orbit|star/.test(description) ? "planet"
+    : /atom|molecule|chemical|science|cell/.test(description) ? "molecule"
+    : /city|building|house|tower|office/.test(description) ? "building"
+    : index % 4 === 0 ? "knot" : index % 4 === 1 ? "sphere" : index % 4 === 2 ? "crystal" : "ring";
   return (
     <ThreeCanvas width={1920} height={1080} camera={{fov: 42, position: [0, 0, 8.2]}} style={{background: palette[0]}}>
       <ambientLight intensity={0.72} />
@@ -86,26 +91,44 @@ const SceneWorld: React.FC<{index: number; frame: number; action: string}> = ({i
       </mesh>
       <Character frame={frame} action={action} />
       <group position={[1.6, 0.35, -0.2]} rotation={[spin * 0.3, spin, spin * 0.2]}>
-        {mode === 0 ? (
-          <mesh>
-            <torusKnotGeometry args={[0.92, 0.24, 140, 18]} />
-            <meshStandardMaterial color={palette[2]} metalness={0.3} roughness={0.3} />
+        {kind === "coin" ? (
+          <mesh rotation={[Math.PI / 2.8, spin, 0]}>
+            <cylinderGeometry args={[0.9, 0.9, 0.16, 64]} />
+            <meshStandardMaterial color="#f4c34e" metalness={0.82} roughness={0.2} />
           </mesh>
-        ) : mode === 1 ? (
-          <mesh>
-            <sphereGeometry args={[1.05, 48, 48]} />
-            <meshStandardMaterial color={palette[2]} metalness={0.28} roughness={0.26} />
-          </mesh>
-        ) : mode === 2 ? (
-          <mesh>
-            <icosahedronGeometry args={[1.1, 1]} />
-            <meshStandardMaterial color={palette[2]} metalness={0.35} roughness={0.32} />
-          </mesh>
+        ) : kind === "planet" ? (
+          <group>
+            <mesh>
+              <sphereGeometry args={[0.95, 48, 48]} />
+              <meshStandardMaterial color="#4d9bd8" metalness={0.18} roughness={0.42} />
+            </mesh>
+            <mesh rotation={[0.8, 0.25, 0.2]}>
+              <torusGeometry args={[1.35, 0.055, 16, 96]} />
+              <meshStandardMaterial color={palette[2]} />
+            </mesh>
+          </group>
+        ) : kind === "molecule" ? (
+          <group>
+            <mesh><sphereGeometry args={[0.38, 24, 24]} /><meshStandardMaterial color={palette[2]} /></mesh>
+            <mesh position={[0.72, 0.35, 0]}><sphereGeometry args={[0.27, 20, 20]} /><meshStandardMaterial color="#f4b942" /></mesh>
+            <mesh position={[-0.68, -0.38, 0]}><sphereGeometry args={[0.27, 20, 20]} /><meshStandardMaterial color="#e87b72" /></mesh>
+            <mesh position={[0.08, 0.85, 0]}><sphereGeometry args={[0.22, 20, 20]} /><meshStandardMaterial color="#79d6a3" /></mesh>
+            <mesh rotation={[0, 0, 0.4]}><torusGeometry args={[0.72, 0.045, 10, 48]} /><meshStandardMaterial color="#e7edf5" /></mesh>
+          </group>
+        ) : kind === "building" ? (
+          <group>
+            <mesh position={[-0.35, -0.15, 0]}><boxGeometry args={[0.65, 1.5, 0.55]} /><meshStandardMaterial color={palette[2]} /></mesh>
+            <mesh position={[0.38, 0.1, -0.08]}><boxGeometry args={[0.58, 2.0, 0.5]} /><meshStandardMaterial color="#f4b942" /></mesh>
+            <mesh position={[0.05, -0.9, 0.2]}><boxGeometry args={[1.35, 0.16, 0.75]} /><meshStandardMaterial color="#e7edf5" /></mesh>
+          </group>
+        ) : kind === "knot" ? (
+          <mesh><torusKnotGeometry args={[0.92, 0.24, 140, 18]} /><meshStandardMaterial color={palette[2]} metalness={0.3} roughness={0.3} /></mesh>
+        ) : kind === "sphere" ? (
+          <mesh><sphereGeometry args={[1.05, 48, 48]} /><meshStandardMaterial color={palette[2]} metalness={0.28} roughness={0.26} /></mesh>
+        ) : kind === "crystal" ? (
+          <mesh><icosahedronGeometry args={[1.1, 1]} /><meshStandardMaterial color={palette[2]} metalness={0.35} roughness={0.32} /></mesh>
         ) : (
-          <mesh>
-            <torusGeometry args={[0.85, 0.23, 24, 80]} />
-            <meshStandardMaterial color={palette[2]} metalness={0.3} roughness={0.3} />
-          </mesh>
+          <mesh><torusGeometry args={[0.85, 0.23, 24, 80]} /><meshStandardMaterial color={palette[2]} metalness={0.3} roughness={0.3} /></mesh>
         )}
       </group>
       {Array.from({length: 12}, (_, i) => {
@@ -130,7 +153,7 @@ const Scene: React.FC<{scene: ExplainerScene; index: number; duration: number}> 
   const palette = palettes[index % palettes.length];
   return (
     <AbsoluteFill style={{opacity: fade, background: `linear-gradient(120deg, ${palette[0]}, ${palette[1]})`}}>
-      <SceneWorld index={index} frame={frame} action={scene.action || "explain"} />
+      <SceneWorld index={index} frame={frame} action={scene.action || "explain"} visual={scene.visual || scene.title} />
       <AbsoluteFill style={{justifyContent: "flex-end", padding: "0 110px 90px", background: "linear-gradient(0deg, rgba(0,0,0,.82), transparent 58%)"}}>
         <div style={{fontFamily: "Arial, sans-serif", color: "#ffffff", fontSize: 28, letterSpacing: 5, textTransform: "uppercase", opacity: 0.8, marginBottom: 18}}>
           {scene.title}
