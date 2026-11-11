@@ -9,6 +9,9 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
 KILO_FALLBACK_MODELS = [x.strip() for x in os.getenv("KILO_FALLBACK_MODELS", "nvidia/nemotron-3.5-lightning:free,openrouter/free").split(",") if x.strip()]
 
+class PermanentProviderError(RuntimeError):
+    """A non-retryable provider response such as HTTP 400 or 404."""
+
 MODEL_FALLBACKS = [
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
@@ -101,9 +104,10 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
                     f"{provider} HTTP {response.status_code}: {response.text[:900]}"
                 )
             if not response.ok:
-                raise RuntimeError(
-                    f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
-                )
+                error = f"{provider} HTTP {response.status_code}: {response.text[:1200]}"
+                if 400 <= response.status_code < 500 and response.status_code not in (408, 425, 429):
+                    raise PermanentProviderError(error)
+                raise RuntimeError(error)
             choices = response.json().get("choices") or []
             message = choices[0].get("message", {}) if choices else {}
             content = message.get("content", "")
@@ -115,6 +119,10 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
                 raise RuntimeError(f"{provider} returned an empty completion.")
             print(f"{provider} story planner active: {model}", flush=True)
             return {"candidates": [{"content": {"parts": [{"text": content}]}}]}
+        except PermanentProviderError as exc:
+            last_error = exc
+            print(f"{provider} rejected this model/request; skipping retries: {exc}", flush=True)
+            break
         except Exception as exc:
             last_error = exc
             print(
