@@ -7,6 +7,7 @@ import requests
 GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
+KILO_FALLBACK_MODELS = [x.strip() for x in os.getenv("KILO_FALLBACK_MODELS", "nvidia/nemotron-3.5-lightning:free,openrouter/free").split(",") if x.strip()]
 
 MODEL_FALLBACKS = [
     "gemini-3.5-flash-lite",
@@ -398,11 +399,18 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 print(f"Groq story fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
 
         if data is None:
-            try:
-                data = _call_openai_compatible("Kilo", KILO_MODEL, prompt)
-                used_model = "kilo:" + KILO_MODEL
-            except Exception as exc:
-                print(f"Kilo anonymous story fallback unavailable: {type(exc).__name__}: {exc}", flush=True)
+            kilo_models = list(dict.fromkeys([KILO_MODEL] + KILO_FALLBACK_MODELS))
+            for kilo_model in kilo_models:
+                try:
+                    data = _call_openai_compatible("Kilo", kilo_model, prompt)
+                    used_model = "kilo:" + kilo_model
+                    break
+                except Exception as exc:
+                    print(
+                        f"Kilo anonymous model {kilo_model} unavailable: "
+                        f"{type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
 
         if data is None:
             raise RuntimeError(
