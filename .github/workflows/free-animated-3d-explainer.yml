@@ -112,8 +112,12 @@ jobs:
           sample_rate = 22050
           total_samples = int(duration * sample_rate)
           samples = array("h")
+          boundaries = [sum(durations[:j]) / fps for j in range(1, len(durations))]
+          boundary_index = 0
           for i in range(total_samples):
               t = i / sample_rate
+              while boundary_index < len(boundaries) and t >= boundaries[boundary_index] + 0.42:
+                  boundary_index += 1
               fade_in = min(1.0, t / 2.5)
               fade_out = min(1.0, (duration - t) / 3.0)
               bed = (
@@ -123,10 +127,10 @@ jobs:
               )
               pulse = 0.5 + 0.5 * math.sin(2 * math.pi * 0.08 * t)
               chime = 0.0
-              for boundary in [sum(durations[:j]) / fps for j in range(1, len(durations))]:
-                  delta = t - boundary
+              if boundary_index < len(boundaries):
+                  delta = t - boundaries[boundary_index]
                   if 0 <= delta < 0.42:
-                      chime += 0.18 * math.sin(2 * math.pi * 660 * delta) * math.exp(-8 * delta)
+                      chime = 0.18 * math.sin(2 * math.pi * 660 * delta) * math.exp(-8 * delta)
               value = (bed * (0.045 + 0.018 * pulse) + chime * 0.10) * fade_in * fade_out
               samples.append(max(-32767, min(32767, int(value * 32767))))
           with wave.open(str(public / "ambient.wav"), "wb") as wav:
