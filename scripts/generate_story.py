@@ -64,18 +64,10 @@ def _call_gemini(api_key, model, prompt, attempts=3):
 
 
 PROVIDER_CONFIG = {
-    # provider: (base URL, API-key environment variable, default model)
-    "LLM7": ("https://api.llm7.io/v1", "LLM7_API_KEY", "gpt-oss:20b"),
+    # These public routes are attempted without credentials. They may be
+    # rate-limited or unavailable; the offline generator is the final fallback.
     "Kilo": ("https://api.kilo.ai/api/gateway", "", "kilo-auto/free"),
     "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
-    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
-    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-lightning:free"),
-    "Mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY", "ministral-3b-latest"),
-    "Cohere": ("https://api.cohere.ai/compatibility/v1", "COHERE_API_KEY", "command-r7b-12-2024"),
-    "NVIDIA": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "openai/gpt-oss-20b"),
-    "ZAI": ("https://api.z.ai/api/paas/v4", "ZAI_API_KEY", "glm-4.7-flash"),
-    "ModelScope": ("https://api-inference.modelscope.cn/v1", "MODELSCOPE_API_KEY", "Qwen/Qwen3.5-35B-A3B"),
-    "SiliconFlow": ("https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY", "tencent/Hunyuan-MT-7B"),
 }
 
 
@@ -396,9 +388,8 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 
 def generate_story(root: Path, config: dict) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        print("GEMINI_API_KEY is not set; skipping Gemini and using configured free LLM fallbacks.", flush=True)
+    api_key = ""  # This workflow intentionally uses no API keys.
+    print("Keyless mode: trying public free endpoints, then the offline story generator.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -417,13 +408,6 @@ def generate_story(root: Path, config: dict) -> dict:
     examples = "\n".join(f"- {topic}" for topic in topics)
     recent_history = history[-150:]
     models = []
-    if api_key:
-        preferred = config.get("gemini_model", "").strip()
-        if preferred:
-            models.append(preferred)
-        for model in MODEL_FALLBACKS:
-            if model not in models:
-                models.append(model)
 
     data = None
     used_model = None
@@ -477,31 +461,12 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Try Gemini when configured, then independent gateways/providers.
-        # LLM7 accepts an optional free token; Kilo and OVH also have keyless tiers.
-        for model in models:
-            print(f"Trying Gemini model: {model}", flush=True)
-            try:
-                data = _call_gemini(api_key, model, prompt, attempts=2)
-                used_model = model
-                break
-            except Exception as exc:
-                print(f"Gemini {model} unavailable: {type(exc).__name__}: {str(exc)[:350]}", flush=True)
-
+        # Try only public keyless gateways. Never require or read API secrets.
         provider_models = [
-            ("LLM7", os.getenv("LLM7_MODEL", "gpt-oss:20b").strip()),
-            ("Kilo", os.getenv("KILO_MODEL", "kilo-auto/free").strip()),
+            ("Kilo", "kilo-auto/free"),
             ("Kilo", "nvidia/nemotron-3.5-lightning:free"),
             ("Kilo", "openrouter/free"),
-            ("OVH", os.getenv("OVH_MODEL", "gpt-oss-20b").strip()),
-            ("Groq", os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()),
-            ("OpenRouter", os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free").strip()),
-            ("Mistral", os.getenv("MISTRAL_MODEL", "ministral-3b-latest").strip()),
-            ("Cohere", os.getenv("COHERE_MODEL", "command-r7b-12-2024").strip()),
-            ("NVIDIA", os.getenv("NVIDIA_MODEL", "openai/gpt-oss-20b").strip()),
-            ("ZAI", os.getenv("ZAI_MODEL", "glm-4.7-flash").strip()),
-            ("ModelScope", os.getenv("MODELSCOPE_MODEL", "Qwen/Qwen3.5-35B-A3B").strip()),
-            ("SiliconFlow", os.getenv("SILICONFLOW_MODEL", "tencent/Hunyuan-MT-7B").strip()),
+            ("OVH", "gpt-oss-20b"),
         ]
         for provider, provider_model in provider_models:
             if data is not None:
