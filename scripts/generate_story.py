@@ -95,11 +95,44 @@ def _call_openai_compatible(provider, model, prompt, attempts=2):
     raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
 
 
+def _call_gemini(api_key, model, prompt):
+    """Call Gemini when configured; return the same response shape as other providers."""
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    body = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "systemInstruction": {"parts": [{"text": (
+            "Return exactly one valid JSON object matching the requested schema. "
+            "Do not use Markdown fences or add commentary."
+        )}]},
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 12000,
+            "responseMimeType": "application/json",
+        },
+    }
+    response = requests.post(url, headers=headers, json=body, timeout=(12, 120))
+    if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+        raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:700]}")
+    if not response.ok:
+        raise PermanentProviderError(f"Gemini HTTP {response.status_code}: {response.text[:700]}")
+    payload = response.json()
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        raise RuntimeError(f"Gemini returned no candidates: {str(payload)[:700]}")
+    print(f"Story planner active: Gemini/{model}", flush=True)
+    return {"candidates": candidates}
+
+
 def _call_story_model(api_key, model, prompt):
     """Repair a story using the same keyless provider that generated it."""
     if ":" not in model:
         raise RuntimeError("Offline fallback does not make remote repair calls")
     provider, provider_model = model.split(":", 1)
+    if provider == "Gemini":
+        return _call_gemini(api_key, provider_model, prompt)
     return _call_openai_compatible(provider, provider_model, prompt)
 
 
@@ -346,8 +379,11 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 
 def generate_story(root: Path, config: dict) -> dict:
-    api_key = ""  # Kept only for compatibility with the scene-repair helper.
-    print("Keyless mode: no API keys or paid credentials are used.", flush=True)
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if api_key:
+        print("Gemini API key detected; Gemini will be tried first with free-provider fallbacks.", flush=True)
+    else:
+        print("GEMINI_API_KEY is not set; using free-provider fallbacks and offline generation.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -417,19 +453,26 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Public keyless endpoints only; offline story is the final fallback.
-        provider_models = [
+        # Gemini is preferred when a secret is configured. Keyless providers and
+        # the deterministic local generator remain available as automatic fallbacks.
+        provider_models = []
+        if api_key:
+            provider_models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
+        provider_models.extend([
             ("Kilo", KILO_MODEL),
             *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
             ("OVH", "gpt-oss-20b"),
-        ]
+        ])
         for provider, provider_model in provider_models:
             if data is not None:
                 break
             if not provider_model:
                 continue
             try:
-                data = _call_openai_compatible(provider, provider_model, prompt)
+                if provider == "Gemini":
+                    data = _call_gemini(api_key, provider_model, prompt)
+                else:
+                    data = _call_openai_compatible(provider, provider_model, prompt)
                 used_model = provider + ":" + provider_model
                 break
             except Exception as exc:
