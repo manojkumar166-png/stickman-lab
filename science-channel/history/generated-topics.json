@@ -39,7 +39,8 @@
     "Why do rings form around planets?",
     "Why does copper turn green?",
     "Why are sunsets on Mars blue?",
-    "Why do cats purr?"
+    "Why do cats purr?",
+    "How do snakes 'see' heat?"
   ],
   "topic_details": [
     {
@@ -226,6 +227,11 @@
       "title": "Why do cats purr?",
       "angle": "Explore the surprising evolutionary mechanics behind feline purring, examining how this rhythmic low-frequency vocalization goes far beyond simple contentment to act as a physical self-healing mechanism and a tool for social bonding.",
       "pillar": "Animals and animal behaviour"
+    },
+    {
+      "title": "How do snakes 'see' heat?",
+      "angle": "An exploration of specialized pit organs that allow pit vipers to visualize infrared radiation and strike prey in total darkness.",
+      "pillar": "Animal senses and abilities"
     }
   ]
 }
