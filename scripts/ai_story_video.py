@@ -12,7 +12,7 @@ KEY=os.getenv("GEMINI_API_KEY","").strip()
 GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
 GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
-KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-lightning:free,openrouter/free").split(",") if x.strip()]
+KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
 OVH_MODEL=os.getenv("OVH_MODEL","Qwen3.5-397B-A17B").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
 # Paid or unknown model IDs supplied through Actions variables are ignored.
@@ -114,26 +114,40 @@ def gemini(prompt):
     kilo_errors=[]
     kilo_models=list(dict.fromkeys([KILO_MODEL]+KILO_FALLBACK_MODELS))
     for kilo_model in kilo_models:
+        messages=[
+            {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
+            {"role":"user","content":prompt},
+        ]
+        request_bodies=[
+            {"model":kilo_model,"messages":messages,"max_tokens":16384},
+            {"model":kilo_model,"messages":messages},
+        ]
         for attempt in range(1,3):
             try:
-                response=requests.post(kilo_url,
-                    headers={"Content-Type":"application/json"},
-                    json={"model":kilo_model,"messages":[
-                        {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
-                        {"role":"user","content":prompt}],
-                        "temperature":0.8,"max_tokens":32768},
-                    timeout=TIMEOUT)
-                if response.status_code in (408,425,429,500,502,503,504):
-                    raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:900]}")
-                if not response.ok:
-                    error=f"Kilo model {kilo_model} HTTP {response.status_code}: {response.text[:1200]}"
-                    kilo_errors.append(error)
-                    print(error,flush=True)
-                    # A client error is usually a model/payload/entitlement issue;
-                    # retrying it unchanged wastes the free-model request budget.
-                    if 400 <= response.status_code < 500:
-                        break
-                    raise RuntimeError(error)
+                response=None
+                for variant_index,body in enumerate(request_bodies):
+                    response=requests.post(
+                        kilo_url,
+                        headers={"Content-Type":"application/json"},
+                        json=body,
+                        timeout=(20,240),
+                    )
+                    if response.status_code==400 and variant_index+1<len(request_bodies):
+                        message=f"Kilo model {kilo_model} rejected optional token limits; retrying minimal request."
+                        print(message,flush=True)
+                        continue
+                    if response.status_code in (408,425,429,500,502,503,504):
+                        raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:1200]}")
+                    if not response.ok:
+                        error=f"Kilo model {kilo_model} HTTP {response.status_code}: {response.text[:1400]}"
+                        kilo_errors.append(error)
+                        print(error,flush=True)
+                        if 400<=response.status_code<500:
+                            break
+                        raise RuntimeError(error)
+                    break
+                if response is None or not response.ok:
+                    break
                 choices=response.json().get("choices") or []
                 message=choices[0].get("message",{}) if choices else {}
                 content=message.get("content","")
@@ -145,7 +159,7 @@ def gemini(prompt):
             except Exception as exc:
                 kilo_errors.append(f"{kilo_model} try {attempt}: {type(exc).__name__}: {exc}")
                 if attempt<2:
-                    delay=attempt*5
+                    delay=attempt*7
                     print(f"Kilo model {kilo_model} attempt {attempt}/2 failed: {exc}. Retrying in {delay}s.",flush=True)
                     time.sleep(delay)
 
