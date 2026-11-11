@@ -9,6 +9,12 @@ on:
         default: "6"
         type: choice
         options: ["3", "4", "5", "6", "7", "8"]
+      content_niche:
+        description: "Video niche"
+        required: true
+        default: "science"
+        type: choice
+        options: ["science", "finance", "psychology", "history", "technology", "self-improvement", "general education"]
 
 permissions:
   contents: read
@@ -49,6 +55,7 @@ jobs:
       - name: Generate story, voiceover and original background sound
         env:
           TARGET_MINUTES: ${{ inputs.target_minutes }}
+          CONTENT_NICHE: ${{ inputs.content_niche }}
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
@@ -70,6 +77,7 @@ jobs:
           config = json.loads((root / "config.json").read_text(encoding="utf-8"))
           minutes = int(os.environ.get("TARGET_MINUTES", "6"))
           config["target_minutes"] = minutes
+          config["content_niche"] = os.environ.get("CONTENT_NICHE", "science")
           config["scene_count"] = max(15, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
