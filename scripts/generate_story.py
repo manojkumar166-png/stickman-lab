@@ -4,20 +4,11 @@ from pathlib import Path
 
 import requests
 
-GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
-KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
-KILO_FALLBACK_MODELS = [x.strip() for x in os.getenv("KILO_FALLBACK_MODELS", "nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
+KILO_MODEL = "kilo-auto/free"
+KILO_FALLBACK_MODELS = ["nvidia/nemotron-3.5-lightning:free", "openrouter/free"]
 
 class PermanentProviderError(RuntimeError):
     """A non-retryable provider response such as HTTP 400 or 404."""
-
-MODEL_FALLBACKS = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.8-flash",
-]
 
 # Broad categories are deliberately mixed so consecutive videos explore
 # different areas of science while keeping the simple question-led style.
@@ -36,46 +27,10 @@ TOPIC_CATEGORIES = [
 ]
 
 
-def _call_gemini(api_key, model, prompt, attempts=3):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    body = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9, "maxOutputTokens": 16000},
-    }
-    last_err = None
-    for attempt in range(attempts):
-        try:
-            r = requests.post(url, params={"key": api_key}, json=body, timeout=180)
-        except requests.RequestException as e:
-            last_err = f"network error: {e}"
-            time.sleep(2 ** attempt)
-            continue
-        if r.status_code == 200:
-            return r.json()
-        if r.status_code in (429, 500, 502, 503, 504):
-            last_err = f"{r.status_code}: {r.text[:300]}"
-            wait = 2 ** attempt
-            print(f"  {model} -> {r.status_code}, retrying in {wait}s...")
-            time.sleep(wait)
-            continue
-        raise RuntimeError(f"Gemini API error {r.status_code} on {model}: {r.text[:1000]}")
-    raise RuntimeError(f"Gemini API gave up on {model} after {attempts} tries: {last_err}")
-
-
-
 PROVIDER_CONFIG = {
-    # provider: (base URL, API-key environment variable, default model)
-    "LLM7": ("https://api.llm7.io/v1", "LLM7_API_KEY", "gpt-oss:20b"),
+    # Public endpoints that do not require credentials. Availability may vary.
     "Kilo": ("https://api.kilo.ai/api/gateway", "", "kilo-auto/free"),
     "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
-    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
-    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-lightning:free"),
-    "Mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY", "ministral-3b-latest"),
-    "Cohere": ("https://api.cohere.ai/compatibility/v1", "COHERE_API_KEY", "command-r7b-12-2024"),
-    "NVIDIA": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "openai/gpt-oss-20b"),
-    "ZAI": ("https://api.z.ai/api/paas/v4", "ZAI_API_KEY", "glm-4.7-flash"),
-    "ModelScope": ("https://api-inference.modelscope.cn/v1", "MODELSCOPE_API_KEY", "Qwen/Qwen3.5-35B-A3B"),
-    "SiliconFlow": ("https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY", "tencent/Hunyuan-MT-7B"),
 }
 
 
@@ -84,13 +39,8 @@ def _call_openai_compatible(provider, model, prompt, attempts=2):
     if provider not in PROVIDER_CONFIG:
         raise ValueError(f"Unsupported backup provider: {provider}")
     base_url, key_env, _ = PROVIDER_CONFIG[provider]
-    api_key = os.getenv(key_env, "").strip() if key_env else ""
-    if key_env and not api_key:
-        raise PermanentProviderError(f"{provider} API key is not configured")
-
+    # Intentionally anonymous: this workflow must never require an API key.
     headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
     if provider == "OpenRouter":
         headers["HTTP-Referer"] = "https://github.com/manojkumar166-png/stickman-lab"
         headers["X-Title"] = "Free Animated 3D Explainer"
@@ -146,11 +96,11 @@ def _call_openai_compatible(provider, model, prompt, attempts=2):
 
 
 def _call_story_model(api_key, model, prompt):
-    """Call the selected provider again when a partial story needs repair."""
-    if ":" in model and model.split(":", 1)[0] in PROVIDER_CONFIG:
-        provider, provider_model = model.split(":", 1)
-        return _call_openai_compatible(provider, provider_model, prompt)
-    return _call_gemini(api_key, model, prompt)
+    """Repair a story using the same keyless provider that generated it."""
+    if ":" not in model:
+        raise RuntimeError("Offline fallback does not make remote repair calls")
+    provider, provider_model = model.split(":", 1)
+    return _call_openai_compatible(provider, provider_model, prompt)
 
 
 def _response_text(data):
@@ -396,9 +346,8 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 
 def generate_story(root: Path, config: dict) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        print("GEMINI_API_KEY is not set; skipping Gemini and using configured free LLM fallbacks.", flush=True)
+    api_key = ""  # Kept only for compatibility with the scene-repair helper.
+    print("Keyless mode: no API keys or paid credentials are used.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -416,15 +365,6 @@ def generate_story(root: Path, config: dict) -> dict:
     # reuse one if it already appears in the published topic history.
     examples = "\n".join(f"- {topic}" for topic in topics)
     recent_history = history[-150:]
-    models = []
-    if api_key:
-        preferred = config.get("gemini_model", "").strip()
-        if preferred:
-            models.append(preferred)
-        for model in MODEL_FALLBACKS:
-            if model not in models:
-                models.append(model)
-
     data = None
     used_model = None
     story = None
@@ -477,31 +417,11 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Try Gemini when configured, then independent gateways/providers.
-        # LLM7 accepts an optional free token; Kilo and OVH also have keyless tiers.
-        for model in models:
-            print(f"Trying Gemini model: {model}", flush=True)
-            try:
-                data = _call_gemini(api_key, model, prompt, attempts=2)
-                used_model = model
-                break
-            except Exception as exc:
-                print(f"Gemini {model} unavailable: {type(exc).__name__}: {str(exc)[:350]}", flush=True)
-
+        # Public keyless endpoints only; offline story is the final fallback.
         provider_models = [
-            ("LLM7", os.getenv("LLM7_MODEL", "gpt-oss:20b").strip()),
-            ("Kilo", os.getenv("KILO_MODEL", "kilo-auto/free").strip()),
-            ("Kilo", "nvidia/nemotron-3.5-lightning:free"),
-            ("Kilo", "openrouter/free"),
-            ("OVH", os.getenv("OVH_MODEL", "gpt-oss-20b").strip()),
-            ("Groq", os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()),
-            ("OpenRouter", os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free").strip()),
-            ("Mistral", os.getenv("MISTRAL_MODEL", "ministral-3b-latest").strip()),
-            ("Cohere", os.getenv("COHERE_MODEL", "command-r7b-12-2024").strip()),
-            ("NVIDIA", os.getenv("NVIDIA_MODEL", "openai/gpt-oss-20b").strip()),
-            ("ZAI", os.getenv("ZAI_MODEL", "glm-4.7-flash").strip()),
-            ("ModelScope", os.getenv("MODELSCOPE_MODEL", "Qwen/Qwen3.5-35B-A3B").strip()),
-            ("SiliconFlow", os.getenv("SILICONFLOW_MODEL", "tencent/Hunyuan-MT-7B").strip()),
+            ("Kilo", KILO_MODEL),
+            *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
+            ("OVH", "gpt-oss-20b"),
         ]
         for provider, provider_model in provider_models:
             if data is not None:
@@ -534,11 +454,11 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         returned_scenes = candidate_story.get("scenes", [])
         if not isinstance(returned_scenes, list):
             last_scene_count = "invalid"
-            print("Gemini returned an invalid scenes field; requesting a fresh story.", flush=True)
+            print("Keyless provider returned an invalid scenes field; requesting a fresh story.", flush=True)
             continue
         if len(returned_scenes) != desired_scene_count:
             actual_count = len(returned_scenes)
-            print(f"Gemini returned {actual_count} scenes; repairing to exactly {desired_scene_count}.", flush=True)
+            print(f"Keyless provider returned {actual_count} scenes; repairing to exactly {desired_scene_count}.", flush=True)
             if not _repair_missing_scenes(api_key, used_model, candidate_story, desired_scene_count):
                 last_scene_count = len(candidate_story.get("scenes", []))
                 print("Could not repair this story's scene count; requesting a fresh story.", flush=True)
@@ -549,7 +469,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         candidate_topic = str(candidate_story.get("topic", "")).strip()
         if _is_repeat(candidate_topic, history):
             last_duplicate = candidate_topic or "(empty title)"
-            print(f"Gemini returned a repeated/too-similar topic: {last_duplicate!r}; choosing another category.")
+            print(f"Keyless provider returned a repeated/too-similar topic: {last_duplicate!r}; choosing another category.")
             recent_history = history[-150:] + ([last_duplicate] if last_duplicate else [])
             continue
         story = candidate_story
