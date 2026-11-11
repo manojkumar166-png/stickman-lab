@@ -85,7 +85,7 @@ jobs:
           KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free' }}
           OVH_MODEL: ${{ vars.OVH_MODEL || 'Qwen3.5-397B-A17B' }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
-          GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite' }}
+          GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
         shell: bash
         run: |
           set -euo pipefail
