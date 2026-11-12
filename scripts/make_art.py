@@ -1,4 +1,4 @@
-import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, requests
+import os, random, hashlib, asyncio, aiohttp, io, urllib.parse, base64, time, requests, json
 from PIL import Image, ImageDraw, ImageFont
 
 STYLE = ("high-quality Pixar-inspired 3D animated feature-film style, polished stylized 3D rendering, "
@@ -128,12 +128,31 @@ def valid_png(raw):
         converted.save(output, format="PNG", optimize=True)
         return output.getvalue()
 
+def _extract_gemini_payload(response_text):
+    """Decode a Gemini response even if a proxy appended a second JSON object."""
+    decoder = json.JSONDecoder()
+    candidates = []
+    for offset, char in enumerate(response_text):
+        if char != "{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(response_text[offset:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("candidates"), list):
+            candidates.append(payload)
+    if not candidates:
+        preview = response_text[:1200].replace("\\n", " ")
+        raise ValueError(f"Gemini response contained no complete candidates JSON object. Response begins: {preview}")
+    return candidates[0]
+
+
 def rewrite_flagged_prompt(original_visual, attempt):
     """Rewrite a flagged scene into a safe depiction of the same story beat."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is missing; cannot rewrite flagged scene prompt.")
-    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     strategies = {
@@ -145,14 +164,13 @@ def rewrite_flagged_prompt(original_visual, attempt):
         2: (
             "Re-stage the same story moment as a clearly safe educational 3D illustration. "
             "Preserve the central science concept and what the viewer needs to understand, "
-            "but replace any potentially sensitive physical action with a harmless symbolic "
+            "but replace potentially sensitive physical action with a harmless symbolic "
             "visual metaphor, demonstration model, or non-contact interaction."
         ),
         3: (
             "Create a substantially different but meaning-equivalent visual composition for "
             "the same scene. Focus on the scientific idea and narrative beat using benign "
-            "objects, a classroom or laboratory demonstration, and calm character poses. "
-            "Avoid depicting injury, violence, weapons, dangerous acts, or graphic detail."
+            "objects, a classroom or laboratory demonstration, and calm character poses."
         ),
         4: (
             "Show the same story beat through a close-up educational science exhibit or "
@@ -162,32 +180,61 @@ def rewrite_flagged_prompt(original_visual, attempt):
         5: (
             "Use a wide establishing shot of the same setting and moment, preserving the "
             "important characters or scientific subject. Communicate the same narrative "
-            "purpose through calm poses, safe distance, and a clear visual metaphor. "
-            "Use a noticeably different camera angle and composition."
+            "purpose through calm poses, safe distance, and a clear visual metaphor."
         ),
     }
     strategy = strategies.get(attempt, strategies[5])
     instruction = (
-        "You are revising a visual prompt because an image-generation safety filter rejected "
-        "the previous wording. Your job is to make a genuinely safer depiction, not to bypass "
-        "or trick the safety system.\n"
-        f"{strategy}\n"
-        "Keep it suitable for a general-audience educational science video. "
-        "Describe only visible image content. Do not include text, captions, labels, logos, "
-        "or instructions. Return one concise visual description only, with no explanation.\n\n"
-        f"Original scene description:\n{original_visual}"
+        "Revise this image prompt into a genuinely safer general-audience educational depiction. "
+        "Do not bypass or trick the image safety system. Preserve the educational concept and "
+        "story beat while removing risky or ambiguous details. Describe only visible image content. "
+        "Return one concise visual description only, with no explanation or markdown.\n\n"
+        f"{strategy}\nOriginal scene description:\n{original_visual}"
     )
-    response = requests.post(
-        url, params={"key": api_key},
-        json={"contents": [{"parts": [{"text": instruction}]}],
-              "generationConfig": {"temperature": 0.65}},
-        timeout=(20, 90)
+
+    request_body = {
+        "contents": [{"parts": [{"text": instruction}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 512},
+    }
+    last_error = None
+    for api_attempt in range(1, 6):
+        try:
+            response = requests.post(
+                url,
+                params={"key": api_key},
+                json=request_body,
+                timeout=(20, 90),
+            )
+            if response.status_code == 429 or response.status_code >= 500:
+                raise requests.HTTPError(
+                    f"Gemini temporary HTTP {response.status_code}: {response.text[:800]}",
+                    response=response,
+                )
+            response.raise_for_status()
+            payload = _extract_gemini_payload(response.text)
+            parts = payload["candidates"][0]["content"]["parts"]
+            revised = "\n".join(
+                part["text"] for part in parts
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            ).strip()
+            if not revised:
+                raise ValueError("Gemini returned no text in its first candidate.")
+            return " ".join(revised.split())[:1000]
+        except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            if api_attempt == 5:
+                break
+            wait = min(30, api_attempt * 5)
+            print(
+                f"Gemini safe-prompt rewrite request failed ({api_attempt}/5); "
+                f"retrying in {wait}s: {last_error}",
+                flush=True,
+            )
+            time.sleep(wait)
+
+    raise RuntimeError(
+        f"Gemini safe-prompt rewrite failed after five API attempts: {last_error}"
     )
-    response.raise_for_status()
-    revised = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-    if not revised:
-        raise RuntimeError("Gemini returned an empty revised visual prompt.")
-    return revised[:1000]
 
 
 async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None):
