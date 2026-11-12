@@ -14,7 +14,17 @@ OUT.mkdir(exist_ok=True)
 def valid_media(path, minimum_size):
     if not path.is_file() or path.stat().st_size < minimum_size:
         return False
-    return True
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True
+    )
+    if probe.returncode != 0:
+        return False
+    try:
+        return float(probe.stdout.strip()) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def main():
