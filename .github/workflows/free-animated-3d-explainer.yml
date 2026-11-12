@@ -231,11 +231,11 @@ jobs:
           source = generator_path.read_text(encoding="utf-8")
           source = source.replace(
               '    niche = niche[:80]\n',
-              '    niche = niche[:80]\n    selected_topic = str(config.get("selected_topic", "")).strip()[:180]\n'
+              '    niche = niche[:80]\n    selected_topic = str(config.get("selected_topic", "")).strip()[:180]\n    selected_sub_niche = str(config.get("sub_niche", "")).strip()[:120]\n'
           )
           source = source.replace(
               'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\n',
-              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\n{("Use this exact user-selected topic as the title and answer it directly: " + selected_topic) if selected_topic else "Choose a fresh topic yourself."}\n'
+              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\nSub-niche focus: {selected_sub_niche or "use the broad niche"}.\n{("Use this exact user-selected topic as the title and answer it directly: " + selected_topic) if selected_topic else "Choose a fresh topic yourself."}\n'
           )
           source = source.replace(
               '        candidate_topic = str(candidate_story.get("topic", "")).strip()\n',
