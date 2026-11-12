@@ -11,10 +11,8 @@ Workflow file: `.github/workflows/ai-video-test.yml`
 - Runs automatically every day at **05:30 UTC (11:00 India Standard Time)**.
 - Can also be started manually from Actions → **AI Video Experiment** → Run workflow.
 - Uses Python 3.11, installs FFmpeg and `requirements.txt`, then runs `python main_ai.py`.
-- Generates a story using Gemini, creates scene illustrations using Cloudflare Workers AI with AI Horde and OVHcloud fallbacks, creates an MP3 narration with Edge TTS, and renders an MP4 with FFmpeg.
-- Sends the MP4 to the configured Telegram chat, uploads the MP4 and story JSON as a GitHub Actions artifact retained for **7 days**, then commits `topic_history.json` to main.
-
-**Important order:** Telegram delivery happens before artifact upload in this workflow. Unlike the Science Channel renderer, the Telegram step is not marked continue-on-error. If Telegram delivery fails, later artifact upload and topic-history commit steps may not run. Check the Actions log rather than assuming an artifact exists.
+- Generates a story using Gemini, creates all scene illustrations using Cloudflare Workers AI only, creates an MP3 narration with Edge TTS, and renders an MP4 with FFmpeg. Valid stage outputs are reused on retry.
+- Uploads the rendered MP4 as a GitHub Actions artifact retained for **2 days**, commits `topic_history.json` to main, and then sends the MP4 to the configured Telegram chat. Telegram delivery is retried without regenerating the story, images, narration or video. A delivery marker prevents duplicate sends if a later completion/cleanup step fails.
 
 ## 2. Files and what they control
 
@@ -39,7 +37,7 @@ The root `config.json` currently contains:
 | Setting | Current value | Meaning |
 |---|---:|---|
 | `target_minutes` | 8 | Target story length used in the Gemini prompt. |
-| `scene_count` | 47 | Number of scenes requested from Gemini. |
+| `scene_count` | 48 | Number of scenes requested from Gemini. |
 | `width` / `height` | 1280 × 720 | Video dimensions (16:9). |
 | `fps` | 24 | Video frame rate. |
 | `gemini_model` | gemini-3.5-flash-lite | First Gemini model attempted; code also has a fallback list. |
@@ -82,7 +80,7 @@ Edit `width`, `height` and `fps` in `config.json`. Keep width and height in the 
 
 Edit `gemini_model` in `config.json`. The story generator tries the configured model first, then attempts its built-in fallback model list. The model must be available to the Gemini API key and support the request/JSON response format expected by `scripts/generate_story.py`.
 
-To change provider (for example, from Gemini to another API), changing only the model string is not enough. Update the API URL, authentication, request body, response parsing and model fallback logic in `scripts/generate_story.py`, then test the returned JSON schema.
+To change the story-text provider (for example, from Gemini to another API), changing only the model string is not enough. Update the API URL, authentication, request body, response parsing and model fallback logic in `scripts/generate_story.py`, then test the returned JSON schema. This does not change the image provider: image generation remains Cloudflare-only.
 
 ### Change the AI illustration style
 
@@ -561,11 +559,11 @@ The 250-character limit applies only to the scene's `visual` text before the sha
 
 Inside `scripts/make_art.py`:
 
-- `timeout=120` gives each Cloudflare request up to 120 seconds.
-- `time.sleep(6)` waits six seconds between scene requests.
-- Cloudflare requests use bounded retries for rate limits and transient failures.
-- Each scene falls through to AI Horde and then OVHcloud if its current provider fails.
-- The first valid image is saved immediately. If all three providers fail for a scene, image generation raises an error and the workflow stops.
+- Each Cloudflare request has a 20-second connect timeout and a 180-second response timeout.
+- Cloudflare network errors, HTTP 429 and HTTP 5xx responses are retried up to five times with bounded backoff; a numeric `Retry-After` value is honored up to the configured wait cap.
+- Permanent authentication/permission errors and invalid requests fail clearly rather than switching providers.
+- There is no AI Horde, OVHcloud, Vexa, Pollinations, Groq or Kilo image fallback. If Cloudflare cannot produce a scene after retries, the run stops and resumes that missing scene on the next workflow attempt.
+- Each valid image is saved atomically as soon as it is generated. Existing valid images are verified and skipped on retry.
 
 You can adjust provider retry counts, timeouts and pacing in `scripts/make_art.py`; respect each anonymous provider's published limits. For a robust production change, implement bounded retries with exponential backoff for transient HTTP 429 and 5xx errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
 
@@ -595,11 +593,11 @@ The bottom strip is a static scene caption, separate from any word-synchronized 
 | HTTP 403 | Token lacks permission or account access | Check Workers AI permissions and account ID. |
 | HTTP 404 / model not found | Incorrect model identifier or model no longer available | Verify current model catalogue and endpoint syntax. |
 | HTTP 400 | Unsupported field, dimension or malformed prompt | Compare request fields with the selected model's current schema. |
-| HTTP 429 | Rate limit or quota exceeded | Check account limits; add safe backoff/retry and retain pacing. |
+| HTTP 429 | Rate limit or quota exceeded | The image client retries up to five times and honors a bounded `Retry-After`; if exhausted, the workflow saves progress and retries the failed scene on the next attempt. |
 | HTTP 5xx | Temporary service/model error | Retry a limited number of times with backoff; inspect Cloudflare status. |
 | Request timeout | Slow generation or network issue | Check the 120-second timeout and model latency. |
 | Response JSON has no `image` field | Model response format differs from current decoder | Inspect the documented response schema and update response parsing. |
-| Some scenes repeat | Provider fallback failed | Inspect the Cloudflare, AI Horde and OVHcloud error messages for the scene. |
+| A scene image fails | Cloudflare request failed after retries | Inspect the Cloudflare error for that scene. Completed scene images are saved and reused; no other image provider is called. |
 | A scene image fails | Check the Cloudflare, AI Horde and OVHcloud errors for that scene; the pipeline intentionally stops rather than substituting artwork. |
 
 ---
@@ -632,8 +630,8 @@ There is no separate Worker URL or custom Worker source in this request path. Th
 | `scripts/make_art.py` → `CF_ACCOUNT_ID`, `CF_API_TOKEN` | Reads environment variables with `os.getenv()` | Change credential variable names (also update workflow and local environment) |
 | `scripts/make_art.py` → `CF_URL_CHEAP` | Builds `https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}` | Change the account API route or model identifier |
 | `build_prompt()` | Normalizes whitespace, removes double quotes, truncates scene visual text to 250 characters, appends `STYLE` | Change prompt length, cleanup or shared visual style |
-| `cf_image_cheap()` | Checks credentials, sends multipart POST with Bearer token, prompt, width 1024, height 576; timeout 120 seconds | Change authentication, request fields, dimensions, timeout or response handling |
-| `generate_all_ai_images()` | Processes scenes sequentially, tries Cloudflare then AI Horde then OVHcloud, validates and saves each successful image immediately | Change concurrency, pacing, retry policy and failed-scene behavior |
+| `cf_image_cheap()` | Checks credentials, sends multipart POST with Bearer token, prompt, width 1024, height 576; retries transient errors up to five times | Change authentication, request fields, dimensions, timeout or response handling |
+| `generate_all_ai_images()` | Processes scenes sequentially, calls Cloudflare only, validates and saves each image immediately, and skips existing valid scene files | Change concurrency, pacing, retry policy and failed-scene behavior |
 | `make_scene_art()` | Opens returned bytes with Pillow, resizes to output size, draws title/caption bars and saves the final scene image | Change image composition and overlays |
 | 
 
