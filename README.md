@@ -3,7 +3,7 @@
 This repository contains **two related but separate video pipelines**:
 
 1. **Science Channel (episode workflow):** Gemini plans a new 48-scene episode, you review the narration and create its 48 images, and GitHub Actions renders the finished 8–10 minute video. Telegram can deliver prompts, receive images, and deliver the final MP4.
-2. **AI Video Experiment:** a separate generator creates a narrated video using Gemini/Groq/Kilo story-planning fallbacks and a resilient image-provider chain (Cloudflare, OVHcloud, AI Horde, Vexa and Pollinations) for scene artwork.
+2. **AI Video Experiment:** a separate generator creates a narrated video using Gemini for story planning and **Cloudflare Workers AI only** for scene artwork. It saves stage checkpoints and resumes failed runs without regenerating completed work.
 
 The Science Channel pipeline is the current episode-based workflow. Its planning, Telegram upload, ZIP import, rendering and cleanup workflows operate on **main only**. Do not use the adaptive-cinematic-effects branch for Science Channel episodes or uploads.
 
