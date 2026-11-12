@@ -6,13 +6,13 @@ on:
       stage:
         description: "Generate ideas first, then render the idea you choose"
         required: true
-        default: "ideas"
+        default: "render"
         type: choice
         options: ["ideas", "render"]
       selected_topic:
-        description: "Paste your chosen idea title when stage is render"
+        description: "Chosen test topic (change this any time)"
         required: false
-        default: ""
+        default: "How Code Turns Into 3D Animation"
         type: string
       custom_niche:
         description: "Optional custom niche (overrides the niche choice)"
@@ -45,13 +45,13 @@ on:
       target_minutes:
         description: "Approximate video length"
         required: true
-        default: "6"
+        default: "1"
         type: choice
-        options: ["3", "4", "5", "6", "7", "8"]
+        options: ["1", "3", "4", "5", "6", "7", "8"]
       content_niche:
         description: "Video niche"
         required: true
-        default: "science"
+        default: "technology"
         type: choice
         options: ["science", "finance", "psychology", "history", "technology", "self-improvement", "what-if", "general education"]
 
@@ -290,7 +290,7 @@ jobs:
           if not selected_topic:
               raise RuntimeError("Paste the chosen idea into selected_topic when stage=render.")
           config["selected_topic"] = selected_topic
-          config["scene_count"] = max(16, minutes * 5)
+          config["scene_count"] = max(5, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
           # Uses Gemini when GEMINI_API_KEY is configured; otherwise starts with
