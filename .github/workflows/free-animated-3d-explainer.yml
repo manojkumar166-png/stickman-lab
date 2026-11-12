@@ -178,6 +178,7 @@ jobs:
         env:
           TARGET_MINUTES: ${{ inputs.target_minutes }}
           CONTENT_NICHE: ${{ inputs.content_niche }}
+          SELECTED_TOPIC: ${{ inputs.selected_topic }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
@@ -193,20 +194,20 @@ jobs:
           generator_path = root / "scripts" / "generate_story.py"
           source = generator_path.read_text(encoding="utf-8")
           source = source.replace(
-              '    niche = niche[:80]\\n',
-              '    niche = niche[:80]\\n    selected_topic = str(config.get("selected_topic", "")).strip()[:180]\\n'
+              '    niche = niche[:80]\n',
+              '    niche = niche[:80]\n    selected_topic = str(config.get("selected_topic", "")).strip()[:180]\n'
           )
           source = source.replace(
-              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\\n',
-              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\\n{("Use this exact user-selected topic as the title and answer it directly: " + selected_topic) if selected_topic else "Choose a fresh topic yourself."}\\n'
+              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\n',
+              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\n{("Use this exact user-selected topic as the title and answer it directly: " + selected_topic) if selected_topic else "Choose a fresh topic yourself."}\n'
           )
           source = source.replace(
-              '        candidate_topic = str(candidate_story.get("topic", "")).strip()\\n',
-              '        if selected_topic:\\n            candidate_story["topic"] = selected_topic\\n        candidate_topic = str(candidate_story.get("topic", "")).strip()\\n'
+              '        candidate_topic = str(candidate_story.get("topic", "")).strip()\n',
+              '        if selected_topic:\n            candidate_story["topic"] = selected_topic\n        candidate_topic = str(candidate_story.get("topic", "")).strip()\n'
           )
           source = source.replace(
-              '        story = _local_story_fallback(niche, desired_scene_count, history)\\n        used_model = "offline:template"\\n',
-              '        story = _local_story_fallback(niche, desired_scene_count, history)\\n        if selected_topic:\\n            story["topic"] = selected_topic\\n            story["description"] = f"A clear animated explainer about {selected_topic}."\\n        used_model = "offline:template"\\n'
+              '        story = _local_story_fallback(niche, desired_scene_count, history)\n        used_model = "offline:template"\n',
+              '        story = _local_story_fallback(niche, desired_scene_count, history)\n        if selected_topic:\n            story["topic"] = selected_topic\n            story["description"] = f"A clear animated explainer about {selected_topic}."\n        used_model = "offline:template"\n'
           )
           generator_path.write_text(source, encoding="utf-8")
 
