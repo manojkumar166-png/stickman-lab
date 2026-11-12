@@ -43,7 +43,7 @@ The root `config.json` currently contains:
 | `gemini_model` | gemini-3.5-flash-lite | First Gemini model attempted; code also has a fallback list. |
 | `voice` | en-US-AndrewMultilingualNeural | Edge TTS voice. |
 | `speech_rate` | +0% | Normal speech rate. |
-| `artifact_retention_days` | 7 | Documented config value; the Actions workflow currently sets artifact retention directly to 7 days in YAML. |
+| `artifact_retention_days` | 7 | Config value for reference; the active Actions workflow currently sets artifact retention to 2 days in YAML. |
 | `topic_history_file` | topic_history.json | Topic history file path. |
 | `use_ai_art` | true | Configuration flag; the current `main_ai.py` explicitly runs the AI-art generation path. |
 
@@ -413,10 +413,10 @@ Current image-generation flow:
 2. `build_prompt()` cleans the visual description, truncates it to 250 characters, and appends the shared `STYLE` instruction.
 3. `cf_image_cheap()` sends one request per scene to Cloudflare.
 4. The request asks for a 1024 × 576 image.
-5. The code waits 6 seconds between scene requests to reduce request pressure.
-6. Successful image bytes are collected in memory and passed back to the main pipeline.
-7. Each image is resized to the configured video dimensions. The code draws a blue title strip and a black narration-caption strip over it.
-8. If an individual scene request fails, the code reuses a randomly selected successful AI image for that scene. If Cloudflare fails, AI Horde and OVHcloud are attempted in order. If all providers fail for a scene, generation stops rather than substituting stickman artwork.
+5. Cloudflare requests are retried up to five times for network errors, HTTP 429 and HTTP 5xx responses, using bounded backoff and the returned `Retry-After` when available.
+6. Each valid image is saved atomically to its numbered scene PNG immediately, so the next run can verify and skip it.
+7. `make_scene_art()` resizes the Cloudflare image to the configured video dimensions and saves it without drawing title or caption bars.
+8. If Cloudflare still fails after retries, generation stops at that scene. It never reuses another scene's image and never switches to a different provider.
 
 **Important:** the current implementation is a single-model Cloudflare integration. Despite older references to multiple/cheap image models, the active code uses only FLUX-2-KLEIN-4B. It does not automatically switch to a second Cloudflare model.
 
@@ -565,24 +565,13 @@ Inside `scripts/make_art.py`:
 - There is no AI Horde, OVHcloud, Vexa, Pollinations, Groq or Kilo image fallback. If Cloudflare cannot produce a scene after retries, the run stops and resumes that missing scene on the next workflow attempt.
 - Each valid image is saved atomically as soon as it is generated. Existing valid images are verified and skipped on retry.
 
-You can adjust provider retry counts, timeouts and pacing in `scripts/make_art.py`; respect each anonymous provider's published limits. For a robust production change, implement bounded retries with exponential backoff for transient HTTP 429 and 5xx errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
+You can adjust the Cloudflare retry count, timeout and pacing in `scripts/make_art.py`. Keep bounded retries for transient HTTP 429, 5xx and network errors, while avoiding retries for permanent authentication or invalid-request errors. Log HTTP status and a safe error summary, but never log the bearer token or full authorization headers.
 
-Provider order, retries, pacing and fail-fast behavior are all controlled by `generate_all_ai_images()` in `scripts/make_art.py`. Test the full pipeline after changing this behavior.
+Cloudflare retries and fail-fast behavior are controlled by `cf_image_cheap()` and `generate_all_ai_images()` in `scripts/make_art.py`. Test the full pipeline after changing this behavior.
 
-## H. Change the title and narration strips drawn over images
+## H. Scene image preparation
 
-The function `make_scene_art()` in `scripts/make_art.py` handles the final image composition:
-
-- Resizes the generated image to the requested output dimensions.
-- Draws a rounded blue title bar at the top.
-- Uses the scene's `title`, truncated to 58 characters.
-- Draws a black caption bar along the bottom.
-- Wraps the scene narration into lines and displays at most two lines.
-- Uses DejaVu Sans fonts from the system font folder.
-
-To change these overlays, edit the drawing coordinates, colors, font sizes, title length and line-wrapping logic in `make_scene_art()`. The font helper `font()` loads DejaVu Sans or falls back to Pillow's default font if unavailable. The workflow must have the DejaVu font files installed for the intended appearance.
-
-The bottom strip is a static scene caption, separate from any word-synchronized karaoke captions used in the Science Channel renderer.
+The function `make_scene_art()` in `scripts/make_art.py` validates the supplied Cloudflare image bytes, converts them to RGB, resizes to the configured output dimensions and saves the full-frame PNG. It deliberately does not add title bars, caption bars or procedural stick-figure artwork. Karaoke subtitles are generated and burned into the finished video in a later workflow stage.
 
 ## I. Cloudflare troubleshooting
 
@@ -595,10 +584,10 @@ The bottom strip is a static scene caption, separate from any word-synchronized 
 | HTTP 400 | Unsupported field, dimension or malformed prompt | Compare request fields with the selected model's current schema. |
 | HTTP 429 | Rate limit or quota exceeded | The image client retries up to five times and honors a bounded `Retry-After`; if exhausted, the workflow saves progress and retries the failed scene on the next attempt. |
 | HTTP 5xx | Temporary service/model error | Retry a limited number of times with backoff; inspect Cloudflare status. |
-| Request timeout | Slow generation or network issue | Check the 120-second timeout and model latency. |
+| Request timeout | Slow generation or network issue | Check the 20-second connect timeout and 180-second response timeout; transient failures are retried. |
 | Response JSON has no `image` field | Model response format differs from current decoder | Inspect the documented response schema and update response parsing. |
 | A scene image fails | Cloudflare request failed after retries | Inspect the Cloudflare error for that scene. Completed scene images are saved and reused; no other image provider is called. |
-| A scene image fails | Check the Cloudflare, AI Horde and OVHcloud errors for that scene; the pipeline intentionally stops rather than substituting artwork. |
+
 
 ---
 
@@ -616,8 +605,8 @@ This is the implementation currently present in `main`; it is not a generic Clou
                  ├─ build_prompt(scene["visual"])
                  ├─ cf_image_cheap(prompt)
                  │    └─ POST Cloudflare Workers AI REST endpoint
-                 └─ collect image bytes per scene
-                      └─ make_scene_art() resizes and overlays title/caption
+                 └─ validate and atomically save each scene PNG
+                      └─ make_scene_art() resizes the saved Cloudflare image
 ```
 
 There is no separate Worker URL or custom Worker source in this request path. The Cloudflare feature used here is **Workers AI**, called directly through its account REST endpoint.
@@ -649,7 +638,7 @@ It authenticates with:
 Authorization: Bearer <CF_API_TOKEN>
 ```
 
-The body is multipart form data containing `prompt`, `width=1024` and `height=576`. The code uses `requests.post(..., files=form_data, timeout=120)`. It raises on HTTP errors. If the response content type starts with `image/`, it uses the response body directly; otherwise it parses JSON and base64-decodes the `image` field from `result` (or the top-level object).
+The body is multipart form data containing `prompt`, `width=1024` and `height=576`. The code uses `requests.post(..., files=form_data, timeout=(20, 180))` and retries transient network, 429 and 5xx failures up to five times. If the response content type starts with `image/`, it uses the response body directly; otherwise it parses JSON and base64-decodes the `image` field from `result` (or the top-level object).
 
 The active model is configured in the endpoint string, not in `config.json`. Changing `config.json` does not change the Cloudflare model.
 
@@ -674,18 +663,18 @@ Edit `width` and `height` in `form_data` inside `cf_image_cheap()`. Keep the mod
 
 ### Change request pacing, timeout or add retries
 
-- Delay: edit `time.sleep(6)` in `generate_all_ai_images()`. The delay currently occurs between scene requests, not after the final request.
-- Timeout: edit `timeout=120` in `cf_image_cheap()`.
-- Retries: there is currently **no explicit retry loop**. Add bounded retries with backoff around the request, and avoid retrying permanent errors such as invalid credentials or unsupported model names.
+- Delay: edit `time.sleep(2)` in `generate_all_ai_images()`. The delay currently occurs between scene requests, not after the final request.
+- Timeout: edit the `(20, 180)` connect/read timeout in `cf_image_cheap()`.
+- Retries: the current implementation retries transient network, HTTP 429 and 5xx failures up to five times. It does not retry permanent authentication errors or rejected prompts.
 - Concurrency: calls are currently sequential. Introducing parallel requests changes rate-limit pressure and should be tested against the account's current limits.
 
 ### Change what happens when an image request fails
 
-Today, failed requests are stored as `None`. If at least one scene succeeded, each failed slot receives a randomly chosen successful image. If all three providers fail for a scene, `generate_all_ai_images()` raises an error and the workflow stops. Provider order, retries, request pacing and fail-fast behavior are configured in `generate_all_ai_images()`.
+A failed Cloudflare request raises a clear error after its bounded retries. Successfully generated scene files remain on disk and are uploaded to the `ai-image-progress` checkpoint branch when the workflow fails. The next workflow attempt restores those files and retries only the missing or invalid scene images. No alternate image provider or randomly selected image is used.
 
-### Change title/caption overlays
+### Change scene image preparation
 
-Edit `make_scene_art()` in `scripts/make_art.py`: title truncation (58 characters), blue title rectangle, black caption rectangle, caption wrapping (75-character line threshold, at most two lines), font sizes and coordinates. These overlays are added after Cloudflare returns the image; they are not part of the model prompt.
+Edit `make_scene_art()` in `scripts/make_art.py` to change image resizing, color conversion or output encoding. This function does not add text or caption overlays. Karaoke captions are produced by the workflow after FFmpeg rendering.
 
 ## 5. Credential rotation and testing
 
