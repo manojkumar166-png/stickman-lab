@@ -142,7 +142,7 @@ def _extract_gemini_payload(response_text):
         if isinstance(payload, dict) and isinstance(payload.get("candidates"), list):
             candidates.append(payload)
     if not candidates:
-        preview = response_text[:1200].replace("\\n", " ")
+        preview = response_text[:1200].replace("\n", " ")
         raise ValueError(f"Gemini response contained no complete candidates JSON object. Response begins: {preview}")
     return candidates[0]
 
