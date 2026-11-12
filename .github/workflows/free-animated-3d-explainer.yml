@@ -130,6 +130,17 @@ jobs:
               ("The Trade Network Linking Three Continents","Follow merchants and routes across distant societies."),
               ("Why Did the Bronze Age Collapse?","Compare several interacting explanations."),
               ("What Daily Life Looked Like in Ancient Cities","Reconstruct routines from homes, tools, and records.")],
+            "what-if": [
+              ("What If Every Human Disappeared Overnight?","Explore how cities, infrastructure, and ecosystems would change over time."),
+              ("What If Earth Had Two Moons?","Imagine gravitational and tidal consequences while separating science from speculation."),
+              ("What If the Sun Went Dark for One Day?","Follow immediate effects on light, temperature, and living systems."),
+              ("What If Humans Could Breathe Underwater?","Consider how bodies, habitats, and civilization might adapt."),
+              ("What If Gravity Became Half as Strong?","Explore the effects on movement, buildings, and orbiting objects."),
+              ("What If Everyone Shared One Language?","Consider benefits and cultural costs of losing linguistic diversity."),
+              ("What If the Oceans Rose by Ten Metres?","Map broad consequences for coasts, cities, and migration."),
+              ("What If Time Stopped for Everyone but You?","Use a thought experiment to examine motion, perception, and physical limits."),
+              ("What If We Built a City on Mars?","Explore life support, radiation, energy, and self-sufficiency."),
+              ("What If Dinosaurs Had Never Gone Extinct?","Trace plausible ecological ripple effects without claiming certainty.")],
             "technology": [
               ("How the Internet Finds the Right Computer","Follow packets, routers, and addresses through a network."),
               ("How AI Models Learn Patterns","Explain training, prediction, and why models make mistakes."),
@@ -164,7 +175,21 @@ jobs:
               ("What Makes a Good Scientific Experiment?","Explain controls, variables, and repeatability."),
               ("How Bridges Stay Standing Under Heavy Loads","Explore forces, materials, and structural design.")]
           }
-          ideas = banks.get(niche.lower(), banks["general education"])
+          ideas = banks.get(niche.lower())
+          if ideas is None:
+              label = sub_niche or niche
+              ideas = [
+                (f"What Everyone Gets Wrong About {label}", f"Challenge a common assumption and explain the evidence behind it."),
+                (f"How {label} Really Works", f"Break {label} into clear steps with everyday examples."),
+                (f"Why {label} Matters More Than You Think", f"Connect {label} to real decisions, history, and daily life."),
+                (f"The Hidden History of {label}", f"Trace the people, ideas, and turning points behind {label}."),
+                (f"What Happens When {label} Goes Wrong?", f"Explore realistic failure modes, warning signs, and prevention."),
+                (f"Could {label} Change the Future?", f"Separate plausible developments from speculation."),
+                (f"Five Surprising Facts About {label}", f"Build curiosity with five carefully explained discoveries."),
+                (f"The Science Behind {label}", f"Explain the mechanisms and evidence behind {label}."),
+                (f"How Beginners Can Understand {label}", f"Introduce the essential concepts without jargon."),
+                (f"The Biggest Mystery in {label}", f"Explore what researchers know and what remains uncertain.")
+              ]
           data = {"niche": niche, "sub_niche": sub_niche, "ideas": [{"number":i+1,"title":t,"hook":(h + (" Focus: " + sub_niche + "." if sub_niche else ""))} for i,(t,h) in enumerate(ideas)]}
           with open("output/scriptforge-ideas.json","w",encoding="utf-8") as f: json.dump(data,f,ensure_ascii=False,indent=2)
           with open("output/scriptforge-ideas.md","w",encoding="utf-8") as f:
