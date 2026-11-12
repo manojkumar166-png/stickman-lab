@@ -49,6 +49,9 @@ def main():
     if pending:
         _, story_path, story = max(pending, key=lambda item: item[0])
         run_key = story_path.stem.removeprefix("story-")
+        # Make the resumed story the newest checkpoint so downstream workflow
+        # steps resolve the same run key even when several old stories exist.
+        story_path.touch()
         print(f"Resuming saved pipeline checkpoint: {story_path.name}", flush=True)
     else:
         run_key = today
