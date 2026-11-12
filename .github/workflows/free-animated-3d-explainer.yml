@@ -209,7 +209,12 @@ jobs:
         env:
           TARGET_MINUTES: ${{ inputs.target_minutes }}
           CONTENT_NICHE: ${{ inputs.content_niche }}
+          CUSTOM_NICHE: ${{ inputs.custom_niche }}
+          SUB_NICHE: ${{ inputs.sub_niche }}
           SELECTED_TOPIC: ${{ inputs.selected_topic }}
+          VISUAL_STYLE: ${{ inputs.visual_style }}
+          ASPECT_RATIO: ${{ inputs.aspect_ratio }}
+          RESOLUTION: ${{ inputs.resolution }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
@@ -254,7 +259,8 @@ jobs:
           config = json.loads((root / "config.json").read_text(encoding="utf-8"))
           minutes = int(os.environ.get("TARGET_MINUTES", "6"))
           config["target_minutes"] = minutes
-          config["content_niche"] = os.environ.get("CONTENT_NICHE", "science")
+          config["content_niche"] = os.environ.get("CUSTOM_NICHE", "").strip() or os.environ.get("CONTENT_NICHE", "science")
+          config["sub_niche"] = os.environ.get("SUB_NICHE", "").strip()
           selected_topic = os.environ.get("SELECTED_TOPIC", "").strip()
           if not selected_topic:
               raise RuntimeError("Paste the chosen idea into selected_topic when stage=render.")
