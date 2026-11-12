@@ -348,13 +348,49 @@ jobs:
           print(f"TOTAL_FRAMES={sum(durations)}")
           PY
 
-      - name: Install Remotion, React and Three.js
+
+      - name: Export ScriptForge script and split voiceover
         if: inputs.stage == 'render'
+        run: |
+          set -euo pipefail
+          STORY_FILE="$(find output -maxdepth 1 -name 'animated-story-*.json' -print -quit)"
+          VOICE_FILE="$(find output -maxdepth 1 -name 'narration-*.mp3' -print -quit)"
+          python scripts/export_scriptforge.py --story "$STORY_FILE" --voice "$VOICE_FILE" --target-minutes "${{ inputs.target_minutes }}" --output output
+
+      - name: Detect GrowKaz plugin archive
+        if: inputs.stage == 'render'
+        id: growkaz
+        run: |
+          if [ -f vendor/GrowKaz_Stickman.plugin ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "GrowKaz archive missing: add vendor/GrowKaz_Stickman.plugin to activate this renderer. Remotion fallback remains enabled."
+          fi
+
+      - name: Install and render with GrowKaz Stickman Studio
+        if: inputs.stage == 'render' && steps.growkaz.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p growkaz-stickman-studio /tmp/growkaz-plugin
+          unzip -q vendor/GrowKaz_Stickman.plugin -d /tmp/growkaz-plugin
+          cp -R /tmp/growkaz-plugin/skills/make-2d-video/kit/. growkaz-stickman-studio/
+          cd growkaz-stickman-studio
+          npm install --no-audit --no-fund
+          npx playwright install chromium --with-deps
+          python -m pip install numpy scipy pillow
+          cd ..
+          STORY_FILE="$(find output -maxdepth 1 -name 'animated-story-*.json' -print -quit)"
+          VOICE_FILE="$(find output -maxdepth 1 -name 'narration-*.mp3' -print -quit)"
+          python scripts/render_growkaz.py --kit growkaz-stickman-studio --story "$STORY_FILE" --voice "$VOICE_FILE" --aspect "${{ inputs.aspect_ratio }}" --resolution "${{ inputs.resolution }}" --style "${{ inputs.visual_style }}" --out output
+
+      - name: Install Remotion, React and Three.js
+        if: inputs.stage == 'render' && steps.growkaz.outputs.available != 'true'
         working-directory: remotion
         run: npm install --no-audit --no-fund
 
       - name: Render animated 3D video with Remotion
-        if: inputs.stage == 'render'
+        if: inputs.stage == 'render' && steps.growkaz.outputs.available != 'true'
         working-directory: remotion
         run: |
           set -euo pipefail
@@ -371,6 +407,12 @@ jobs:
             output/free-animated-3d-explainer.mp4
             output/animated-story-*.json
             output/narration-*.mp3
+            output/voiceover-part-*.mp3
+            output/scriptforge-script.md
+            output/growkaz-stickman-explainer.mp4
+            output/growkaz-shots.json
+            output/growkaz-contact-sheet.png
+            growkaz-stickman-studio/projects/
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
