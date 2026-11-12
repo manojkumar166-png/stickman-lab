@@ -531,7 +531,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 
     print(f"Story generated with {used_model}: {story['topic']}")
     scenes = story.get("scenes", [])
-    if not isinstance(scenes, list) or len(scenes) < 8:
+    if not isinstance(scenes, list) or len(scenes) < 5:
         raise RuntimeError("AI returned too few scenes; rerun.")
 
     for scene in scenes:
