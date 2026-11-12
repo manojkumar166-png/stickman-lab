@@ -70,7 +70,7 @@ def main():
         desc = json.dumps(str(scene.get("title") or title), ensure_ascii=False)
         visual = json.dumps(str(scene.get("visual") or ""), ensure_ascii=False)
         action = str(scene.get("action", "explain")).lower()
-        pose = {"walk":"walk", "run":"ready", "point":"point", "think":"think", "surprised":"handsOnHead", "celebrate":"cheer", "observe":"pointUp"}.get(action, "explain")
+        pose = {"walk":"explain", "run":"ready", "point":"point", "think":"think", "surprised":"handsOnHead", "celebrate":"cheer", "observe":"pointUp"}.get(action, "explain")
         color = palette[i % len(palette)]
         # Each shot is original code-drawn 2D/2.5D animation using the GrowKaz rig, lighting, atmosphere and UI primitives.
         js = f"""import {{ E, V, registerShot, mood, backdrop, ease, prog, text, seg, circle }} from '/engine/core.js';
@@ -91,7 +91,7 @@ registerShot('{sid}', {{ draw(g, t, info) {{
   if ({i} % 4 === 2) drawFigure(g, {{ x: E.W*0.77, y: E.H*V(0.84,0.78), s: V(1.1,0.9), facing: -1, outfit: SECOND, pose: breathe(POSES.point, t, 1, 3), expr: 'neutral', rim: {{ color: '{color}', dir: [1,-1], w: 4 }} }});
   FX.dust(g, t, {{ count: 24, color: M.rim, a: 0.18 }});
   UI.badge(g, {{ str: {desc}, a: ease.out(prog(t,0.15,0.7)), size: V(30,34) }});
-  text(g, {visual}, E.W*0.5, E.H*V(0.22,0.18), {{ size: V(34,42), color: '#fff4e8', weight: 700, align: 'center', maxWidth: E.W*0.82 }});
+  text(g, {visual}, E.W*0.5, E.H*V(0.22,0.18), {{ size: V(34,42), color: '#fff4e8', weight: 700, align: 'center',  }});
 }} }});
 """
         (project / "scenes" / "shots" / f"{sid}.js").write_text(js, encoding="utf-8")
@@ -99,7 +99,7 @@ registerShot('{sid}', {{ draw(g, t, info) {{
     run(["node", "render.mjs", "--project", f"projects/{slug}", "--sheet", "--scale", "0.35", "--workers", "2"], cwd=studio)
     run(["node", "render.mjs", "--project", f"projects/{slug}", "--workers", "2", "--crf", "20"], cwd=studio)
     run(["python", "audio/mix.py", "--project", f"projects/{slug}"], cwd=studio)
-    final = project / "out" / (re.sub(r"[^\\w\\- ]+", "", title).strip() or slug) / "video.mp4"
+    final = project / "out" / ((re.sub(r"[^\\w\\- ]+", "", title).strip().replace(" ", "_") or slug) + ".mp4")
     if not final.exists():
         candidates = list((project / "out").rglob("*.mp4"))
         if not candidates: raise SystemExit("GrowKaz render completed without an MP4 output.")
