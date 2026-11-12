@@ -188,6 +188,28 @@ jobs:
           from pathlib import Path
           from datetime import datetime, timezone
 
+          # Inject the selected ScriptForge topic into the existing story planner.
+          generator = root = Path.cwd()
+          generator_path = root / "scripts" / "generate_story.py"
+          source = generator_path.read_text(encoding="utf-8")
+          source = source.replace(
+              '    niche = niche[:80]\\n',
+              '    niche = niche[:80]\\n    selected_topic = str(config.get("selected_topic", "")).strip()[:180]\\n'
+          )
+          source = source.replace(
+              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\\n',
+              'Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.\\n{("Use this exact user-selected topic as the title and answer it directly: " + selected_topic) if selected_topic else "Choose a fresh topic yourself."}\\n'
+          )
+          source = source.replace(
+              '        candidate_topic = str(candidate_story.get("topic", "")).strip()\\n',
+              '        if selected_topic:\\n            candidate_story["topic"] = selected_topic\\n        candidate_topic = str(candidate_story.get("topic", "")).strip()\\n'
+          )
+          source = source.replace(
+              '        story = _local_story_fallback(niche, desired_scene_count, history)\\n        used_model = "offline:template"\\n',
+              '        story = _local_story_fallback(niche, desired_scene_count, history)\\n        if selected_topic:\\n            story["topic"] = selected_topic\\n            story["description"] = f"A clear animated explainer about {selected_topic}."\\n        used_model = "offline:template"\\n'
+          )
+          generator_path.write_text(source, encoding="utf-8")
+
           from scripts.generate_story import generate_story
           from scripts.make_voice import make_voice
 
