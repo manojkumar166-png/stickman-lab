@@ -15,7 +15,7 @@ concurrency:
 jobs:
   generate-ai:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -24,11 +24,14 @@ jobs:
       - name: Validate required secrets before expensive setup
         shell: bash
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
-          for name in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+          for name in GEMINI_API_KEY CF_ACCOUNT_ID CF_API_TOKEN TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Required repository secret $name is missing. Configure it before running AI Video Experiment."
               exit 1
@@ -57,7 +60,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/huggingface
-          key: faster-whisper-small-${{ runner.os }}-v1
+          key: whisperx-large-v3-turbo-${{ runner.os }}-v1
       - name: Install FFmpeg and subtitle fonts
         run: |
           set -euo pipefail
@@ -76,17 +79,13 @@ jobs:
           set -euo pipefail
           python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
-          python -m pip install --retries 5 --timeout 60 faster-whisper
+          python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
-          KILO_MODEL: ${{ vars.KILO_MODEL || 'kilo-auto/free' }}
-          KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free' }}
-        run: python -u main_ai.py
+        run: python main_ai.py
 
       - name: Generate and burn karaoke subtitles
         env:
@@ -255,15 +254,12 @@ jobs:
       - name: Send Video to Telegram
         id: telegram
         continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_CAPTION: "🎨 AI Video Experiment — created by workflow: AI Video Experiment | Topic: ${{ steps.get_topic.outputs.topic }}"
-          VIDEO_PATH: output/${{ steps.get_topic.outputs.filename }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -u scripts/send_telegram_video.py "$VIDEO_PATH"
+        uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
+        with:
+          bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          files: output/${{ steps.get_topic.outputs.filename }}
+          message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
 
       - name: Require successful Telegram delivery
         if: steps.telegram.outcome != 'success'
@@ -353,6 +349,15 @@ jobs:
           retention-days: 2
           compression-level: 0
 
+      - name: Retry failed workflow run
+        if: failure() && fromJSON(github.run_attempt) < 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Workflow attempt ${GITHUB_RUN_ATTEMPT} failed. Requesting retry; maximum total attempts: 3."
+          gh run rerun "${GITHUB_RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
