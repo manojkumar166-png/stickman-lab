@@ -219,7 +219,7 @@ Make changes on **main** unless you are deliberately working on a separate exper
 | Legacy AI experiment topic ideas | Root `topics.txt` | Separate from `science-channel/topics.txt`. |
 | Legacy AI experiment illustration style | `scripts/make_art.py` | Edit the `STYLE` string. The active Cloudflare model URL is also in this file. |
 | Legacy AI experiment narration and scene-generation instructions | `scripts/generate_story.py` | Edit the prompt and model fallback list. |
-| AI Video Experiment image providers and fallback order | `scripts/make_art.py` | Cloudflare primary; OVHcloud, AI Horde, Vexa and Pollinations are independent fallbacks. Cloudflare 429 disables Cloudflare for the rest of the run so quota exhaustion does not block all scenes. |
+| AI Video Experiment image provider, retries and checkpoint behavior | `scripts/make_art.py`, `main_ai.py`, `.github/workflows/ai-video-test.yml` | Cloudflare Workers AI only. Transient failures retry; saved scene images and completed stages are reused on automatic workflow retries. No alternate image provider is called. |
 
 **Important:** Science Channel is a fixed 48-scene pipeline. Do not change `scene_count` or `required_uploaded_images` from 48 in settings alone. The planner, Telegram receiver, ZIP importer, render validation, READY logic and image prompts also assume 48. Changing the count requires a coordinated code/workflow update and testing.
 
@@ -255,9 +255,9 @@ Cloudflare **Workers AI** is currently used by the **root AI Video Experiment on
 - Active implementation: `scripts/make_art.py`.
 - Current model endpoint: `@cf/black-forest-labs/flux-2-klein-4b`.
 - Current image request: Cloudflare FLUX.2 Klein at 1024 × 576 with bearer-token authentication; Cloudflare requests use bounded retries.
-- Provider fallback: Cloudflare → anonymous AI Horde → anonymous OVHcloud SDXL. Images are saved scene-by-scene; if all providers fail for a scene, generation stops. No stickman fallback or unrelated image reuse is used.
+- Image provider: Cloudflare Workers AI only. HTTP 429, 5xx and network errors are retried; completed images are checkpointed and reused. No AI Horde, OVHcloud, Vexa, Pollinations or procedural image fallback is used.
 
-The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` builds and sends Workers AI requests, how the GitHub workflow supplies credentials, and exactly where to change the model, prompt, dimensions, timeout, pacing and fallback. Start with [How this repository implemented Cloudflare and how to modify it](ai-video-experiment/README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
+The detailed manual explains the **actual implementation in this repository**: how `scripts/make_art.py` sends Workers AI requests, retries temporary errors, saves scene images, and how `main_ai.py` and GitHub Actions resume from saved stages. Start with [How this repository implemented Cloudflare and how to modify it](ai-video-experiment/README.md#-how-this-repository-implemented-cloudflare--exact-code-path-and-modification-map). It also documents the current Workers AI API setup and, separately, optional Cloudflare Worker deployment if you later want a custom gateway.
 
 ## 📲 Telegram
 
