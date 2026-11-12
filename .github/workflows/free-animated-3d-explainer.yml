@@ -14,6 +14,34 @@ on:
         required: false
         default: ""
         type: string
+      custom_niche:
+        description: "Optional custom niche (overrides the niche choice)"
+        required: false
+        default: ""
+        type: string
+      sub_niche:
+        description: "Optional focused sub-niche"
+        required: false
+        default: ""
+        type: string
+      visual_style:
+        description: "GrowKaz visual style"
+        required: true
+        default: "emerald"
+        type: choice
+        options: ["emerald", "ember", "arctic", "sakura", "retro"]
+      aspect_ratio:
+        description: "Video orientation"
+        required: true
+        default: "16:9"
+        type: choice
+        options: ["16:9", "9:16"]
+      resolution:
+        description: "GrowKaz output resolution"
+        required: true
+        default: "1080p"
+        type: choice
+        options: ["720p", "1080p", "1440p", "2160p"]
       target_minutes:
         description: "Approximate video length"
         required: true
@@ -25,7 +53,7 @@ on:
         required: true
         default: "science"
         type: choice
-        options: ["science", "finance", "psychology", "history", "technology", "self-improvement", "general education"]
+        options: ["science", "finance", "psychology", "history", "technology", "self-improvement", "what-if", "general education"]
 
 permissions:
   contents: read
@@ -47,13 +75,16 @@ jobs:
         if: inputs.stage == 'ideas'
         env:
           CONTENT_NICHE: ${{ inputs.content_niche }}
+          CUSTOM_NICHE: ${{ inputs.custom_niche }}
+          SUB_NICHE: ${{ inputs.sub_niche }}
           SELECTED_TOPIC: ${{ inputs.selected_topic }}
         run: |
           set -euo pipefail
           mkdir -p output
           python - <<'PY'
           import json, os
-          niche = os.environ.get("CONTENT_NICHE", "science")
+          niche = os.environ.get("CUSTOM_NICHE", "").strip() or os.environ.get("CONTENT_NICHE", "science")
+          sub_niche = os.environ.get("SUB_NICHE", "").strip()
           banks = {
             "science": [
               ("Why the Moon Changes Shape Every Night","The sunlight-and-orbit explanation behind the phases we see."),
@@ -133,8 +164,8 @@ jobs:
               ("What Makes a Good Scientific Experiment?","Explain controls, variables, and repeatability."),
               ("How Bridges Stay Standing Under Heavy Loads","Explore forces, materials, and structural design.")]
           }
-          ideas = banks.get(niche, banks["general education"])
-          data = {"niche": niche, "ideas": [{"number":i+1,"title":t,"hook":h} for i,(t,h) in enumerate(ideas)]}
+          ideas = banks.get(niche.lower(), banks["general education"])
+          data = {"niche": niche, "sub_niche": sub_niche, "ideas": [{"number":i+1,"title":t,"hook":(h + (" Focus: " + sub_niche + "." if sub_niche else ""))} for i,(t,h) in enumerate(ideas)]}
           with open("output/scriptforge-ideas.json","w",encoding="utf-8") as f: json.dump(data,f,ensure_ascii=False,indent=2)
           with open("output/scriptforge-ideas.md","w",encoding="utf-8") as f:
               f.write("# 10 video ideas — " + niche + "\n\n")
