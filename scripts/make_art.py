@@ -41,72 +41,47 @@ class CloudflarePromptFlagged(RuntimeError):
 CF_URL_CHEAP = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b"
 
 def cf_image_cheap(prompt):
-    global _CLOUDFLARE_DISABLED
-    if _CLOUDFLARE_DISABLED:
-        raise CloudflareRateLimited("Cloudflare was disabled for this run after an earlier quota/service failure.")
+    """Generate an image with Cloudflare Workers AI only, retrying transient failures."""
     if not CF_ACCOUNT_ID or not CF_API_TOKEN:
-        _CLOUDFLARE_DISABLED = True
-        raise CloudflareUnavailable("Cloudflare credentials are missing; using anonymous image providers.")
+        raise CloudflareUnavailable("Cloudflare credentials are missing.")
 
     form_data = {"prompt": (None, prompt), "width": (None, "1024"), "height": (None, "576")}
     headers = {"Authorization": f"Bearer {CF_API_TOKEN}"}
     last_error = None
-    for attempt in range(1, 4):
+
+    for attempt in range(1, 6):
         try:
             response = requests.post(
                 CF_URL_CHEAP, headers=headers, files=form_data, timeout=(20, 180)
             )
         except requests.RequestException as exc:
-            last_error = exc
-            if attempt < 3:
-                wait = min(30, attempt * 8)
-                print(
-                    f"Cloudflare network error ({type(exc).__name__}); retrying in {wait}s "
-                    f"({attempt}/3).",
-                    flush=True,
-                )
-                time.sleep(wait)
-                continue
-            _CLOUDFLARE_DISABLED = True
-            raise CloudflareUnavailable(
-                f"Cloudflare network errors persisted after {attempt} attempts: {exc}"
-            ) from exc
+            last_error = f"{type(exc).__name__}: {exc}"
+            if attempt == 5:
+                break
+            wait = min(60, attempt * 10)
+            print(f"Cloudflare network error; retrying in {wait}s ({attempt}/5): {last_error}", flush=True)
+            time.sleep(wait)
+            continue
 
-        if response.status_code == 429:
-            _CLOUDFLARE_DISABLED = True
+        if response.status_code == 429 or response.status_code >= 500:
+            last_error = f"HTTP {response.status_code}: {response.text[:800]}"
+            if attempt == 5:
+                break
             retry_after = response.headers.get("Retry-After", "")
-            raise CloudflareRateLimited(
-                "Cloudflare returned HTTP 429"
-                + (f" (Retry-After: {retry_after}s)" if retry_after else "")
-                + "; switching to independent image providers for the rest of this run."
-            )
+            try:
+                wait = min(120, max(1, int(float(retry_after)))) if retry_after else min(60, attempt * 10)
+            except (TypeError, ValueError):
+                wait = min(60, attempt * 10)
+            print(f"Cloudflare temporary error; retrying in {wait}s ({attempt}/5): {last_error}", flush=True)
+            time.sleep(wait)
+            continue
 
         if response.status_code in (401, 403):
-            _CLOUDFLARE_DISABLED = True
             raise CloudflareUnavailable(
-                f"Cloudflare authentication/permission error HTTP {response.status_code}: "
-                f"{response.text[:1200]}"
-            )
-
-        if response.status_code >= 500:
-            last_error = f"HTTP {response.status_code}: {response.text[:800]}"
-            if attempt < 3:
-                wait = min(30, attempt * 8)
-                print(
-                    f"Cloudflare server error {last_error}; retrying in {wait}s "
-                    f"({attempt}/3).",
-                    flush=True,
-                )
-                time.sleep(wait)
-                continue
-            _CLOUDFLARE_DISABLED = True
-            raise CloudflareUnavailable(
-                f"Cloudflare remained unavailable after {attempt} attempts: {last_error}"
+                f"Cloudflare authentication/permission error HTTP {response.status_code}: {response.text[:1200]}"
             )
 
         if not response.ok:
-            print(f"Cloudflare HTTP {response.status_code}", flush=True)
-            print(f"Cloudflare response: {response.text[:3000]}", flush=True)
             try:
                 error_payload = response.json()
             except ValueError:
@@ -115,72 +90,32 @@ def cf_image_cheap(prompt):
             if response.status_code == 400 and any(
                 isinstance(item, dict) and item.get("code") == 3030 for item in errors
             ):
-                raise CloudflarePromptFlagged(
-                    "Cloudflare safety filter flagged this scene prompt (error 3030)."
-                )
-            _CLOUDFLARE_DISABLED = True
+                raise CloudflarePromptFlagged("Cloudflare safety filter flagged this scene prompt (error 3030).")
             raise CloudflareUnavailable(
-                f"Cloudflare rejected the image request with HTTP {response.status_code}: "
-                f"{response.text[:1200]}"
+                f"Cloudflare rejected the image request with HTTP {response.status_code}: {response.text[:1200]}"
             )
 
         try:
             if response.headers.get("content-type", "").startswith("image/"):
-                return response.content
-            payload = response.json()
-            image_data = base64.b64decode(payload.get("result", payload)["image"])
+                image_data = response.content
+            else:
+                payload = response.json()
+                image_data = base64.b64decode(payload.get("result", payload)["image"])
             if not image_data:
                 raise ValueError("Cloudflare returned an empty image.")
             return image_data
         except (ValueError, KeyError, TypeError) as exc:
-            _CLOUDFLARE_DISABLED = True
-            raise CloudflareUnavailable(
-                f"Cloudflare returned an invalid image payload: {exc}"
-            ) from exc
+            last_error = f"Invalid Cloudflare image response: {exc}"
+            if attempt < 5:
+                wait = min(60, attempt * 10)
+                print(f"{last_error}; retrying in {wait}s ({attempt}/5).", flush=True)
+                time.sleep(wait)
+                continue
 
-    _CLOUDFLARE_DISABLED = True
-    raise CloudflareUnavailable(f"Cloudflare remained unavailable: {last_error}")
-
-
-def generate_fallback_ai_image(prompt, scene_number):
-    """Try independent anonymous image providers after Cloudflare is unavailable."""
-    # Reuse the already-tested no-key provider implementations from the
-    # standalone AI Story workflow rather than maintaining divergent copies.
-    from scripts.ai_story_video import ovh, ai_horde, vexa, pollinations
-
-    providers = (
-        ("OVHcloud anonymous SDXL", ovh, 1),
-        ("AI Horde volunteer workers", ai_horde, 1),
-        ("Vexa/DeepAI+Flux", vexa, 1),
-        ("Pollinations", pollinations, 1),
+    raise CloudflareUnavailable(
+        f"Cloudflare image generation failed after five attempts. Last error: {last_error}"
     )
-    errors = []
-    for provider_name, provider, retries in providers:
-        for attempt in range(1, retries + 1):
-            print(
-                f"  Scene {scene_number}: trying {provider_name} "
-                f"(attempt {attempt}/{retries}).",
-                flush=True,
-            )
-            try:
-                image = valid_png(provider(prompt))
-                print(
-                    f"  Scene {scene_number}: image generated with {provider_name}.",
-                    flush=True,
-                )
-                return image, provider_name
-            except Exception as exc:
-                errors.append(f"{provider_name}: {type(exc).__name__}: {exc}")
-                print(
-                    f"  Scene {scene_number}: {provider_name} failed: "
-                    f"{type(exc).__name__}: {exc}",
-                    flush=True,
-                )
-    raise RuntimeError(
-        f"All anonymous image providers failed for scene {scene_number}: "
-        + " | ".join(errors)
-        + ". Completed scene images are checkpointed; rerun to resume only missing scenes."
-    )
+
 
 def valid_png(raw):
     if not raw:
@@ -256,12 +191,11 @@ def rewrite_flagged_prompt(original_visual, attempt):
 
 
 async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None):
-    print(
-        "Generating AI illustrations: Cloudflare primary, then OVHcloud, AI Horde, Vexa and Pollinations fallbacks.",
-        flush=True,
-    )
+    """Generate every missing scene through Cloudflare Workers AI; never use another image provider."""
+    print("Generating AI illustrations with Cloudflare Workers AI only.", flush=True)
     os.makedirs(out_dir, exist_ok=True)
     results = []
+
     for i, scene in enumerate(scenes, 1):
         image_path = os.path.join(out_dir, f"scene-{i:03d}.png")
         if os.path.isfile(image_path) and os.path.getsize(image_path) > 0:
@@ -270,157 +204,72 @@ async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None
                     existing.verify()
                 with open(image_path, "rb") as image_file:
                     results.append((i, image_file.read()))
-                print(f"  Scene {i}/{len(scenes)} already saved; skipping.", flush=True)
+                print(f"Scene {i}/{len(scenes)} already checkpointed; skipping.", flush=True)
                 continue
             except Exception:
                 os.remove(image_path)
 
         original_visual = scene.get("visual", "science illustration")
-        prompt = build_prompt(original_visual)
         image_data = None
-        provider_used = "Cloudflare"
-
+        last_error = None
         try:
             try:
-                print(f"  Scene {i}/{len(scenes)}: requesting Cloudflare.", flush=True)
-                image_data = valid_png(cf_image_cheap(prompt))
+                print(f"Scene {i}/{len(scenes)}: requesting Cloudflare Workers AI.", flush=True)
+                image_data = valid_png(cf_image_cheap(build_prompt(original_visual)))
             except CloudflarePromptFlagged:
-                # A moderation rejection is handled by a meaning-preserving
-                # safe rewrite; do not route the original flagged wording around
-                # the moderation result to another provider.
-                image_data = None
                 for rewrite_attempt in range(1, 6):
                     try:
-                        revised_visual = rewrite_flagged_prompt(
-                            original_visual, rewrite_attempt
-                        )
+                        revised_visual = rewrite_flagged_prompt(original_visual, rewrite_attempt)
                         revised_prompt = build_prompt(revised_visual)
                         print(
-                            f"  Scene {i}: Gemini safe rewrite "
-                            f"({rewrite_attempt}/5); retrying Cloudflare.",
+                            f"Scene {i}: safe prompt revision {rewrite_attempt}/5; retrying Cloudflare only.",
                             flush=True,
                         )
                         image_data = valid_png(cf_image_cheap(revised_prompt))
                         scene["visual"] = revised_visual
-                        prompt = revised_prompt
                         if story_path:
                             import json
                             from pathlib import Path
                             story_file = Path(story_path)
-                            saved_story = json.loads(
-                                story_file.read_text(encoding="utf-8")
-                            )
+                            saved_story = json.loads(story_file.read_text(encoding="utf-8"))
                             saved_story["scenes"][i - 1]["visual"] = revised_visual
-                            temporary_story = story_file.with_name(
-                                story_file.name + ".tmp"
-                            )
+                            temporary_story = story_file.with_name(story_file.name + ".tmp")
                             temporary_story.write_text(
-                                json.dumps(saved_story, ensure_ascii=False, indent=2)
-                                + "\n",
+                                json.dumps(saved_story, ensure_ascii=False, indent=2) + "\n",
                                 encoding="utf-8",
                             )
                             os.replace(temporary_story, story_file)
                         break
-                    except CloudflarePromptFlagged:
-                        print(
-                            f"  Scene {i}: rewritten prompt was still flagged.",
-                            flush=True,
-                        )
-                    except (CloudflareRateLimited, CloudflareUnavailable) as exc:
-                        # Cloudflare may have run out of quota while the safe
-                        # rewrite was being processed. Use the safe rewrite with
-                        # the independent providers, not the original prompt.
-                        print(
-                            f"  Scene {i}: Cloudflare unavailable after safe rewrite: {exc}",
-                            flush=True,
-                        )
-                        image_data, provider_used = generate_fallback_ai_image(
-                            revised_prompt, i
-                        )
-                        scene["visual"] = revised_visual
-                        prompt = revised_prompt
-                        break
-                    except Exception as exc:
-                        print(
-                            f"  Scene {i}: safe rewrite attempt failed: {exc}",
-                            flush=True,
-                        )
+                    except CloudflarePromptFlagged as exc:
+                        last_error = exc
+                        print(f"Scene {i}: Cloudflare still flagged the revised prompt ({rewrite_attempt}/5).", flush=True)
                 if image_data is None:
                     raise CloudflarePromptFlagged(
-                        f"Scene {i}: Cloudflare rejected the original prompt and all "
-                        "five meaning-preserving safe rewrites."
-                    )
-            except (CloudflareRateLimited, CloudflareUnavailable) as cf_error:
-                print(
-                    f"  Scene {i}: Cloudflare unavailable ({cf_error}); "
-                    "switching to independent providers.",
-                    flush=True,
-                )
-                image_data, provider_used = generate_fallback_ai_image(prompt, i)
-            except Exception as cf_error:
-                # Unexpected Cloudflare/network/payload failures also use the
-                # anonymous fallback chain. Keep the original error in logs.
-                print(
-                    f"  Scene {i}: Cloudflare request failed "
-                    f"({type(cf_error).__name__}: {cf_error}); switching providers.",
-                    flush=True,
-                )
-                image_data, provider_used = generate_fallback_ai_image(prompt, i)
-
-            # Persist an approved rewritten visual prompt even when an
-            # independent provider, rather than Cloudflare, generated the image.
-            if scene.get("visual") != original_visual and story_path:
-                import json
-                from pathlib import Path
-                story_file = Path(story_path)
-                saved_story = json.loads(story_file.read_text(encoding="utf-8"))
-                saved_story["scenes"][i - 1]["visual"] = scene["visual"]
-                temporary_story = story_file.with_name(story_file.name + ".tmp")
-                temporary_story.write_text(
-                    json.dumps(saved_story, ensure_ascii=False, indent=2) + "\\n",
-                    encoding="utf-8",
-                )
-                os.replace(temporary_story, story_file)
+                        f"Cloudflare rejected the original prompt and all five safe revisions for scene {i}."
+                    ) from last_error
 
             if not image_data:
-                raise RuntimeError(
-                    f"Scene {i}: image providers returned an empty result."
-                )
+                raise RuntimeError("Cloudflare returned an empty image.")
             image_data = valid_png(image_data)
             temporary_image = image_path + ".tmp"
             with open(temporary_image, "wb") as image_file:
                 image_file.write(image_data)
             os.replace(temporary_image, image_path)
             results.append((i, image_data))
-            print(
-                f"  Scene {i}/{len(scenes)}: saved from {provider_used}.",
-                flush=True,
-            )
+            print(f"Scene {i}/{len(scenes)}: saved Cloudflare image checkpoint.", flush=True)
             if i < len(scenes):
                 time.sleep(2)
-        except CloudflarePromptFlagged:
-            raise
         except Exception as exc:
-            print(
-                f"  Scene {i}/{len(scenes)} could not be generated: {exc}. "
-                "Any completed scene images are preserved for the next run.",
-                flush=True,
-            )
-            raise
+            raise RuntimeError(
+                f"Cloudflare could not generate scene {i}/{len(scenes)} after its retries. "
+                f"Completed scene images remain saved; the next workflow attempt will resume at this scene. "
+                f"Cause: {type(exc).__name__}: {exc}"
+            ) from exc
 
-    print(
-        f"Generated or resumed {len(results)} of {len(scenes)} scene images.",
-        flush=True,
-    )
     if len(results) != len(scenes):
-        missing = sorted(
-            set(range(1, len(scenes) + 1))
-            - {index for index, _ in results}
-        )
-        raise RuntimeError(
-            f"Scene images still missing after fallback: {missing}. "
-            "Saved images are checkpointed; rerun to retry only missing scenes."
-        )
+        missing = sorted(set(range(1, len(scenes) + 1)) - {index for index, _ in results})
+        raise RuntimeError(f"Cloudflare scene images missing: {missing}. Saved images will be reused on retry.")
+    print(f"Cloudflare images ready: {len(results)}/{len(scenes)} scenes.", flush=True)
     return results
 
 
