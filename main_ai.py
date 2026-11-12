@@ -79,7 +79,7 @@ def main():
     # Do not rewrite valid scene files on a resumed run.
     for index, scene in enumerate(story["scenes"], 1):
         scene_file = scene_dir / f"scene-{index:03d}.png"
-        if valid_media(scene_file, 1000):
+        if scene_file.is_file() and scene_file.stat().st_size > 1000:
             try:
                 from PIL import Image
                 with Image.open(scene_file) as image:
