@@ -86,7 +86,7 @@ registerShot('{sid}', {{ draw(g, t, info) {{
   for (let k=0;k<12;k++) seg(g, [[k*E.W/10, E.H*V(0.84,0.78)],[k*E.W/10-90,E.H]], 2, 'rgba(255,255,255,.055)');
   const bob = Math.sin(t*2.4)*5;
   drawFigure(g, {{ x: E.W*0.50 + Math.sin(t*0.65)*22, y: E.H*V(0.84,0.78)+bob, s: V(1.55,1.28), facing: 1,
-    outfit: HERO, pose: breathe(POSES.{pose}, t), expr: '{action === "surprised" ? "surprised" : action === "think" ? "thinking" : "neutral"}',
+    outfit: HERO, pose: breathe(POSES.{pose}, t), expr: '{action === "surprised" ? "surprised" : action === "think" ? "neutral" : "neutral"}',
     rim: {{ color: M.rim, dir: [-1,-1], w: 5 }} }});
   if ({i} % 4 === 2) drawFigure(g, {{ x: E.W*0.77, y: E.H*V(0.84,0.78), s: V(1.1,0.9), facing: -1, outfit: SECOND, pose: breathe(POSES.point, t, 1, 3), expr: 'neutral', rim: {{ color: '{color}', dir: [1,-1], w: 4 }} }});
   FX.dust(g, t, {{ count: 24, color: M.rim, a: 0.18 }});
