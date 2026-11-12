@@ -49,7 +49,7 @@ def main():
     for i, scene in enumerate(scenes):
         end = duration if i == len(scenes)-1 else cursor + duration * weights[i] / total
         line = str(scene.get("narration", "")).strip()
-        visual = str(scene.get("visual", "")).strip()
+        visual = str(scene.get("title") or scene.get("visual", "")).strip()[:72]
         bg = str(scene.get("background", "city")).lower()
         action = str(scene.get("action", "explain")).lower()
         sfx = [{"at": 0.12, "name": "whoosh", "gain": -14}]
@@ -99,7 +99,7 @@ registerShot('{sid}', {{ draw(g, t, info) {{
     run(["node", "render.mjs", "--project", f"projects/{slug}", "--sheet", "--scale", "0.35", "--workers", "2"], cwd=studio)
     run(["node", "render.mjs", "--project", f"projects/{slug}", "--workers", "2", "--crf", "20"], cwd=studio)
     run(["python", "audio/mix.py", "--project", f"projects/{slug}"], cwd=studio)
-    final = project / "out" / ((re.sub(r"[^\\w\\- ]+", "", title).strip().replace(" ", "_") or slug) + ".mp4")
+    final = project / "out" / ((re.sub(r"[^\w -]+", "", title).strip().replace(" ", "_") or slug) + ".mp4")
     if not final.exists():
         candidates = list((project / "out").rglob("*.mp4"))
         if not candidates: raise SystemExit("GrowKaz render completed without an MP4 output.")
