@@ -94,20 +94,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TODAY="$(date +%F)"
-          AUDIO="output/narration-$TODAY.mp3"
-          VIDEO="$(python - "$TODAY" <<'PY'
+          RUN_KEY="$(python - <<'PY'
+          import glob
+          from pathlib import Path
+          stories = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
+          if not stories:
+              raise SystemExit("No saved story checkpoint was found.")
+          latest = max(stories, key=lambda p: p.stat().st_mtime_ns)
+          print(latest.stem.removeprefix("story-"))
+          PY
+          )"
+          if [[ -f "output/subtitles-$RUN_KEY.done" ]]; then
+            echo "Subtitle stage already completed for $RUN_KEY; skipping."
+            exit 0
+          fi
+          AUDIO="output/narration-$RUN_KEY.mp3"
+          VIDEO="$(python - "$RUN_KEY" <<'PY'
           import sys
           from pathlib import Path
-          day = sys.argv[1]
-          files = [p for p in Path("output").glob(f"*-{day}.mp4") if p.is_file()]
+          run_key = sys.argv[1]
+          files = [p for p in Path("output").glob(f"*-{run_key}.mp4") if p.is_file()]
           print(max(files, key=lambda p: p.stat().st_mtime_ns) if files else "")
           PY
           )"
-          test -f "$AUDIO" || { echo "Narration file not found: $AUDIO"; exit 1; }
-          test -n "$VIDEO" && test -f "$VIDEO" || { echo "Today's generated MP4 was not found."; exit 1; }
-          CAPTIONS="output/karaoke-captions-$TODAY.ass"
-          SUBTITLED="output/subtitled-$TODAY.mp4"
+          test -f "$AUDIO" || { echo "Narration checkpoint not found: $AUDIO"; exit 1; }
+          test -n "$VIDEO" && test -f "$VIDEO" || { echo "Rendered video checkpoint for $RUN_KEY was not found."; exit 1; }
+          CAPTIONS="output/karaoke-captions-$RUN_KEY.ass"
+          SUBTITLED="output/subtitled-$RUN_KEY.mp4"
           python - "$AUDIO" "$CAPTIONS" <<'PY'
           import sys
           from pathlib import Path
@@ -144,6 +157,7 @@ jobs:
             -c:a copy -shortest -movflags +faststart "$SUBTITLED"
           mv "$SUBTITLED" "$VIDEO"
           rm -f "$CAPTIONS"
+          touch "output/subtitles-$RUN_KEY.done"
           echo "Karaoke subtitles burned into $VIDEO"
 
       - name: Record topic after successful video generation
@@ -183,35 +197,37 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import glob, json, os, re
+          import glob, json, os
           from pathlib import Path
-          files = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
-          if not files:
+          stories = [Path(p) for p in glob.glob("output/story-*.json") if Path(p).is_file()]
+          if not stories:
               raise SystemExit("No generated story JSON was found.")
-          latest = max(files, key=lambda p: p.stat().st_mtime_ns)
-          with latest.open(encoding="utf-8") as handle:
-              topic = str(json.load(handle).get("topic", "")).strip()
+          latest = max(stories, key=lambda p: p.stat().st_mtime_ns)
+          story = json.loads(latest.read_text(encoding="utf-8"))
+          topic = " ".join(str(story.get("topic", "")).split())
           if not topic:
               raise SystemExit("Generated story has no topic.")
-          filename = re.sub(r'[<>:"/\\|?*\r\n]', "", topic)
-          filename = re.sub(r"\s+", " ", filename).strip().rstrip(".")[:120].rstrip(".")
-          if not filename or filename in {".", ".."}:
-              raise SystemExit("Could not make a safe MP4 filename from the topic.")
-          filename += ".mp4"
-          today = __import__("datetime").date.today().isoformat()
-          candidates = [p for p in Path("output").glob(f"*-{today}.mp4") if p.is_file() and p.name != filename]
+          run_key = latest.stem.removeprefix("story-")
+          candidates = [p for p in Path("output").glob(f"*-{run_key}.mp4") if p.is_file()]
           if not candidates:
-              raise SystemExit(f"No dated generated video was found for {today}.")
-          # A manual rerun on the same day may leave older dated MP4s behind.
-          # Rename only the newest output from this run.
-          newest_video = max(candidates, key=lambda p: p.stat().st_mtime_ns)
-          newest_video.replace(Path("output") / filename)
-          display_topic = " ".join(topic.split())
+              raise SystemExit(f"No rendered video checkpoint was found for {run_key}.")
+          video = max(candidates, key=lambda p: p.stat().st_mtime_ns)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"topic={display_topic}\n")
-              output.write(f"filename={filename}\n")
+              output.write(f"topic={topic}\n")
+              output.write(f"filename={video.name}\n")
+              output.write(f"run_key={run_key}\n")
           PY
-
+      - name: Check Telegram delivery checkpoint
+        id: telegram_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "output/telegram-${{ steps.get_topic.outputs.run_key }}.done" ]]; then
+            echo "sent=true" >> "$GITHUB_OUTPUT"
+            echo "Telegram delivery already succeeded; skipping duplicate upload."
+          else
+            echo "sent=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Upload AI Video
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -253,6 +269,7 @@ jobs:
           exit 1
       - name: Send Video to Telegram
         id: telegram
+        if: steps.telegram_check.outputs.sent != 'true'
         continue-on-error: true
         uses: PonomarevDA/telegram-upload@b6a8f85231f9a39d652fa1cc64f8557e0a6519ea # v1
         with:
@@ -261,8 +278,14 @@ jobs:
           files: output/${{ steps.get_topic.outputs.filename }}
           message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
 
+      - name: Mark Telegram delivery checkpoint
+        if: steps.telegram_check.outputs.sent != 'true' && steps.telegram.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch "output/telegram-${{ steps.get_topic.outputs.run_key }}.done"
       - name: Require successful Telegram delivery
-        if: steps.telegram.outcome != 'success'
+        if: steps.telegram_check.outputs.sent != 'true' && steps.telegram.outcome != 'success'
         shell: bash
         run: |
           echo "::error::The video artifact was created, but Telegram delivery failed. Existing scene/story progress will be preserved for a safe retry."
