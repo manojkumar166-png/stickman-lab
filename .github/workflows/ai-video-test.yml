@@ -108,6 +108,11 @@ jobs:
             echo "Subtitle stage already completed for $RUN_KEY; skipping."
             exit 0
           fi
+          if [[ -s "output/subtitled-$RUN_KEY.mp4" ]] && ffprobe -v error "output/subtitled-$RUN_KEY.mp4" >/dev/null 2>&1; then
+            touch "output/subtitles-$RUN_KEY.done"
+            echo "A valid subtitled video already exists; preserving it."
+            exit 0
+          fi
           AUDIO="output/narration-$RUN_KEY.mp3"
           VIDEO="$(python - "$RUN_KEY" <<'PY'
           import sys
@@ -155,10 +160,10 @@ jobs:
             -vf "subtitles=$CAPTIONS:fontsdir=/usr/share/fonts/truetype/dejavu" \
             -map 0:v:0 -map 0:a:0 -c:v libx264 -preset veryfast -crf 21 \
             -c:a copy -shortest -movflags +faststart "$SUBTITLED"
-          mv "$SUBTITLED" "$VIDEO"
+          test -s "$SUBTITLED" || { echo "Subtitle render did not produce an MP4."; exit 1; }
           rm -f "$CAPTIONS"
           touch "output/subtitles-$RUN_KEY.done"
-          echo "Karaoke subtitles burned into $VIDEO"
+          echo "Karaoke subtitles saved as $SUBTITLED; original render checkpoint preserved."
 
       - name: Record topic after successful video generation
         shell: bash
@@ -208,10 +213,14 @@ jobs:
           if not topic:
               raise SystemExit("Generated story has no topic.")
           run_key = latest.stem.removeprefix("story-")
+          subtitled = Path("output") / f"subtitled-{run_key}.mp4"
           candidates = [p for p in Path("output").glob(f"*-{run_key}.mp4") if p.is_file()]
-          if not candidates:
+          if subtitled.is_file() and subtitled.stat().st_size > 100000:
+              video = subtitled
+          elif candidates:
+              video = max(candidates, key=lambda p: p.stat().st_mtime_ns)
+          else:
               raise SystemExit(f"No rendered video checkpoint was found for {run_key}.")
-          video = max(candidates, key=lambda p: p.stat().st_mtime_ns)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"topic={topic}\n")
               output.write(f"filename={video.name}\n")
