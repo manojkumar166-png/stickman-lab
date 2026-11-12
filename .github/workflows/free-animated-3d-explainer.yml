@@ -290,7 +290,7 @@ jobs:
           if not selected_topic:
               raise RuntimeError("Paste the chosen idea into selected_topic when stage=render.")
           config["selected_topic"] = selected_topic
-          config["scene_count"] = max(15, minutes * 5)
+          config["scene_count"] = max(16, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
           # Uses Gemini when GEMINI_API_KEY is configured; otherwise starts with
