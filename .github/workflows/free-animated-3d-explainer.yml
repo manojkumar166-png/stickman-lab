@@ -3,6 +3,17 @@ name: Free Animated 3D Explainer (Three.js + Remotion)
 on:
   workflow_dispatch:
     inputs:
+      stage:
+        description: "Generate ideas first, then render the idea you choose"
+        required: true
+        default: "ideas"
+        type: choice
+        options: ["ideas", "render"]
+      selected_topic:
+        description: "Paste your chosen idea title when stage is render"
+        required: false
+        default: ""
+        type: string
       target_minutes:
         description: "Approximate video length"
         required: true
@@ -32,12 +43,121 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Generate 10 ScriptForge ideas
+        if: inputs.stage == 'ideas'
+        env:
+          CONTENT_NICHE: ${{ inputs.content_niche }}
+          SELECTED_TOPIC: ${{ inputs.selected_topic }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python - <<'PY'
+          import json, os
+          niche = os.environ.get("CONTENT_NICHE", "science")
+          banks = {
+            "science": [
+              ("Why the Moon Changes Shape Every Night","The sunlight-and-orbit explanation behind the phases we see."),
+              ("How Plants Turn Sunlight Into Food","Follow photosynthesis from light capture to the sugars plants use."),
+              ("Why Lightning Happens Before Thunder","Compare light and sound to explain a familiar storm."),
+              ("What If Earth Stopped Spinning?","Separate the physics of an instant stop from gradual slowing."),
+              ("How Deep Is the Ocean, Really?","Journey through ocean zones and the life adapted to each."),
+              ("Why Does Ice Float on Water?","Discover the unusual structure of water and why it matters."),
+              ("How Do Vaccines Train the Immune System?","Explain immune memory in clear, careful, non-medical-advice terms."),
+              ("Can a Black Hole Trap Light?","Use gravity and spacetime to explain the event horizon."),
+              ("Why Do We See Colors That Aren’t in Light?","Explore how eyes and brains interpret different wavelengths."),
+              ("How Do Birds Navigate Across Continents?","Look at stars, landmarks, and magnetic cues used in migration.")],
+            "psychology": [
+              ("Why Your Brain Replays Awkward Moments","Explore negativity bias and why embarrassing memories can stick."),
+              ("How Manipulators Use Guilt in Conversations","Spot pressure tactics and practice boundary-based responses."),
+              ("Why People Follow the Crowd","See how social proof shapes decisions under uncertainty."),
+              ("The Psychology Behind First Impressions","Separate quick judgments from reliable knowledge."),
+              ("Why Silence Feels So Uncomfortable","Understand pauses, expectations, and social interaction."),
+              ("How Your Memory Quietly Rewrites the Past","Learn why remembering is reconstruction, not replay."),
+              ("Why We Trust Confident People Too Quickly","Explore confidence bias and how to assess claims."),
+              ("Subtle Signs of Emotional Manipulation","Recognize blame shifting and coercive pressure in context."),
+              ("Why Rejection Feels So Much Bigger","Understand threat sensitivity and regain perspective."),
+              ("How Small Rewards Turn Actions Into Habits","Follow the cue-routine-reward loop and how habits change.")],
+            "self-improvement": [
+              ("Why Motivation Disappears When You Need It","Find the friction behind fading intentions and make action easier."),
+              ("The 2-Minute Rule That Makes Starting Easier","Use a tiny starting ritual to lower resistance."),
+              ("Why Your Brain Loves Easy Distractions","See how cues compete with long-term goals."),
+              ("The Quiet Habit That Builds Confidence","Learn why confidence often follows repeated progress."),
+              ("How to Stop Restarting Every Monday","Build a system that can recover after an imperfect day."),
+              ("Why Doing Less Can Make You More Productive","Use priorities to protect attention from task switching."),
+              ("The Hidden Cost of Constant Phone Checking","See how interruptions fragment focus."),
+              ("Can 10 Minutes a Day Build a Skill?","Understand deliberate practice, feedback, and consistency."),
+              ("Why Willpower Is a Weak Daily Strategy","Use routines and environment design instead."),
+              ("How to Build Discipline Without Hating It","Make consistency sustainable with small commitments.")],
+            "history": [
+              ("How the Silk Road Changed the World","Trace how trade moved ideas, technologies, and goods."),
+              ("Why the Roman Empire Split in Two","Explore the pressures behind a complex historical change."),
+              ("The Ancient City Buried Beneath the Sand","Investigate what archaeology can and cannot reveal."),
+              ("How One Invention Spread Books to the Masses","Follow printing and the changing speed of information."),
+              ("What Really Happened to Alexandria’s Library?","Separate popular legend from historical evidence."),
+              ("Why Medieval Castles Were Hard to Capture","See how geography and engineering shaped sieges."),
+              ("How Ancient People Measured the Stars","Explore astronomy before modern telescopes."),
+              ("The Trade Network Linking Three Continents","Follow merchants and routes across distant societies."),
+              ("Why Did the Bronze Age Collapse?","Compare several interacting explanations."),
+              ("What Daily Life Looked Like in Ancient Cities","Reconstruct routines from homes, tools, and records.")],
+            "technology": [
+              ("How the Internet Finds the Right Computer","Follow packets, routers, and addresses through a network."),
+              ("How AI Models Learn Patterns","Explain training, prediction, and why models make mistakes."),
+              ("What Happens When You Tap a Smartphone?","Trace touch sensing, software, and display response."),
+              ("How a Battery Stores Electricity","Explore chemical reactions and charged particles."),
+              ("Why Computers Use Ones and Zeros","See how binary represents numbers, text, images, and sound."),
+              ("How GPS Knows Where You Are","Use satellite timing and geometry to explain positioning."),
+              ("Can Robots Learn to Walk by Falling?","Explore feedback, balance, and iterative control."),
+              ("How Wi-Fi Sends Data Through the Air","Understand radio waves and the role of a router."),
+              ("How a Self-Driving Car Sees the Road","Explore sensors, mapping, and limits of automated perception."),
+              ("How Code Turns Into 3D Animation","Follow geometry, frames, lighting, and rendering.")],
+            "finance": [
+              ("Why Compound Growth Surprises Everyone","See how returns build on earlier returns over time."),
+              ("What Actually Makes Prices Go Up?","Explore supply, demand, costs, and expectations."),
+              ("Why an Emergency Fund Is So Powerful","Understand how reserves can reduce last-minute borrowing."),
+              ("How Does a Credit Score Work?","Break down payment history and common scoring factors."),
+              ("Saving vs Investing: What’s the Difference?","Compare goals, risk, time horizons, and liquidity."),
+              ("How Small Fees Eat Into Long-Term Returns","See how recurring costs compound."),
+              ("How Banks Make Money From Deposits","Explain lending, interest margins, and regulation."),
+              ("Why Diversification Is More Than Owning Many Stocks","Explore how different risks behave across a portfolio."),
+              ("What Inflation Does to Your Savings","Show how purchasing power changes as prices rise."),
+              ("Why a Budget Is a Plan for Choices","Turn income and expenses into practical decisions.")],
+            "general education": [
+              ("Why We Forget Things We Just Learned","Explore attention, encoding, retrieval, and spaced practice."),
+              ("How Maps Flatten a Round Planet","Understand projections and unavoidable distortions."),
+              ("Why Time Feels Faster as We Get Older","Explore memory, novelty, and perception."),
+              ("How Languages Change Over Time","Follow sound shifts, borrowing, and everyday usage."),
+              ("Why Simple Rules Create Complex Patterns","Use nature to introduce emergence."),
+              ("How We Know What Happened Millions of Years Ago","Explore fossils, dating methods, and converging evidence."),
+              ("Why Two People See the Same Event Differently","Look at attention, prior knowledge, and interpretation."),
+              ("How Sound Travels Through a Room","Follow vibrations and how surfaces shape sound."),
+              ("What Makes a Good Scientific Experiment?","Explain controls, variables, and repeatability."),
+              ("How Bridges Stay Standing Under Heavy Loads","Explore forces, materials, and structural design.")]
+          }
+          ideas = banks.get(niche, banks["general education"])
+          data = {"niche": niche, "ideas": [{"number":i+1,"title":t,"hook":h} for i,(t,h) in enumerate(ideas)]}
+          with open("output/scriptforge-ideas.json","w",encoding="utf-8") as f: json.dump(data,f,ensure_ascii=False,indent=2)
+          with open("output/scriptforge-ideas.md","w",encoding="utf-8") as f:
+              f.write("# 10 video ideas — " + niche + "\n\n")
+              for x in data["ideas"]: f.write("## " + str(x["number"]) + ". " + x["title"] + "\n\n" + x["hook"] + "\n\n")
+          print("Exactly 10 ideas ready. Choose one title and rerun with stage=render.")
+          PY
+
+      - name: Upload ScriptForge ideas
+        if: inputs.stage == 'ideas'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: scriptforge-ideas-${{ github.run_number }}
+          path: output/scriptforge-ideas.*
+          retention-days: 7
+
       - name: Set up Python
+        if: inputs.stage == 'render'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
       - name: Set up Node.js
+        if: inputs.stage == 'render'
         uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 # v4
         with:
           node-version: "20"
@@ -45,6 +165,7 @@ jobs:
           cache-dependency-path: remotion/package.json
 
       - name: Install system and free voice tools
+        if: inputs.stage == 'render'
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -53,6 +174,7 @@ jobs:
           python -m pip install requests Pillow edge-tts gTTS
 
       - name: Generate story, voiceover and original background sound
+        if: inputs.stage == 'render'
         env:
           TARGET_MINUTES: ${{ inputs.target_minutes }}
           CONTENT_NICHE: ${{ inputs.content_niche }}
@@ -79,6 +201,10 @@ jobs:
           minutes = int(os.environ.get("TARGET_MINUTES", "6"))
           config["target_minutes"] = minutes
           config["content_niche"] = os.environ.get("CONTENT_NICHE", "science")
+          selected_topic = os.environ.get("SELECTED_TOPIC", "").strip()
+          if not selected_topic:
+              raise RuntimeError("Paste the chosen idea into selected_topic when stage=render.")
+          config["selected_topic"] = selected_topic
           config["scene_count"] = max(15, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
@@ -163,10 +289,12 @@ jobs:
           PY
 
       - name: Install Remotion, React and Three.js
+        if: inputs.stage == 'render'
         working-directory: remotion
         run: npm install --no-audit --no-fund
 
       - name: Render animated 3D video with Remotion
+        if: inputs.stage == 'render'
         working-directory: remotion
         run: |
           set -euo pipefail
@@ -175,6 +303,7 @@ jobs:
             --props=public/props.json --codec=h264 --gl=swangle --concurrency=2
 
       - name: Upload finished video and project files
+        if: inputs.stage == 'render'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: free-animated-3d-explainer-${{ github.run_number }}
