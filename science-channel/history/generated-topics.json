@@ -41,7 +41,8 @@
     "Why are sunsets on Mars blue?",
     "Why do cats purr?",
     "How do snakes 'see' heat?",
-    "Why do joints crack?"
+    "Why do joints crack?",
+    "Why do we get brain freeze?"
   ],
   "topic_details": [
     {
@@ -238,6 +239,11 @@
       "title": "Why do joints crack?",
       "angle": "An exploration of the physical pressure changes and nitrogen gas bubbles inside our synovial fluid that create the familiar popping sound.",
       "pillar": "Human body everyday mysteries"
+    },
+    {
+      "title": "Why do we get brain freeze?",
+      "angle": "Explores the rapid blood vessel constriction and nerve signaling in the mouth that tricks the brain into feeling sudden, intense pain from cold food.",
+      "pillar": "Human body and mind"
     }
   ]
 }
