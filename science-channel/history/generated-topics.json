@@ -42,7 +42,8 @@
     "Why do cats purr?",
     "How do snakes 'see' heat?",
     "Why do joints crack?",
-    "Why do we get brain freeze?"
+    "Why do we get brain freeze?",
+    "Why do we experience the past differently than the future?"
   ],
   "topic_details": [
     {
@@ -244,6 +245,11 @@
       "title": "Why do we get brain freeze?",
       "angle": "Explores the rapid blood vessel constriction and nerve signaling in the mouth that tricks the brain into feeling sudden, intense pain from cold food.",
       "pillar": "Human body and mind"
+    },
+    {
+      "title": "Why do we experience the past differently than the future?",
+      "angle": "Exploring the psychological and thermodynamic asymmetry of memory and anticipation that defines the unidirectional flow of human experience.",
+      "pillar": "Science of time and space"
     }
   ]
 }
