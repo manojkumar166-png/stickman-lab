@@ -64,16 +64,12 @@ jobs:
         if: ${{ inputs.approve_preview == 'yes' }}
         run: npm run film:render
 
-      - name: Build HTML film player
-        if: ${{ inputs.approve_preview == 'yes' }}
-        run: python scripts/build_stickman_player.py
-
       - name: Audit final MP4 properties
         if: ${{ inputs.approve_preview == 'yes' }}
         shell: bash
         run: |
           set -euo pipefail
-          ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > /tmp/video-audit.json
+          ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > /tmp/video-audit.json
           python - <<'PY'
           import json
           d=json.load(open('/tmp/video-audit.json'))
@@ -96,7 +92,6 @@ jobs:
             stickman-films/latest/contact-sheet.jpg
             stickman-films/latest/film.json
             stickman-films/latest/title.txt
-            stickman-films/latest/index.html
           retention-days: 30
 
       - name: Commit approved film output to selected branch
