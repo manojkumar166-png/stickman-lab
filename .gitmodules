@@ -1,0 +1,3 @@
+[submodule "vendor/stickman-skill"]
+	path = vendor/stickman-skill
+	url = https://github.com/michxlai/stickman-skill.git
