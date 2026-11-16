@@ -55,9 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: daily-stickman-video-${{ github.run_number }}
-          path: |
-            stickman-films/latest/
-            stickman-films/${{ github.run_id }}/
+          path: stickman-films/
           retention-days: 30
 
       - name: Commit generated film and history
