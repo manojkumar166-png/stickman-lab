@@ -72,8 +72,8 @@ jobs:
 
       - name: Install Playwright browser dependencies
         run: |
-          python -m pip install --upgrade pip
-          npx --yes playwright install --with-deps chromium
+          python -m pip install --upgrade pip playwright
+          python -m playwright install --with-deps chromium
 
       - name: Render requested review stills and contact sheet FIRST
         run: |
@@ -95,18 +95,13 @@ jobs:
         run: |
           python scripts/build.py --out stickman-films/latest/the-door-that-opens-to-tomorrow.mp4
 
-      - name: Mix original sound effects (no music or voice)
-        if: ${{ inputs.approve_preview == 'yes' }}
-        run: |
-          python scripts/audio_mix.py --input stickman-films/latest/the-door-that-opens-to-tomorrow.mp4 --output stickman-films/latest/video.mp4
-
       - name: Audit delivered MP4
         if: ${{ inputs.approve_preview == 'yes' }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s stickman-films/latest/video.mp4
-          ffprobe -v error -show_entries format=duration,size:stream=codec_type,codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > /tmp/video-audit.json
+          test -s stickman-films/latest/the-door-that-opens-to-tomorrow.mp4
+          ffprobe -v error -show_entries format=duration,size:stream=codec_type,codec_name,width,height,r_frame_rate -of json stickman-films/latest/the-door-that-opens-to-tomorrow.mp4 > /tmp/video-audit.json
           python - <<'PY'
           import json
           d = json.load(open('/tmp/video-audit.json'))
@@ -126,7 +121,7 @@ jobs:
         with:
           name: the-door-that-opens-to-tomorrow-mp4-${{ github.run_number }}
           path: |
-            stickman-films/latest/video.mp4
+            stickman-films/latest/the-door-that-opens-to-tomorrow.mp4
             /tmp/video-audit.json
           if-no-files-found: error
           retention-days: 30
@@ -136,7 +131,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add stickman-films/latest/video.mp4
+          git add stickman-films/latest/the-door-that-opens-to-tomorrow.mp4
           if git diff --cached --quiet; then
             echo "No generated MP4 changes to commit."
           else
