@@ -1,0 +1,114 @@
+name: Cinematic Stickman Film
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve_preview:
+        description: "Set to yes only after reviewing the contact sheet"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cinematic-stickman-film
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Preview, then render approved 30-second film
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Set up Python for audio mix
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg and Playwright Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Render nine storyboard stills and contact sheet
+        run: npm run film:preview
+
+      - name: Upload preview for approval
+        uses: actions/upload-artifact@v4
+        with:
+          name: door-to-tomorrow-preview-${{ github.run_number }}
+          path: |
+            stickman-films/latest/contact-sheet.jpg
+            stickman-films/latest/preview-*.jpg
+            stickman-films/latest/film.json
+          retention-days: 14
+
+      - name: Render the full 900-frame MP4
+        if: ${{ inputs.approve_preview == 'yes' }}
+        run: npm run film:render
+
+      - name: Build HTML film player
+        if: ${{ inputs.approve_preview == 'yes' }}
+        run: python scripts/build_stickman_player.py
+
+      - name: Audit final MP4 properties
+        if: ${{ inputs.approve_preview == 'yes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > /tmp/video-audit.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/video-audit.json'))
+          v=next(s for s in d['streams'] if s.get('codec_type')=='video')
+          duration=float(d['format']['duration'])
+          assert v['codec_name']=='h264', v
+          assert (v['width'],v['height'])==(1920,1080), v
+          assert v['r_frame_rate']=='30/1', v
+          assert 29.9 <= duration <= 30.1, duration
+          print(f"PASS: H.264, 1920x1080, 30fps, {duration:.3f}s")
+          PY
+
+      - name: Upload final MP4 and project
+        if: ${{ inputs.approve_preview == 'yes' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-door-that-opens-to-tomorrow-${{ github.run_number }}
+          path: |
+            stickman-films/latest/video.mp4
+            stickman-films/latest/contact-sheet.jpg
+            stickman-films/latest/film.json
+            stickman-films/latest/title.txt
+            stickman-films/latest/index.html
+          retention-days: 30
+
+      - name: Commit approved film output to selected branch
+        if: ${{ inputs.approve_preview == 'yes' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stickman-films/latest/
+          if git diff --cached --quiet; then
+            echo "No generated output changes to commit."
+          else
+            git commit -m "Render The Door That Opens to Tomorrow"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
