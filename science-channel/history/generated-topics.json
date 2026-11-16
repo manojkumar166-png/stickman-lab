@@ -44,7 +44,8 @@
     "Why do joints crack?",
     "Why do we get brain freeze?",
     "Why do we experience the past differently than the future?",
-    "Why does oil look like a rainbow?"
+    "Why does oil look like a rainbow?",
+    "How do touchscreens know where your finger is?"
   ],
   "topic_details": [
     {
@@ -256,6 +257,11 @@
       "title": "Why does oil look like a rainbow?",
       "angle": "We explore how thin films of oil split ordinary white light into vibrant rainbow patterns through the physics of wave interference.",
       "pillar": "Light, sound and vision"
+    },
+    {
+      "title": "How do touchscreens know where your finger is?",
+      "angle": "Exploring the invisible electrostatic fields and microscopic grids that instantly translate a subtle touch into digital commands.",
+      "pillar": "Technology and engineering"
     }
   ]
 }
