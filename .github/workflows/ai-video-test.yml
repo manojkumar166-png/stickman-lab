@@ -21,7 +21,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Validate required secrets before expensive setup
+      - name: Validate required secrets; Gemini is optional
         shell: bash
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -31,12 +31,17 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -euo pipefail
-          for name in GEMINI_API_KEY CF_ACCOUNT_ID CF_API_TOKEN TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+          for name in CF_ACCOUNT_ID CF_API_TOKEN TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::Required repository secret $name is missing. Configure it before running AI Video Experiment."
               exit 1
             fi
           done
+          if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+            echo "::notice::GEMINI_API_KEY is not configured. Story generation will try anonymous OVH and Kilo free models, then use the built-in offline story generator."
+          else
+            echo "Gemini is configured as the primary story generator; keyless providers remain enabled as fallbacks."
+          fi
       - name: Restore Cloudflare image progress
         shell: bash
         run: |
