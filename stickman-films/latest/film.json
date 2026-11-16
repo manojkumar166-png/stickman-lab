@@ -1,0 +1,97 @@
+{
+  "title": "THE DOOR THAT OPENS TO TOMORROW",
+  "premise": "A lonely man sees a door to tomorrow, sees his future self still alone, and sends one honest message.",
+  "dur": 30,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "cuts": [
+    0,
+    90,
+    150,
+    240,
+    330,
+    420,
+    540,
+    660,
+    810,
+    900
+  ],
+  "endCard": "Tomorrow starts today.",
+  "voiceover": false,
+  "music": false,
+  "scenes": [
+    {
+      "n": 1,
+      "title": "Alone",
+      "start": 0,
+      "end": 3,
+      "camera": "Wide slow push-in",
+      "action": "He sits alone at his desk."
+    },
+    {
+      "n": 2,
+      "title": "Something strange",
+      "start": 3,
+      "end": 5,
+      "camera": "Medium",
+      "action": "A golden outline becomes a teal door."
+    },
+    {
+      "n": 3,
+      "title": "Curiosity",
+      "start": 5,
+      "end": 8,
+      "camera": "Side tracking",
+      "action": "He walks toward the door with planted steps."
+    },
+    {
+      "n": 4,
+      "title": "Discovery",
+      "start": 8,
+      "end": 11,
+      "camera": "Close-up",
+      "action": "He grips the handle and opens the door."
+    },
+    {
+      "n": 5,
+      "title": "Tomorrow",
+      "start": 11,
+      "end": 14,
+      "camera": "Over shoulder",
+      "action": "The same room appears in morning light."
+    },
+    {
+      "n": 6,
+      "title": "The warning",
+      "start": 14,
+      "end": 18,
+      "camera": "Slow push-in",
+      "action": "His future self is still alone beside an unsent message."
+    },
+    {
+      "n": 7,
+      "title": "The choice",
+      "start": 18,
+      "end": 22,
+      "camera": "Close-up",
+      "action": "He looks at his phone and decides."
+    },
+    {
+      "n": 8,
+      "title": "A small action",
+      "start": 22,
+      "end": 27,
+      "camera": "Phone insert",
+      "action": "He types and sends Hey. I miss you."
+    },
+    {
+      "n": 9,
+      "title": "A different tomorrow",
+      "start": 27,
+      "end": 30,
+      "camera": "Morning wide",
+      "action": "A knock comes; he smiles."
+    }
+  ]
+}
