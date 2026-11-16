@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   generate:
-    name: Generate a fresh stickman short
+    name: Generate and render a fresh stickman short
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -38,7 +38,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Generate fresh film
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install Pillow
+
+      - name: Generate fresh film and storyboard
         env:
           FORCE_TOPIC: ${{ github.event.inputs.force_topic }}
           FILM_STYLE: ${{ github.event.inputs.style }}
@@ -48,17 +55,25 @@ jobs:
           if [ -n "$FILM_STYLE" ]; then args+=(--style "$FILM_STYLE"); fi
           python scripts/generate_daily_stickman.py "${args[@]}"
 
+      - name: Render actual 30-second MP4
+        run: python scripts/render_stickman_video.py
+
       - name: Build HTML player
         run: python scripts/build_stickman_player.py
 
-      - name: Upload film artifact
+      - name: Upload rendered video and project files
         uses: actions/upload-artifact@v4
         with:
           name: daily-stickman-video-${{ github.run_number }}
-          path: stickman-films/
+          path: |
+            stickman-films/latest/video.mp4
+            stickman-films/latest/film.json
+            stickman-films/latest/title.txt
+            stickman-films/latest/index.html
+            stickman-films/history.json
           retention-days: 30
 
-      - name: Commit generated film and history
+      - name: Commit generated film, MP4, player and history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,6 +81,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
           else
-            git commit -m "Generate daily stickman video"
+            git commit -m "Generate daily stickman MP4"
             git push
           fi
