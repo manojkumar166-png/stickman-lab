@@ -1,0 +1,12 @@
+{
+  "name": "stickman-lab-cinematic-renderer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "film:preview": "node scripts/build_cinematic_film.mjs --preview-only",
+    "film:render": "node scripts/build_cinematic_film.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

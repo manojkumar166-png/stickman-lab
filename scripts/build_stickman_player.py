@@ -37,7 +37,7 @@ h1{{color:#ff9a83;line-height:1.15}}video{{display:block;width:100%;aspect-ratio
 </style></head><body>
 <h1>{esc(film.get('title'))}</h1><p>{esc(film.get('premise'))}</p>
 <div class="card"><b>{esc(film.get('length'))} · {esc(film.get('style'))} · 1920×1080 · 30 FPS</b>
-<p class="meta">Rendered illustrated 2D animation</p>{video}
+<p class="meta">Procedural Canvas animation · Playwright/Chromium · FFmpeg H.264 · synthetic SFX only</p>{video}
 <p>Hero: {esc(film.get('hero'))}</p><p>End card: {esc(film.get('end_card'))}</p></div>
 <h2>Storyboard</h2>{''.join(scene_cards)}
 </body></html>"""
