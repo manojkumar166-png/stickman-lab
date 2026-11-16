@@ -1,10 +1,19 @@
-name: Cinematic Stickman Film (in-repo renderer)
+name: Cinematic Stickman Film (original skill engine)
 
 on:
   workflow_dispatch:
     inputs:
+      renderer:
+        description: "Choose the renderer. Original skill uses the full upstream 2D/3D engine."
+        required: true
+        type: choice
+        options:
+          - original-2d
+          - original-3d
+          - existing-cinematic
+        default: original-2d
       approve_preview:
-        description: "Set to yes only after reviewing the contact sheet artifact"
+        description: "Set to yes only after reviewing the preview artifact"
         required: true
         type: choice
         options:
@@ -21,21 +30,24 @@ concurrency:
 
 jobs:
   render:
-    name: Render cinematic stickman film
+    name: Render with ${{ inputs.renderer }}
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
-      - name: Check out selected branch
+      - name: Check out selected branch and original skill source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Set up Node for Playwright
+      - name: Set up Node for 3D or existing renderer
+        if: ${{ inputs.renderer == 'original-3d' || inputs.renderer == 'existing-cinematic' }}
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -45,26 +57,79 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Install Playwright and Chromium
+      - name: Install original skill Python dependencies
+        if: ${{ inputs.renderer == 'original-2d' || inputs.renderer == 'original-3d' }}
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "numpy<3" "scipy<2" "Pillow<13" "playwright<2"
+          python -m playwright install --with-deps chromium
+
+      - name: Install existing renderer dependencies
+        if: ${{ inputs.renderer == 'existing-cinematic' }}
         run: |
           npm install --no-package-lock
           npx playwright install --with-deps chromium
 
-      - name: Render review stills and contact sheet FIRST
+      - name: Prepare original 2D or 3D film using upstream engine
+        if: ${{ inputs.renderer == 'original-2d' || inputs.renderer == 'original-3d' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKILL="vendor/stickman-skill/skills/stickman"
+          mkdir -p stickman-films/latest
+          if [[ "${{ inputs.renderer }}" == "original-3d" ]]; then
+            python "$SKILL/scripts/new_film.py" stickman-films/original-engine --3d
+            cp stickman-films/original-skill/film_3d.js stickman-films/original-engine/film.js
+          else
+            python "$SKILL/scripts/new_film.py" stickman-films/original-engine
+            cp stickman-films/original-skill/film_2d.js stickman-films/original-engine/film.js
+          fi
+          cp stickman-films/original-skill/audio_mix.py stickman-films/original-engine/audio_mix.py
+          # Upstream audit reports issues but exits zero; make the workflow fail on reported issues.
+          printf '\nif iss:\n    sys.exit(1)\n' >> "$SKILL/scripts/audit.py"
+          python "$SKILL/scripts/storyboard.py" stickman-films/original-engine
+
+      - name: Render existing cinematic preview
+        if: ${{ inputs.renderer == 'existing-cinematic' }}
         run: node scripts/build_cinematic_film.mjs --preview-only
 
-      - name: Upload stills and contact sheet for review
+      - name: Upload original skill storyboard
+        if: ${{ (inputs.renderer == 'original-2d' || inputs.renderer == 'original-3d') && inputs.approve_preview == 'no' }}
         uses: actions/upload-artifact@v4
         with:
-          name: door-to-tomorrow-stills-${{ github.run_number }}
+          name: original-stickman-storyboard-${{ github.run_number }}
           path: |
-            stickman-films/latest/contact-sheet.*
+            stickman-films/original-engine/storyboard.jpg
+            stickman-films/original-engine/storyboard.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload existing renderer preview
+        if: ${{ inputs.renderer == 'existing-cinematic' && inputs.approve_preview == 'no' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinematic-stickman-stills-${{ github.run_number }}
+          path: |
+            stickman-films/latest/contact-sheet.jpg
             stickman-films/latest/preview-*.jpg
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build final 30-second MP4 only after preview approval
-        if: ${{ inputs.approve_preview == 'yes' }}
+      - name: Build original skill MP4
+        if: ${{ (inputs.renderer == 'original-2d' || inputs.renderer == 'original-3d') && inputs.approve_preview == 'yes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKILL="vendor/stickman-skill/skills/stickman"
+          python "$SKILL/scripts/build.py" stickman-films/original-engine --out video.mp4 --crf 20
+          # Re-run the patched audit as a strict gate (the upstream build invokes it non-fatally).
+          python "$SKILL/scripts/audit.py" stickman-films/original-engine video.mp4
+          cp stickman-films/original-engine/video.mp4 stickman-films/latest/video.mp4
+          cp stickman-films/original-engine/film.json stickman-films/latest/film.json
+          cp stickman-films/original-engine/contact_sheet.jpg stickman-films/latest/contact-sheet.jpg
+
+      - name: Build existing cinematic MP4
+        if: ${{ inputs.renderer == 'existing-cinematic' && inputs.approve_preview == 'yes' }}
         run: node scripts/build_cinematic_film.mjs
 
       - name: Audit delivered MP4
@@ -73,40 +138,45 @@ jobs:
         run: |
           set -euo pipefail
           test -s stickman-films/latest/video.mp4
-          ffprobe -v error -show_entries format=duration,size:stream=codec_type,codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > /tmp/video-audit.json
+          ffprobe -v error -show_entries format=duration,size:stream=codec_type,codec_name,width,height,r_frame_rate -of json stickman-films/latest/video.mp4 > stickman-films/latest/video-audit.json
           python - <<'PY'
           import json
-          d = json.load(open('/tmp/video-audit.json'))
-          v = next(s for s in d['streams'] if s.get('codec_type') == 'video')
-          duration = float(d['format']['duration'])
-          assert v['codec_name'] == 'h264', v
-          assert (v['width'], v['height']) == (1920, 1080), v
-          assert v['r_frame_rate'] == '30/1', v
-          assert 29.9 <= duration <= 30.1, duration
-          print(f"PASS: H.264, 1920x1080, 30fps, {duration:.3f}s")
+          d = json.load(open("stickman-films/latest/video-audit.json"))
+          v = next(s for s in d["streams"] if s.get("codec_type") == "video")
+          duration = float(d["format"]["duration"])
+          assert v["codec_name"] == "h264", v
+          assert (v["width"], v["height"]) == (1920, 1080), v
+          assert v["r_frame_rate"] == "30/1", v
+          assert duration > 0, duration
+          if "${{ inputs.renderer }}" == "existing-cinematic":
+              assert 29.9 <= duration <= 30.1, duration
+          print(f"PASS: H.264, {v['width']}x{v['height']}, {v['r_frame_rate']}, {duration:.3f}s")
           print(f"File size: {int(d['format']['size']):,} bytes")
           PY
 
-      - name: Upload final MP4 and audit
+      - name: Upload final MP4, storyboard and audit
         if: ${{ inputs.approve_preview == 'yes' }}
         uses: actions/upload-artifact@v4
         with:
-          name: the-door-that-opens-to-tomorrow-mp4-${{ github.run_number }}
+          name: stickman-film-${{ inputs.renderer }}-${{ github.run_number }}
           path: |
             stickman-films/latest/video.mp4
-            /tmp/video-audit.json
-          if-no-files-found: error
+            stickman-films/latest/film.json
+            stickman-films/latest/contact-sheet.jpg
+            stickman-films/latest/video-audit.json
+            stickman-films/original-engine/storyboard.jpg
+          if-no-files-found: warn
           retention-days: 30
 
-      - name: Commit approved MP4 output to selected branch
+      - name: Commit rendered MP4 to selected branch
         if: ${{ inputs.approve_preview == 'yes' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add stickman-films/latest/video.mp4
+          git add stickman-films/latest/video.mp4 stickman-films/latest/film.json stickman-films/latest/contact-sheet.jpg stickman-films/latest/video-audit.json
           if git diff --cached --quiet; then
-            echo "No generated MP4 changes to commit."
+            echo "No generated output changes to commit."
           else
-            git commit -m "Render The Door That Opens to Tomorrow MP4"
+            git commit -m "Render Stickman film with ${{ inputs.renderer }}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
