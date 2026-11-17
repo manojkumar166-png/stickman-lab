@@ -177,6 +177,9 @@ def _rewrite_user_prompt(original_prompt, api_key, config):
     original_prompt = str(original_prompt or "").strip()
     if not original_prompt:
         return ""
+    if len(original_prompt) > 12000:
+        print("Run prompt exceeds 12,000 characters; trimming it before provider requests.", flush=True)
+        original_prompt = original_prompt[:12000]
     rewrite_request = f"""
 Rewrite the user's video-generation prompt so it is clear, specific, actionable,
 and optimized for an engaging educational animated explainer. Preserve the user's
