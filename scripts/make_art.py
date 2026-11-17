@@ -228,17 +228,12 @@ def rewrite_flagged_prompt(original_visual, attempt):
 
 
 def _safe_educational_fallback(original_visual):
-    """Conservative local fallback when the text-model service is unavailable."""
-    topic = " ".join(str(original_visual or "").split())
-    # Keep only a short topic hint; do not pass the original action-heavy wording through.
-    topic = topic[:100].strip(" .,:;")
-    if not topic:
-        topic = "the scientific concept"
+    """Use a neutral local fallback without reusing wording rejected by the image safety filter."""
     return (
-        f"A calm, family-friendly 3D educational science exhibit about {topic}. "
-        "Show a simple tabletop model, neutral scientific objects, and friendly animated "
-        "characters observing from a comfortable distance. Use a clear visual metaphor, "
-        "soft cinematic lighting, and a peaceful classroom or museum setting. "
+        "A calm, family-friendly 3D educational science illustration in a bright classroom or museum. "
+        "Show a simple tabletop science model, neutral scientific objects, and friendly animated "
+        "characters observing from a comfortable distance. Use a clear, harmless visual metaphor, "
+        "soft cinematic lighting, and a peaceful setting. "
         "No danger, injury, conflict, bodily detail, weapons, text, labels, or intense action."
     )
 
