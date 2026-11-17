@@ -8,7 +8,12 @@ on:
       - "cloudflare-worker.js"
       - "science-channel/scripts/**"
       - "scripts/**"
-      - "ai-roast-studio/**"
+      - "ai-chat-videos/**"
+      - "stickman/**"
+      - "stickman-films/**"
+      - "remotion/**"
+      - "ai-video-experiment/**"
+      - "ai-story-science-video/**"
       - "main_ai.py"
   pull_request:
     paths:
@@ -49,6 +54,10 @@ jobs:
           python -m compileall -q \
             science-channel/scripts \
             scripts \
-            main_ai.py
+            ai-chat-videos \
+            stickman \
+            stickman-films \
+            main_ai.py \
+            free_science_video.py
       - name: Check Cloudflare Worker JavaScript syntax
         run: node --check cloudflare-worker.js

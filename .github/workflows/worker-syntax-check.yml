@@ -7,12 +7,16 @@ on:
       - ".github/workflows/worker-syntax-check.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   syntax:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 # v4
         with:
           node-version: 22
       - name: Check Worker syntax
