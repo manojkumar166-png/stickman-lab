@@ -5,7 +5,12 @@ from pathlib import Path
 import requests
 
 KILO_MODEL = "kilo-auto/free"
-KILO_FALLBACK_MODELS = ["nvidia/nemotron-3.5-lightning:free", "openrouter/free"]
+KILO_FALLBACK_MODELS = [
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3.5-lightning:free",
+    "cohere/north-mini-code:free",
+    "openrouter/free",
+]
 
 class PermanentProviderError(RuntimeError):
     """A non-retryable provider response such as HTTP 400 or 404."""
@@ -28,9 +33,13 @@ TOPIC_CATEGORIES = [
 
 
 PROVIDER_CONFIG = {
-    # Public endpoints that do not require credentials. Availability may vary.
+    # Keyless free endpoints first; optional keyed providers are enabled only
+    # when their repository secret is present.
     "Kilo": ("https://api.kilo.ai/api/gateway", "", "kilo-auto/free"),
-    "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
+    "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-120b"),
+    "LLM7": ("https://api.llm7.io/v1", "", "gpt-oss:20b"),
+    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
+    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3-ultra-550b-a55b:free"),
 }
 
 
@@ -39,8 +48,15 @@ def _call_openai_compatible(provider, model, prompt, attempts=2):
     if provider not in PROVIDER_CONFIG:
         raise ValueError(f"Unsupported backup provider: {provider}")
     base_url, key_env, _ = PROVIDER_CONFIG[provider]
-    # Intentionally anonymous: this workflow must never require an API key.
     headers = {"Content-Type": "application/json"}
+    api_key = os.environ.get(key_env, "").strip() if key_env else ""
+    if key_env and not api_key:
+        raise RuntimeError(f"{provider} is not configured; missing {key_env}")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif provider == "Kilo":
+        # Kilo explicitly supports anonymous access to its free model pool.
+        headers["Authorization"] = "Bearer anonymous"
     if provider == "OpenRouter":
         headers["HTTP-Referer"] = "https://github.com/manojkumar166-png/stickman-lab"
         headers["X-Title"] = "Free Animated 3D Explainer"
@@ -458,12 +474,20 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         provider_models = []
         if api_key:
             provider_models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
+        # Optional keyed providers are tried when their repository secrets exist.
+        if os.environ.get("GROQ_API_KEY", "").strip():
+            provider_models.append(("Groq", PROVIDER_CONFIG["Groq"][2]))
+        if os.environ.get("OPENROUTER_API_KEY", "").strip():
+            provider_models.append(("OpenRouter", PROVIDER_CONFIG["OpenRouter"][2]))
+        # Keyless fallbacks: Kilo auto-router + free pool, OVH anonymous models,
+        # and LLM7's anonymous turbo tier.
         provider_models.extend([
-            # Second choice: anonymous OVH inference (no API key required).
-            ("OVH", "gpt-oss-20b"),
-            # Third choice: anonymous Kilo, followed by its free model fallbacks.
             ("Kilo", KILO_MODEL),
             *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
+            ("OVH", "gpt-oss-120b"),
+            ("OVH", "Meta-Llama-3_3-70B-Instruct"),
+            ("OVH", "gpt-oss-20b"),
+            ("LLM7", "gpt-oss:20b"),
         ])
         for provider, provider_model in provider_models:
             if data is not None:
