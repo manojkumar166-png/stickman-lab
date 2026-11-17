@@ -501,6 +501,12 @@ def generate_story(root: Path, config: dict) -> dict:
     for generation_attempt in range(5):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
         print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
+        user_prompt_section = (
+            "USER'S RUN-SPECIFIC PROMPT — treat this as the controlling topic and creative brief. "
+            "Preserve its intent; expand it into the complete explainer.\n"
+            + user_prompt + "\n"
+            if user_prompt else ""
+        )
         prompt = f"""
 Create an original, factually careful educational {niche} explainer for a colorful animated-character video.
 
@@ -508,7 +514,7 @@ TOPIC STYLE REFERENCE — read these examples from the repository's topics.txt:
 {examples}
 
 Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.
-{("USER'S RUN-SPECIFIC PROMPT — treat this as the controlling topic and creative brief. Preserve its intent; expand it into the complete explainer:\\n" + user_prompt + "\\n") if user_prompt else ""}
+{user_prompt_section}
 Use topics.txt only as a guide to concise, accessible storytelling style, not as a subject list when the selected niche is not science.
 Do not simply copy a seed topic or make a minor wording change to one.
 Generate a different subject/question each time, drawing from the selected niche.
