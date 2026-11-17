@@ -6,8 +6,9 @@ import requests
 
 KILO_MODEL = "kilo-auto/free"
 KILO_FALLBACK_MODELS = [
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3.5-lightning:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "cohere/north-mini-code:free",
     "openrouter/free",
 ]
@@ -156,7 +157,7 @@ def _prompt_provider_models(api_key, config):
     """Return the ordered provider chain shared by prompt rewriting and story generation."""
     models = []
     if api_key:
-        models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
+        models.append(("Gemini", str(config.get("gemini_model") or "gemini-3.8-flash")))
     if os.environ.get("GROQ_API_KEY", "").strip():
         models.append(("Groq", PROVIDER_CONFIG["Groq"][2]))
     if os.environ.get("OPENROUTER_API_KEY", "").strip():
