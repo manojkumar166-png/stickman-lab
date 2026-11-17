@@ -90,11 +90,31 @@ jobs:
       - name: Generate AI Video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.8-flash,gemini-3.5-flash-lite' }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: python main_ai.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Retry in-place so scene/story checkpoints from earlier attempts are reused.
+          for attempt in 1 2 3; do
+            echo "AI video generation attempt ${attempt}/3"
+            if python main_ai.py; then
+              echo "AI video generation completed."
+              exit 0
+            fi
+            status=$?
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::AI video generation failed after three in-job attempts."
+              exit "$status"
+            fi
+            wait_seconds=$((attempt * 15))
+            echo "Generation failed; preserving checkpoints and retrying in ${wait_seconds}s."
+            sleep "$wait_seconds"
+          done
 
       - name: Generate and burn karaoke subtitles
         env:
@@ -391,15 +411,9 @@ jobs:
           retention-days: 2
           compression-level: 0
 
-      - name: Retry failed workflow run
-        if: failure() && fromJSON(github.run_attempt) < 3
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Workflow attempt ${GITHUB_RUN_ATTEMPT} failed. Requesting retry; maximum total attempts: 3."
-          gh run rerun "${GITHUB_RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
+      # Do not call "gh run rerun" from inside this run: GitHub rejects reruns
+      # while the original run is still in progress. The generation step retries
+      # in-place and reuses the saved scene checkpoints.
       - name: Alert Telegram when workflow fails
         if: failure()
         continue-on-error: true
