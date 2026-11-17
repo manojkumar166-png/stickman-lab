@@ -20,30 +20,40 @@ permissions:
   contents: write
 
 concurrency:
-  group: daily-stickman-video
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 
 jobs:
   generate:
     name: Generate and render a fresh stickman short
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
       - name: Install rendering dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip
-          python -m pip install Pillow
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          for attempt in 1 2 3; do
+            if sudo apt-get install -y ffmpeg; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 10))
+          done
+          python -m pip install --retries 5 --timeout 60 --upgrade pip
+          python -m pip install --retries 5 --timeout 60 Pillow
 
       - name: Generate fresh film and storyboard
         env:
@@ -58,11 +68,25 @@ jobs:
       - name: Render actual 30-second MP4
         run: python scripts/render_stickman_video.py
 
+      - name: Validate rendered MP4
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s stickman-films/latest/video.mp4
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 stickman-films/latest/video.mp4)"
+          python - "$duration" <<'PY'
+          import sys
+          duration = float(sys.argv[1])
+          if not 1 <= duration <= 60:
+              raise SystemExit(f"Rendered video duration is outside the expected range: {duration:.2f}s")
+          print(f"Validated MP4 duration: {duration:.2f}s")
+          PY
+
       - name: Build HTML player
         run: python scripts/build_stickman_player.py
 
       - name: Upload rendered video and project files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: daily-stickman-video-${{ github.run_number }}
           path: |
@@ -80,7 +104,26 @@ jobs:
           git add stickman-films/
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
-          else
-            git commit -m "Generate daily stickman MP4"
-            git push
+            exit 0
           fi
+          git commit -m "Generate daily stickman MP4"
+          for attempt in 1 2 3 4 5; do
+            if ! git fetch origin "$GITHUB_REF_NAME"; then
+              echo "Fetch attempt $attempt failed."
+              [ "$attempt" -lt 5 ] && sleep $((attempt * 3))
+              continue
+            fi
+            if ! git rebase "origin/$GITHUB_REF_NAME"; then
+              git rebase --abort || true
+              echo "Rebase conflict; refusing to overwrite concurrent branch changes."
+              exit 1
+            fi
+            if git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"; then
+              echo "Published generated stickman film."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed."
+            [ "$attempt" -lt 5 ] && sleep $((attempt * 3))
+          done
+          echo "::error::Could not publish generated film after five attempts."
+          exit 1
