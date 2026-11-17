@@ -148,94 +148,99 @@ def _extract_gemini_payload(response_text):
 
 
 def rewrite_flagged_prompt(original_visual, attempt):
-    """Rewrite a flagged scene into a safe depiction of the same story beat."""
+    """Rewrite a flagged scene using a model fallback chain; never depend on one configured model."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is missing; cannot rewrite flagged scene prompt.")
-    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        print("GEMINI_API_KEY is unavailable; using a conservative educational fallback prompt.", flush=True)
+        return _safe_educational_fallback(original_visual)
+
+    configured = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+    configured_fallbacks = [
+        item.strip() for item in os.getenv("GEMINI_FALLBACK_MODELS", "").split(",")
+        if item.strip()
+    ]
+    models = []
+    for model in [configured, *configured_fallbacks, "gemini-3.8-flash", "gemini-3.5-flash-lite"]:
+        if model and model not in models:
+            models.append(model)
 
     strategies = {
-        1: (
-            "Rewrite the description from scratch in simple, neutral, family-friendly language. "
-            "Keep the same subject, scientific concept, characters, setting, and narrative purpose. "
-            "Remove ambiguous or unnecessarily intense wording; do not just swap synonyms."
-        ),
-        2: (
-            "Re-stage the same story moment as a clearly safe educational 3D illustration. "
-            "Preserve the central science concept and what the viewer needs to understand, "
-            "but replace potentially sensitive physical action with a harmless symbolic "
-            "visual metaphor, demonstration model, or non-contact interaction."
-        ),
-        3: (
-            "Create a substantially different but meaning-equivalent visual composition for "
-            "the same scene. Focus on the scientific idea and narrative beat using benign "
-            "objects, a classroom or laboratory demonstration, and calm character poses."
-        ),
-        4: (
-            "Show the same story beat through a close-up educational science exhibit or "
-            "hands-on demonstration. Preserve the key subject and concept, but communicate "
-            "the action through objects, physical models, and visual cause and effect."
-        ),
-        5: (
-            "Use a wide establishing shot of the same setting and moment, preserving the "
-            "important characters or scientific subject. Communicate the same narrative "
-            "purpose through calm poses, safe distance, and a clear visual metaphor."
-        ),
+        1: "Rewrite from scratch in simple, neutral, family-friendly language. Preserve the science concept and story purpose; remove ambiguous or intense wording.",
+        2: "Represent the same concept with a harmless symbolic model or classroom demonstration. Avoid physical contact or risky action.",
+        3: "Use a different calm educational composition with benign objects and friendly characters observing from a safe distance.",
+        4: "Show the concept through a close-up science exhibit, physical model, or visual metaphor.",
+        5: "Use a wide establishing shot of a calm educational setting that communicates the same general science topic.",
     }
     strategy = strategies.get(attempt, strategies[5])
     instruction = (
-        "Revise this image prompt into a genuinely safer general-audience educational depiction. "
-        "Do not bypass or trick the image safety system. Preserve the educational concept and "
-        "story beat while removing risky or ambiguous details. Describe only visible image content. "
-        "Return one concise visual description only, with no explanation or markdown.\n\n"
+        "Create a safer general-audience educational image description. Do not bypass or trick safety filters. "
+        "Preserve the educational idea while removing risky or ambiguous details. Describe visible content only. "
+        "Return one concise description, no markdown.\n\n"
         f"{strategy}\nOriginal scene description:\n{original_visual}"
     )
-
     request_body = {
         "contents": [{"parts": [{"text": instruction}]}],
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 512},
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 512},
     }
-    last_error = None
-    for api_attempt in range(1, 6):
-        try:
-            response = requests.post(
-                url,
-                params={"key": api_key},
-                json=request_body,
-                timeout=(20, 90),
-            )
-            if response.status_code == 429 or response.status_code >= 500:
-                raise requests.HTTPError(
-                    f"Gemini temporary HTTP {response.status_code}: {response.text[:800]}",
-                    response=response,
+
+    errors = []
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        for api_attempt in range(1, 3):
+            try:
+                response = requests.post(
+                    url, params={"key": api_key}, json=request_body, timeout=(15, 60)
                 )
-            response.raise_for_status()
-            payload = _extract_gemini_payload(response.text)
-            parts = payload["candidates"][0]["content"]["parts"]
-            revised = "\n".join(
-                part["text"] for part in parts
-                if isinstance(part, dict) and isinstance(part.get("text"), str)
-            ).strip()
-            if not revised:
+                if response.status_code == 404:
+                    errors.append(f"{model}: HTTP 404 (model unavailable)")
+                    print(f"Gemini model {model} is unavailable; moving to the next fallback.", flush=True)
+                    break
+                if response.status_code in (400, 401, 403):
+                    errors.append(f"{model}: HTTP {response.status_code}: {response.text[:300]}")
+                    break
+                if response.status_code == 429 or response.status_code >= 500:
+                    raise requests.HTTPError(
+                        f"Gemini temporary HTTP {response.status_code}: {response.text[:500]}",
+                        response=response,
+                    )
+                response.raise_for_status()
+                payload = _extract_gemini_payload(response.text)
+                parts = payload["candidates"][0]["content"]["parts"]
+                revised = "\n".join(
+                    part["text"] for part in parts
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                ).strip()
+                if revised:
+                    print(f"Safe-prompt rewrite succeeded with {model}.", flush=True)
+                    return " ".join(revised.split())[:1000]
                 raise ValueError("Gemini returned no text in its first candidate.")
-            return " ".join(revised.split())[:1000]
-        except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
-            last_error = f"{type(exc).__name__}: {exc}"
-            if api_attempt == 5:
-                break
-            wait = min(30, api_attempt * 5)
-            print(
-                f"Gemini safe-prompt rewrite request failed ({api_attempt}/5); "
-                f"retrying in {wait}s: {last_error}",
-                flush=True,
-            )
-            time.sleep(wait)
+            except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+                errors.append(f"{model} attempt {api_attempt}: {type(exc).__name__}: {exc}")
+                if api_attempt < 2:
+                    time.sleep(3 * api_attempt)
 
-    raise RuntimeError(
-        f"Gemini safe-prompt rewrite failed after five API attempts: {last_error}"
+    print(
+        "All Gemini prompt-rewrite models failed; using a conservative educational fallback. "
+        + " | ".join(errors[-6:]),
+        flush=True,
     )
+    return _safe_educational_fallback(original_visual)
 
+
+def _safe_educational_fallback(original_visual):
+    """Conservative local fallback when the text-model service is unavailable."""
+    topic = " ".join(str(original_visual or "").split())
+    # Keep only a short topic hint; do not pass the original action-heavy wording through.
+    topic = topic[:100].strip(" .,:;")
+    if not topic:
+        topic = "the scientific concept"
+    return (
+        f"A calm, family-friendly 3D educational science exhibit about {topic}. "
+        "Show a simple tabletop model, neutral scientific objects, and friendly animated "
+        "characters observing from a comfortable distance. Use a clear visual metaphor, "
+        "soft cinematic lighting, and a peaceful classroom or museum setting. "
+        "No danger, injury, conflict, bodily detail, weapons, text, labels, or intense action."
+    )
 
 async def generate_all_ai_images(scenes, out_dir, width, height, story_path=None):
     """Generate every missing scene through Cloudflare Workers AI; never use another image provider."""
