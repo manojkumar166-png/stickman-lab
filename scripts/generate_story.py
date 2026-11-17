@@ -507,17 +507,23 @@ def generate_story(root: Path, config: dict) -> dict:
             + user_prompt + "\n"
             if user_prompt else ""
         )
+        topic_selection_instruction = (
+            "Use the user's prompt as the controlling subject and creative brief. Do not substitute "
+            "an unrelated topic; turn the requested subject into one clear, curiosity-driven question."
+            if user_prompt else
+            f"Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}. "
+            "Generate a different subject/question each time, drawing from the selected niche."
+        )
         prompt = f"""
 Create an original, factually careful educational {niche} explainer for a colorful animated-character video.
 
 TOPIC STYLE REFERENCE — read these examples from the repository's topics.txt:
 {examples}
 
-Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.
+{topic_selection_instruction}
 {user_prompt_section}
 Use topics.txt only as a guide to concise, accessible storytelling style, not as a subject list when the selected niche is not science.
-Do not simply copy a seed topic or make a minor wording change to one.
-Generate a different subject/question each time, drawing from the selected niche.
+Do not simply copy a seed topic or make a minor wording change to one when no run-specific prompt is supplied.
 Do NOT repeat or closely rephrase any previously used topic in this history:
 {json.dumps(recent_history, ensure_ascii=False)}
 
