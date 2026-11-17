@@ -1,14 +1,20 @@
 {
   "used_titles": [
-    "The Door That Opens to Tomorrow"
+    "The Door That Opens to Tomorrow",
+    "The Snow Globe Summer"
   ],
   "used_premises": [
-    "A door shows him one moment from tomorrow"
+    "A door shows him one moment from tomorrow",
+    "A snow globe shows a sunny memory whenever he feels alone."
   ],
   "films": [
     {
       "date": "2026-11-16",
       "title": "The Door That Opens to Tomorrow"
+    },
+    {
+      "date": "2026-11-17",
+      "title": "The Snow Globe Summer"
     }
   ]
 }
