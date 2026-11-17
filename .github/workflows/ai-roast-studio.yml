@@ -32,7 +32,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ai-chat-videos-${{ github.run_id }}
+  group: stickman-lab-main-writer
   cancel-in-progress: false
 
 jobs:
@@ -116,7 +116,7 @@ jobs:
 
       - name: Save edited MP4 as workflow artifact
         id: artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ai-chat-video-edited-${{ github.run_number }}
           path: ${{ runner.temp }}/ai-chat-videos/edited.mp4
@@ -124,6 +124,7 @@ jobs:
           retention-days: 2
 
       - name: Send edited MP4 to Telegram
+        id: telegram
         if: steps.artifact.outcome == 'success'
         continue-on-error: true
         env:
@@ -135,8 +136,15 @@ jobs:
           DELIVER_ONLY: "1"
         run: python -u ai-chat-videos/telegram_chat_video.py
 
-      - name: Delete GitHub-uploaded source after artifact creation
-        if: always() && github.event_name == 'push' && steps.render.outcome == 'success' && steps.artifact.outcome == 'success'
+      - name: Require successful Telegram delivery
+        if: steps.artifact.outcome == 'success' && steps.telegram.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::error::Edited video artifact exists, but Telegram delivery failed. The original upload will be retained for retry."
+          exit 1
+
+      - name: Delete GitHub-uploaded source after successful delivery
+        if: success() && github.event_name == 'push' && steps.render.outcome == 'success' && steps.artifact.outcome == 'success' && steps.telegram.outcome == 'success'
         env:
           SOURCE_PATH: ${{ steps.source.outputs.local_video_path }}
         run: |
@@ -145,9 +153,26 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git rm -- "$SOURCE_PATH"
             git commit -m "Clean up processed AI Chat Videos source upload"
-            git pull --rebase origin main
-            git push
-            echo "Removed source from the current main branch after artifact creation."
+            for attempt in 1 2 3 4 5; do
+              if ! git fetch origin main; then
+                echo "Fetch attempt $attempt failed."
+                [ "$attempt" -lt 5 ] && sleep $((attempt * 3))
+                continue
+              fi
+              if ! git rebase origin/main; then
+                git rebase --abort || true
+                echo "Rebase conflict; preserving source upload."
+                exit 1
+              fi
+              if git push origin HEAD:refs/heads/main; then
+                echo "Removed source only after successful Telegram delivery."
+                exit 0
+              fi
+              echo "Push attempt $attempt failed."
+              [ "$attempt" -lt 5 ] && sleep $((attempt * 3))
+            done
+            echo "::error::Could not publish source cleanup after five attempts."
+            exit 1
           else
             echo "No GitHub-uploaded source to clean up."
           fi
