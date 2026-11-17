@@ -1,0 +1,101 @@
+name: Daily Gemini Stickman Film
+
+on:
+  schedule:
+    # 09:00 Asia/Kolkata (03:30 UTC), every day
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Optional topic override; leave blank for an automatic fresh topic"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-gemini-stickman-film
+  cancel-in-progress: false
+
+jobs:
+  generate-render:
+    name: Generate and render one daily stickman short
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python and browser dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests
+          npm install --no-save --no-package-lock playwright@^1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Validate automation source files
+        run: |
+          python -m py_compile scripts/generate_daily_film.py
+          node --check scripts/build_topic_film.mjs
+          python -m json.tool stickman-films/topic-history.json > /dev/null
+
+      - name: Generate a fresh topic and nine-shot film brief with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-2.5-flash
+          TOPIC_OVERRIDE: ${{ inputs.topic }}
+        run: |
+          if [ -n "$TOPIC_OVERRIDE" ]; then
+            python scripts/generate_daily_film.py --topic "$TOPIC_OVERRIDE"
+          else
+            python scripts/generate_daily_film.py
+          fi
+
+      - name: Render previews, full video, and synchronized sound
+        run: node scripts/build_topic_film.mjs
+
+      - name: Upload finished MP4 and production evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-stickman-film-${{ github.run_number }}
+          path: |
+            stickman-films/latest/video.mp4
+            stickman-films/latest/film.json
+            stickman-films/latest/title.txt
+            stickman-films/latest/contact-sheet.jpg
+            stickman-films/latest/preview-*.jpg
+            stickman-films/latest/video-audit.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Persist topic history to avoid repeats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stickman-films/topic-history.json
+          if git diff --cached --quiet; then
+            echo "Topic history did not change."
+          else
+            git commit -m "Record daily Gemini stickman topic"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
