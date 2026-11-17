@@ -152,6 +152,66 @@ def _call_story_model(api_key, model, prompt):
     return _call_openai_compatible(provider, provider_model, prompt)
 
 
+def _prompt_provider_models(api_key, config):
+    """Return the ordered provider chain shared by prompt rewriting and story generation."""
+    models = []
+    if api_key:
+        models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
+    if os.environ.get("GROQ_API_KEY", "").strip():
+        models.append(("Groq", PROVIDER_CONFIG["Groq"][2]))
+    if os.environ.get("OPENROUTER_API_KEY", "").strip():
+        models.append(("OpenRouter", PROVIDER_CONFIG["OpenRouter"][2]))
+    models.extend([
+        ("Kilo", KILO_MODEL),
+        *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
+        ("OVH", "gpt-oss-120b"),
+        ("OVH", "Meta-Llama-3_3-70B-Instruct"),
+        ("OVH", "gpt-oss-20b"),
+        ("LLM7", "gpt-oss:20b"),
+    ])
+    return models
+
+
+def _rewrite_user_prompt(original_prompt, api_key, config):
+    """Improve a manually supplied prompt; always fall back safely to the original."""
+    original_prompt = str(original_prompt or "").strip()
+    if not original_prompt:
+        return ""
+    rewrite_request = f"""
+Rewrite the user's video-generation prompt so it is clear, specific, actionable,
+and optimized for an engaging educational animated explainer. Preserve the user's
+subject, intent, constraints, audience, and any requested style. Do not invent a
+different topic or add unsupported factual claims. Keep it concise (under 1200 words).
+Return JSON only: {{"rewritten_prompt":"..."}}
+
+USER PROMPT:
+{original_prompt}
+"""
+    for provider, model in _prompt_provider_models(api_key, config):
+        try:
+            if provider == "Gemini":
+                data = _call_gemini(api_key, model, rewrite_request)
+            else:
+                data = _call_openai_compatible(provider, model, rewrite_request, attempts=2)
+            parsed = _decode_json_object(_response_text(data))
+            rewritten = parsed.get("rewritten_prompt")
+            if not isinstance(rewritten, str):
+                raise ValueError("response is missing the rewritten_prompt string")
+            rewritten = rewritten.strip()
+            if len(rewritten) < 12 or len(rewritten) > 12000:
+                raise ValueError("rewritten prompt is empty or outside the allowed length")
+            print(f"Prompt rewrite succeeded with {provider}/{model}.", flush=True)
+            return rewritten
+        except Exception as exc:
+            print(
+                f"Prompt rewrite via {provider}/{model} failed; trying next provider: "
+                f"{type(exc).__name__}: {str(exc)[:350]}",
+                flush=True,
+            )
+    print("WARNING: Prompt rewrite providers all failed; using the original user prompt.", flush=True)
+    return original_prompt
+
+
 def _response_text(data):
     candidates = data.get("candidates") or []
     parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
@@ -431,6 +491,13 @@ def generate_story(root: Path, config: dict) -> dict:
     # select another broad niche without changing existing science workflows.
     niche = str(config.get("content_niche", "science")).strip() or "science"
     niche = niche[:80]
+
+    # A workflow_dispatch prompt is rewritten independently before story planning.
+    # If every rewrite provider is unavailable, the original prompt is preserved.
+    user_prompt = _rewrite_user_prompt(os.environ.get("STORY_PROMPT", ""), api_key, config)
+    if user_prompt:
+        print("A manual workflow prompt will guide the generated story.", flush=True)
+
     for generation_attempt in range(5):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
         print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
@@ -441,6 +508,7 @@ TOPIC STYLE REFERENCE — read these examples from the repository's topics.txt:
 {examples}
 
 Choose ONE fresh, specific, curiosity-driven question in this category or niche: {category}.
+{("USER'S RUN-SPECIFIC PROMPT — treat this as the controlling topic and creative brief. Preserve its intent; expand it into the complete explainer:\\n" + user_prompt + "\\n") if user_prompt else ""}
 Use topics.txt only as a guide to concise, accessible storytelling style, not as a subject list when the selected niche is not science.
 Do not simply copy a seed topic or make a minor wording change to one.
 Generate a different subject/question each time, drawing from the selected niche.
@@ -471,24 +539,8 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         data = None
         # Gemini is preferred when a secret is configured. Keyless providers and
         # the deterministic local generator remain available as automatic fallbacks.
-        provider_models = []
-        if api_key:
-            provider_models.append(("Gemini", str(config.get("gemini_model") or "gemini-2.5-flash")))
-        # Optional keyed providers are tried when their repository secrets exist.
-        if os.environ.get("GROQ_API_KEY", "").strip():
-            provider_models.append(("Groq", PROVIDER_CONFIG["Groq"][2]))
-        if os.environ.get("OPENROUTER_API_KEY", "").strip():
-            provider_models.append(("OpenRouter", PROVIDER_CONFIG["OpenRouter"][2]))
-        # Keyless fallbacks: Kilo auto-router + free pool, OVH anonymous models,
-        # and LLM7's anonymous turbo tier.
-        provider_models.extend([
-            ("Kilo", KILO_MODEL),
-            *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
-            ("OVH", "gpt-oss-120b"),
-            ("OVH", "Meta-Llama-3_3-70B-Instruct"),
-            ("OVH", "gpt-oss-20b"),
-            ("LLM7", "gpt-oss:20b"),
-        ])
+        # Shared provider order keeps story generation aligned with prompt rewriting.
+        provider_models = _prompt_provider_models(api_key, config)
         for provider, provider_model in provider_models:
             if data is not None:
                 break
