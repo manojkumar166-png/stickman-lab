@@ -53,6 +53,12 @@ jobs:
           npm install --no-save --no-package-lock playwright@^1.56.1
           npx playwright install --with-deps chromium
 
+      - name: Validate automation source files
+        run: |
+          python -m py_compile scripts/generate_daily_film.py
+          node --check scripts/build_topic_film.mjs
+          python -m json.tool stickman-films/topic-history.json > /dev/null
+
       - name: Generate a fresh topic and nine-shot film brief with Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
