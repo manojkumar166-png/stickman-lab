@@ -92,6 +92,7 @@ function drawFilm(){
   c.fillStyle="rgba(9,7,18,.38)";c.fillRect(0,0,w,120);c.fillStyle="#F8E9D5";c.font="600 31px Arial,sans-serif";c.fillText(f.title.toUpperCase(),90,76);
   c.fillStyle="rgba(12,9,22,.68)";c.fillRect(0,900,w,180);c.fillStyle="#FFB69B";c.font="700 27px Arial,sans-serif";c.fillText("SCENE "+String(i+1).padStart(2,"0")+" / 09",95,958);
   c.fillStyle="#FFF2E4";c.font="500 43px Arial,sans-serif";c.fillText(s.title,95,1020);
+  c.fillStyle="rgba(255,236,220,.86)";c.font="500 25px Arial,sans-serif";c.fillText(s.action.slice(0,100),95,1062);
   if(t<2.2){c.fillStyle="rgba(255,245,230,.92)";c.font="700 56px Arial,sans-serif";c.fillText(f.premise.slice(0,82),95,165);}
   if(t>=27.2){c.fillStyle="rgba(20,15,31,.82)";c.fillRect(0,0,w,h);c.fillStyle="#FFE8C9";c.textAlign="center";c.font="700 72px Arial,sans-serif";c.fillText(f.end_card,960,520);c.font="500 28px Arial,sans-serif";c.fillText(f.title,960,585);c.textAlign="left";}
   const v=c.createRadialGradient(960,530,360,960,530,1150);v.addColorStop(0,"rgba(0,0,0,0)");v.addColorStop(1,"rgba(8,5,18,.35)");c.fillStyle=v;c.fillRect(0,0,w,h);
