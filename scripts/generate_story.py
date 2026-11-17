@@ -481,7 +481,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 print(f"{provider}/{provider_model} unavailable: {type(exc).__name__}: {str(exc)[:450]}", flush=True)
 
         if data is None:
-            story = _local_story_fallback(niche, desired_scene_count)
+            story = _local_story_fallback(niche, desired_scene_count, history)
             used_model = "offline:template"
             break
 
