@@ -2,6 +2,11 @@ name: AI Video Experiment
 
 on:
   workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Optional video prompt (rewritten by Gemini, then provider fallbacks)"
+        required: false
+        type: string
   schedule:
     - cron: "30 5 * * *" # Once daily at 11:00 AM IST
 
@@ -89,6 +94,7 @@ jobs:
           python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
       - name: Generate AI Video
         env:
+          STORY_PROMPT: ${{ inputs.prompt }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
