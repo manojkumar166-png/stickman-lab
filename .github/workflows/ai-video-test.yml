@@ -102,11 +102,14 @@ jobs:
           # Retry in-place so scene/story checkpoints from earlier attempts are reused.
           for attempt in 1 2 3; do
             echo "AI video generation attempt ${attempt}/3"
-            if python main_ai.py; then
+            set +e
+            python main_ai.py
+            status=$?
+            set -e
+            if [[ "$status" -eq 0 ]]; then
               echo "AI video generation completed."
               exit 0
             fi
-            status=$?
             if [[ "$attempt" -eq 3 ]]; then
               echo "::error::AI video generation failed after three in-job attempts."
               exit "$status"
