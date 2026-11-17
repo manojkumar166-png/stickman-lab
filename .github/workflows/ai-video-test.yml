@@ -2,11 +2,6 @@ name: AI Video Experiment
 
 on:
   workflow_dispatch:
-    inputs:
-      prompt:
-        description: "Optional video prompt (rewritten by Gemini, then provider fallbacks)"
-        required: false
-        type: string
   schedule:
     - cron: "30 5 * * *" # Once daily at 11:00 AM IST
 
@@ -45,9 +40,9 @@ jobs:
             fi
           done
           if [[ -z "${GEMINI_API_KEY:-}" ]]; then
-            echo "::notice::GEMINI_API_KEY is not configured. Story generation will try configured Groq/OpenRouter keys, then Kilo, OVH, LLM7 anonymous models, and finally the offline generator."
+            echo "::notice::GEMINI_API_KEY is not configured. Topic/story generation will try configured Groq/OpenRouter keys, then Kilo, OVH, LLM7 anonymous models, and finally the offline generator. topics.txt remains the style reference."
           else
-            echo "Gemini is configured as the primary story generator; keyless providers remain enabled as fallbacks."
+            echo "Gemini is configured as the primary topic/story generator. It will use topics.txt as the style reference and avoid topic_history.json repeats; other providers remain fallbacks."
           fi
       - name: Restore Cloudflare image progress
         shell: bash
@@ -94,7 +89,6 @@ jobs:
           python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
       - name: Generate AI Video
         env:
-          STORY_PROMPT: ${{ inputs.prompt }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
