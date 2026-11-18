@@ -1,11 +1,13 @@
 {
   "used_titles": [
     "The Door That Opens to Tomorrow",
-    "The Snow Globe Summer"
+    "The Snow Globe Summer",
+    "The Borrowed Umbrella"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
-    "A snow globe shows a sunny memory whenever he feels alone."
+    "A snow globe shows a sunny memory whenever he feels alone.",
+    "He lends his umbrella to a stranger and later gets it back with a note."
   ],
   "films": [
     {
@@ -15,6 +17,10 @@
     {
       "date": "2026-11-17",
       "title": "The Snow Globe Summer"
+    },
+    {
+      "date": "2026-11-18",
+      "title": "The Borrowed Umbrella"
     }
   ]
 }
