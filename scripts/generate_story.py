@@ -4,14 +4,6 @@ from pathlib import Path
 
 import requests
 
-KILO_MODEL = "kilo-auto/free"
-KILO_FALLBACK_MODELS = [
-    "nvidia/nemotron-3.5-lightning:free",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "cohere/north-mini-code:free",
-    "openrouter/free",
-]
 
 class PermanentProviderError(RuntimeError):
     """A non-retryable provider response such as HTTP 400 or 404."""
@@ -34,17 +26,12 @@ TOPIC_CATEGORIES = [
 
 
 PROVIDER_CONFIG = {
-    # Keyless free endpoints first; optional keyed providers are enabled only
-    # when their repository secret is present.
-    "Kilo": ("https://api.kilo.ai/api/gateway", "", "kilo-auto/free"),
-    "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-120b"),
-    "LLM7": ("https://api.llm7.io/v1", "", "gpt-oss:20b"),
-    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
-    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+    # Keep the chain short: Gemini first, then the OVH model verified in run #76.
+    "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
 }
 
 
-def _call_openai_compatible(provider, model, prompt, attempts=2):
+def _call_openai_compatible(provider, model, prompt, attempts=1):
     """Call a configured OpenAI-compatible provider with bounded retries."""
     if provider not in PROVIDER_CONFIG:
         raise ValueError(f"Unsupported backup provider: {provider}")
@@ -78,7 +65,7 @@ def _call_openai_compatible(provider, model, prompt, attempts=2):
         try:
             response = None
             for variant_index, body in enumerate(request_bodies):
-                response = requests.post(url, headers=headers, json=body, timeout=(12, 90))
+                response = requests.post(url, headers=headers, json=body, timeout=(5, 25))
                 if response.status_code == 400 and variant_index == 0:
                     # Some free-tier models reject optional sampling parameters.
                     continue
@@ -130,7 +117,7 @@ def _call_gemini(api_key, model, prompt):
             "responseMimeType": "application/json",
         },
     }
-    response = requests.post(url, headers=headers, json=body, timeout=(12, 120))
+    response = requests.post(url, headers=headers, json=body, timeout=(5, 25))
     if response.status_code in (408, 425, 429, 500, 502, 503, 504):
         raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:700]}")
     if not response.ok:
@@ -158,18 +145,7 @@ def _prompt_provider_models(api_key, config):
     models = []
     if api_key:
         models.append(("Gemini", str(config.get("gemini_model") or "gemini-3.8-flash")))
-    if os.environ.get("GROQ_API_KEY", "").strip():
-        models.append(("Groq", PROVIDER_CONFIG["Groq"][2]))
-    if os.environ.get("OPENROUTER_API_KEY", "").strip():
-        models.append(("OpenRouter", PROVIDER_CONFIG["OpenRouter"][2]))
-    models.extend([
-        ("Kilo", KILO_MODEL),
-        *[("Kilo", model) for model in KILO_FALLBACK_MODELS],
-        ("OVH", "gpt-oss-120b"),
-        ("OVH", "Meta-Llama-3_3-70B-Instruct"),
-        ("OVH", "gpt-oss-20b"),
-        ("LLM7", "gpt-oss:20b"),
-    ])
+    models.append(("OVH", "gpt-oss-20b"))
     return models
 
 
@@ -309,7 +285,7 @@ Return ONLY valid JSON in this shape: {{"scenes":[{{"title":"short heading","nar
 Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep the narration factually careful and make the final scene of the whole story a memorable conclusion.
 """
         batch_added = False
-        for attempt in range(1, 4):
+        for attempt in range(1, 2):
             try:
                 data = _call_story_model(api_key, model, prompt)
                 addition = _decode_json_object(_response_text(data))
@@ -340,8 +316,7 @@ Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep th
                     f"Scene repair batch {batch_number}, attempt {attempt}/3 failed: {exc}",
                     flush=True,
                 )
-                if attempt < 3:
-                    time.sleep(attempt * 3)
+
         if not batch_added:
             return False
     return len(story.get("scenes", [])) == desired_count
@@ -461,9 +436,9 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if api_key:
-        print("Gemini API key detected; Gemini will be tried first with free-provider fallbacks.", flush=True)
+        print("Gemini API key detected; using the short Gemini → OVH fallback chain.", flush=True)
     else:
-        print("GEMINI_API_KEY is not set; using free-provider fallbacks and offline generation.", flush=True)
+        print("GEMINI_API_KEY is not set; using OVH and offline generation.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -496,13 +471,12 @@ def generate_story(root: Path, config: dict) -> dict:
     niche = str(config.get("content_niche", "science")).strip() or "science"
     niche = niche[:80]
 
-    # A workflow_dispatch prompt is rewritten independently before story planning.
-    # If every rewrite provider is unavailable, the original prompt is preserved.
-    user_prompt = _rewrite_user_prompt(os.environ.get("STORY_PROMPT", ""), api_key, config)
+    # Preserve the supplied prompt directly; a separate rewrite pass adds latency.
+    user_prompt = str(os.environ.get("STORY_PROMPT", "") or "").strip()[:12000]
     if user_prompt:
         print("A manual workflow prompt will guide the generated story.", flush=True)
 
-    for generation_attempt in range(5):
+    for generation_attempt in range(2):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
         print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
         user_prompt_section = (
