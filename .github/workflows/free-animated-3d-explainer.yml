@@ -241,6 +241,8 @@ jobs:
           ASPECT_RATIO: ${{ inputs.aspect_ratio }}
           RESOLUTION: ${{ inputs.resolution }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
@@ -293,8 +295,7 @@ jobs:
           config["scene_count"] = max(5, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
-          # Uses Gemini when GEMINI_API_KEY is configured; otherwise starts with
-          # anonymous free providers and retains the deterministic local fallback.
+          # Tries Gemini three times, then OVH, Kilo and OpenRouter; local fallback remains.
           story = generate_story(root, config)
           scenes = story.get("scenes", [])
           if not isinstance(scenes, list) or not scenes:
