@@ -238,36 +238,6 @@ def gemini(prompt):
             print(f"OVHcloud backup failed: {type(exc).__name__}: {exc}",flush=True)
 
 
-    # Groq follows OVH as the next configured backup; Kilo follows Groq.
-    groq_errors=[]
-    if GROQ_KEY:
-        groq_url="https://api.groq.com/openai/v1/chat/completions"
-        for attempt in range(1,2):
-            try:
-                response=requests.post(groq_url,
-                    headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
-                    json={"model":GROQ_MODEL,"messages":[
-                        {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
-                        {"role":"user","content":prompt}],
-                        "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
-                    timeout=(3,18))
-                if response.status_code in (408,429,500,502,503,504):
-                    raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
-                response.raise_for_status()
-                choices=response.json().get("choices") or []
-                content=choices[0].get("message",{}).get("content","") if choices else ""
-                result=parse_json(content)
-                print(f"Open-weight planner backup active: Groq {GROQ_MODEL}",flush=True)
-                return result
-            except Exception as exc:
-                groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-                if attempt<1:
-                    delay=min(20,2**attempt)
-                    print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
-                    time.sleep(delay)
-    else:
-        print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
-
     # Kilo's free auto-router is OpenAI-compatible and supports anonymous
     # requests for free models, so no KILO_API_KEY is required here.
     kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
@@ -324,6 +294,7 @@ def gemini(prompt):
                     time.sleep(delay)
 
 
+
     if OPENROUTER_KEY:
         try:
             response=requests.post(
@@ -347,6 +318,37 @@ def gemini(prompt):
             print(f"OpenRouter backup failed: {type(exc).__name__}: {exc}",flush=True)
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.",flush=True)
+
+    # Groq follows OVH as the next configured backup; Kilo follows Groq.
+    groq_errors=[]
+    if GROQ_KEY:
+        groq_url="https://api.groq.com/openai/v1/chat/completions"
+        for attempt in range(1,2):
+            try:
+                response=requests.post(groq_url,
+                    headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
+                    json={"model":GROQ_MODEL,"messages":[
+                        {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
+                        {"role":"user","content":prompt}],
+                        "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
+                    timeout=(3,18))
+                if response.status_code in (408,429,500,502,503,504):
+                    raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
+                response.raise_for_status()
+                choices=response.json().get("choices") or []
+                content=choices[0].get("message",{}).get("content","") if choices else ""
+                result=parse_json(content)
+                print(f"Open-weight planner backup active: Groq {GROQ_MODEL}",flush=True)
+                return result
+            except Exception as exc:
+                groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
+                if attempt<1:
+                    delay=min(20,2**attempt)
+                    print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
+                    time.sleep(delay)
+    else:
+        print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
+
 
     raise RuntimeError(
         "All planner providers failed. Gemini: "+" | ".join(errors)
