@@ -259,7 +259,7 @@ def gemini(prompt, temperature=0.7):
                 return result
             except Exception as exc:
                 failures.append(f"Groq attempt {attempt}/3: {type(exc).__name__}: {exc}")
-                if attempt < 3:
+                if attempt < 1:
                     time.sleep(min(30, attempt * 5))
     else:
         print("Groq planner fallback skipped: GROQ_API_KEY is not configured.", flush=True)
@@ -325,9 +325,9 @@ def gemini(prompt, temperature=0.7):
                 return result
             except Exception as exc:
                 kilo_errors.append(
-                    f"{kilo_model} attempt {attempt}/2: {type(exc).__name__}: {exc}"
+                    f"{kilo_model} attempt {attempt}/1: {type(exc).__name__}: {exc}"
                 )
-                if attempt < 2:
+                if attempt < 1:
                     time.sleep(attempt * 7)
 
     if OPENROUTER_API_KEY:
