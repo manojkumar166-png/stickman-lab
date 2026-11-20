@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = json.loads((ROOT / "settings.json").read_text())
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
 KILO_MODEL = os.getenv("KILO_MODEL", "kilo-auto/free").strip()
 KILO_FALLBACK_MODELS = [
@@ -220,7 +221,7 @@ def gemini(prompt, temperature=0.7):
     # Try Groq when its optional secret is configured.
     if GROQ_API_KEY:
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
-        for attempt in range(1, 4):
+        for attempt in range(1, 2):
             try:
                 response = requests.post(
                     groq_url,
@@ -266,7 +267,7 @@ def gemini(prompt, temperature=0.7):
     # Kilo Auto Free works without an API key. Try its current free catalogue
     # after Gemini/Groq, using a minimal body if a routed model rejects max_tokens.
     kilo_url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
-    kilo_models = list(dict.fromkeys([KILO_MODEL] + KILO_FALLBACK_MODELS))
+    kilo_models = [KILO_MODEL]
     kilo_errors = []
     for kilo_model in kilo_models:
         messages = [
@@ -280,7 +281,7 @@ def gemini(prompt, temperature=0.7):
             {"model": kilo_model, "messages": messages, "max_tokens": 16000},
             {"model": kilo_model, "messages": messages},
         ]
-        for attempt in range(1, 3):
+        for attempt in range(1, 2):
             try:
                 response = None
                 for variant_index, body in enumerate(request_bodies):
@@ -328,6 +329,39 @@ def gemini(prompt, temperature=0.7):
                 )
                 if attempt < 2:
                     time.sleep(attempt * 7)
+
+    if OPENROUTER_API_KEY:
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/manojkumar166-png/stickman-lab",
+                    "X-Title": "Science Channel Planner",
+                },
+                json={
+                    "model": "openrouter/free",
+                    "messages": [
+                        {"role": "system", "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 16000,
+                },
+                timeout=(3, 18),
+            )
+            if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                raise RuntimeError(f"OpenRouter HTTP {response.status_code}: {response.text[:1200]}")
+            response.raise_for_status()
+            choices = response.json().get("choices") or []
+            result_text = choices[0].get("message", {}).get("content", "") if choices else ""
+            result = parse_gemini_json(result_text)
+            print("OpenRouter free planner fallback active.", flush=True)
+            return result
+        except Exception as exc:
+            print(f"OpenRouter backup failed: {type(exc).__name__}: {exc}", flush=True)
+    else:
+        print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.", flush=True)
 
     raise RuntimeError(
         "All configured story-planning providers failed. "
