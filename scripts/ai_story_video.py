@@ -540,26 +540,69 @@ def generate_all(scenes,folder):
     print(f"Validated all {len(scenes)} scene images.",flush=True)
 
 async def speak(text,path,voice):
+    """Generate one scene's narration with male Edge Neural voice and Google fallback."""
+    text=str(text or "").strip()
+    if not text:
+        raise ValueError("Scene narration is empty.")
+    voice=str(voice or "en-US-AndrewMultilingualNeural")
     last=None
-    for attempt in range(5):
+    for attempt in range(1,6):
+        try:
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.unlink(missing_ok=True)
+            await asyncio.wait_for(
+                edge_tts.Communicate(text=text,voice=voice,rate="+0%").save(str(path)),
+                timeout=240,
+            )
+            if not path.is_file() or path.stat().st_size<=1000:
+                raise RuntimeError("Edge TTS returned an empty or incomplete audio file.")
+            if not media_has_stream(path,"a:0",1000):
+                raise RuntimeError("Edge TTS output failed ffprobe audio-stream validation.")
+            print(f"Edge TTS narration validated with {voice} ({path.stat().st_size} bytes).",flush=True)
+            return
+        except Exception as exc:
+            last=exc
+            path.unlink(missing_ok=True)
+            if attempt<5:
+                delay=min(30,2**attempt)
+                print(
+                    f"Edge TTS attempt {attempt}/5 failed: {type(exc).__name__}: {exc}; "
+                    f"retrying in {delay}s.",
+                    file=sys.stderr,flush=True,
+                )
+                await asyncio.sleep(delay)
+
+    print(
+        f"Edge TTS failed after 5 attempts ({last}); switching to Google TTS fallback.",
+        file=sys.stderr,flush=True,
+    )
+    fallback_error=None
+    for attempt in range(1,4):
         try:
             path.unlink(missing_ok=True)
-            await asyncio.wait_for(edge_tts.Communicate(text=text,voice=voice,rate="+0%").save(str(path)),timeout=240)
-            if path.exists() and path.stat().st_size>1000: return
-            raise RuntimeError("Empty narration audio")
-        except Exception as e:
-            last=e; path.unlink(missing_ok=True)
-            if attempt<4: await asyncio.sleep(min(30,2**(attempt+1)))
-    print(f"Edge TTS failed after 5 attempts ({last}); switching to Google TTS fallback.",file=sys.stderr,flush=True)
-    try:
-        path.unlink(missing_ok=True)
-        gTTS(text=text, lang="en").save(str(path))
-        if not path.is_file() or path.stat().st_size <= 1000:
-            raise RuntimeError("Google TTS returned an empty audio file")
-        print(f"Google TTS fallback completed: {path}",flush=True)
-    except Exception as fallback_error:
-        path.unlink(missing_ok=True)
-        raise RuntimeError(f"Edge TTS failed after 5 attempts ({last}); Google TTS fallback also failed: {fallback_error}") from fallback_error
+            gTTS(text=text,lang="en",slow=False,timeout=(15,90)).save(str(path))
+            if not path.is_file() or path.stat().st_size<=1000:
+                raise RuntimeError("Google TTS returned an empty or incomplete audio file.")
+            if not media_has_stream(path,"a:0",1000):
+                raise RuntimeError("Google TTS output failed ffprobe audio-stream validation.")
+            print(f"Google TTS fallback validated ({path.stat().st_size} bytes; attempt {attempt}/3).",flush=True)
+            return
+        except Exception as exc:
+            fallback_error=exc
+            path.unlink(missing_ok=True)
+            if attempt<3:
+                delay=attempt*5
+                print(
+                    f"Google TTS attempt {attempt}/3 failed: {type(exc).__name__}: {exc}; "
+                    f"retrying in {delay}s.",
+                    file=sys.stderr,flush=True,
+                )
+                await asyncio.sleep(delay)
+    raise RuntimeError(
+        f"Edge TTS failed after 5 attempts ({last}); Google TTS failed after 3 attempts "
+        f"({fallback_error})."
+    ) from fallback_error
+
 
 def command(args):
     """Run FFmpeg with retries and expose useful diagnostics instead of hiding stderr."""
