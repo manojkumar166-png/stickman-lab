@@ -212,15 +212,25 @@ jobs:
               from karaoke_subtitles import generate_karaoke_ass
               config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
 
-              if captions.is_file() and captions.stat().st_size > 100:
+              caption_lines = captions.read_text(encoding="utf-8", errors="replace").splitlines() if captions.is_file() else []
+              caption_dialogues = [line for line in caption_lines if line.startswith("Dialogue:")]
+              captions_valid = (
+                  captions.is_file() and captions.stat().st_size > 100
+                  and any(line.strip() == "[Events]" for line in caption_lines)
+                  and bool(caption_dialogues)
+              )
+              if captions_valid:
                   print("Reusing saved karaoke subtitle checkpoint.", flush=True)
-                  words = sum(1 for line in captions.read_text(encoding="utf-8", errors="replace").splitlines()
-                               if line.startswith("Dialogue:"))
+                  words = len(caption_dialogues)
               else:
+                  captions.unlink(missing_ok=True)
                   words = generate_karaoke_ass(
                       str(audio), str(captions), int(config["width"]), int(config["height"])
                   )
-              if not captions.is_file() or captions.stat().st_size <= 100:
+              caption_lines = captions.read_text(encoding="utf-8", errors="replace").splitlines() if captions.is_file() else []
+              if (not captions.is_file() or captions.stat().st_size <= 100
+                      or not any(line.strip() == "[Events]" for line in caption_lines)
+                      or not any(line.startswith("Dialogue:") for line in caption_lines)):
                   raise SystemExit("Karaoke subtitle generation did not produce a valid ASS file.")
 
               temporary_final = final_video.with_name(final_video.stem + ".rendering.mp4")
