@@ -218,52 +218,6 @@ def gemini(prompt, temperature=0.7):
         ovh_errors.append(f"{type(exc).__name__}: {exc}")
         print(f"OVHcloud backup failed: {ovh_errors[-1]}", flush=True)
 
-    # Try Groq when its optional secret is configured.
-    if GROQ_API_KEY:
-        groq_url = "https://api.groq.com/openai/v1/chat/completions"
-        for attempt in range(1, 2):
-            try:
-                response = requests.post(
-                    groq_url,
-                    headers={
-                        "Authorization": f"Bearer {GROQ_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": GROQ_MODEL,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "response_format": {"type": "json_object"},
-                        "max_completion_tokens": 16000,
-                        "temperature": temperature,
-                    },
-                    timeout=(3, 18),
-                )
-                if response.status_code in (408, 425, 429, 500, 502, 503, 504):
-                    raise RuntimeError(
-                        f"Groq HTTP {response.status_code}: {response.text[:1200]}"
-                    )
-                response.raise_for_status()
-                choices = response.json().get("choices") or []
-                result_text = (
-                    choices[0].get("message", {}).get("content", "")
-                    if choices else ""
-                )
-                result = parse_gemini_json(result_text)
-                print(f"Groq planner fallback active: {GROQ_MODEL}", flush=True)
-                return result
-            except Exception as exc:
-                failures.append(f"Groq attempt {attempt}/3: {type(exc).__name__}: {exc}")
-                if attempt < 1:
-                    time.sleep(min(30, attempt * 5))
-    else:
-        print("Groq planner fallback skipped: GROQ_API_KEY is not configured.", flush=True)
-
     # Kilo Auto Free works without an API key. Try its current free catalogue
     # after Gemini/Groq, using a minimal body if a routed model rejects max_tokens.
     kilo_url = "https://ai-gateway.kilo.ai/api/v1/chat/completions"
@@ -330,6 +284,7 @@ def gemini(prompt, temperature=0.7):
                 if attempt < 1:
                     time.sleep(attempt * 7)
 
+
     if OPENROUTER_API_KEY:
         try:
             response = requests.post(
@@ -362,6 +317,53 @@ def gemini(prompt, temperature=0.7):
             print(f"OpenRouter backup failed: {type(exc).__name__}: {exc}", flush=True)
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.", flush=True)
+
+    # Try Groq when its optional secret is configured.
+    if GROQ_API_KEY:
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        for attempt in range(1, 2):
+            try:
+                response = requests.post(
+                    groq_url,
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": GROQ_MODEL,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "max_completion_tokens": 16000,
+                        "temperature": temperature,
+                    },
+                    timeout=(3, 18),
+                )
+                if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                    raise RuntimeError(
+                        f"Groq HTTP {response.status_code}: {response.text[:1200]}"
+                    )
+                response.raise_for_status()
+                choices = response.json().get("choices") or []
+                result_text = (
+                    choices[0].get("message", {}).get("content", "")
+                    if choices else ""
+                )
+                result = parse_gemini_json(result_text)
+                print(f"Groq planner fallback active: {GROQ_MODEL}", flush=True)
+                return result
+            except Exception as exc:
+                failures.append(f"Groq attempt {attempt}/3: {type(exc).__name__}: {exc}")
+                if attempt < 1:
+                    time.sleep(min(30, attempt * 5))
+    else:
+        print("Groq planner fallback skipped: GROQ_API_KEY is not configured.", flush=True)
+
 
     raise RuntimeError(
         "All configured story-planning providers failed. "
