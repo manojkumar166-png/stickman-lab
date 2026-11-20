@@ -26,8 +26,9 @@ TOPIC_CATEGORIES = [
 
 
 PROVIDER_CONFIG = {
-    # Keep the chain short: Gemini first, then the OVH model verified in run #76.
     "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
+    "Kilo": ("https://api.kilo.ai/api/gateway", "KILO_API_KEY", "kilo-auto/free"),
+    "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openrouter/free"),
 }
 
 
@@ -38,8 +39,8 @@ def _call_openai_compatible(provider, model, prompt, attempts=1):
     base_url, key_env, _ = PROVIDER_CONFIG[provider]
     headers = {"Content-Type": "application/json"}
     api_key = os.environ.get(key_env, "").strip() if key_env else ""
-    if key_env and not api_key:
-        raise RuntimeError(f"{provider} is not configured; missing {key_env}")
+    if provider == "OpenRouter" and not api_key:
+        raise RuntimeError("OpenRouter is not configured; missing OPENROUTER_API_KEY")
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     elif provider == "Kilo":
@@ -65,7 +66,7 @@ def _call_openai_compatible(provider, model, prompt, attempts=1):
         try:
             response = None
             for variant_index, body in enumerate(request_bodies):
-                response = requests.post(url, headers=headers, json=body, timeout=(5, 25))
+                response = requests.post(url, headers=headers, json=body, timeout=(3, 18))
                 if response.status_code == 400 and variant_index == 0:
                     # Some free-tier models reject optional sampling parameters.
                     continue
@@ -100,7 +101,7 @@ def _call_openai_compatible(provider, model, prompt, attempts=1):
 
 
 def _call_gemini(api_key, model, prompt):
-    """Call Gemini when configured; return the same response shape as other providers."""
+    """Try Gemini up to three times with short per-request timeouts."""
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -117,17 +118,28 @@ def _call_gemini(api_key, model, prompt):
             "responseMimeType": "application/json",
         },
     }
-    response = requests.post(url, headers=headers, json=body, timeout=(5, 25))
-    if response.status_code in (408, 425, 429, 500, 502, 503, 504):
-        raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:700]}")
-    if not response.ok:
-        raise PermanentProviderError(f"Gemini HTTP {response.status_code}: {response.text[:700]}")
-    payload = response.json()
-    candidates = payload.get("candidates") or []
-    if not candidates:
-        raise RuntimeError(f"Gemini returned no candidates: {str(payload)[:700]}")
-    print(f"Story planner active: Gemini/{model}", flush=True)
-    return {"candidates": candidates}
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            response = requests.post(url, headers=headers, json=body, timeout=(3, 18))
+            if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+                raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:500]}")
+            if not response.ok:
+                raise PermanentProviderError(f"Gemini HTTP {response.status_code}: {response.text[:500]}")
+            payload = response.json()
+            candidates = payload.get("candidates") or []
+            if not candidates:
+                raise RuntimeError(f"Gemini returned no candidates: {str(payload)[:500]}")
+            print(f"Story planner active: Gemini/{model} (attempt {attempt}/3)", flush=True)
+            return {"candidates": candidates}
+        except PermanentProviderError:
+            raise
+        except Exception as exc:
+            last_error = exc
+            print(f"Gemini attempt {attempt}/3 failed: {type(exc).__name__}: {exc}", flush=True)
+            if attempt < 3:
+                time.sleep(attempt)
+    raise RuntimeError(f"Gemini failed after 3 attempts: {last_error}") from last_error
 
 
 def _call_story_model(api_key, model, prompt):
@@ -141,8 +153,15 @@ def _call_story_model(api_key, model, prompt):
 
 
 def _prompt_provider_models(api_key, config):
-    """Use the verified OVH model only; avoid slow, unreliable provider fallbacks."""
-    return [("OVH", "gpt-oss-20b")]
+    """Gemini first, followed by short, bounded backup-provider requests."""
+    models = []
+    if api_key:
+        models.append(("Gemini", str(config.get("gemini_model") or "gemini-3.8-flash")))
+    models.append(("OVH", "gpt-oss-20b"))
+    models.append(("Kilo", "kilo-auto/free"))
+    if os.environ.get("OPENROUTER_API_KEY", "").strip():
+        models.append(("OpenRouter", "openrouter/free"))
+    return models
 
 
 def _rewrite_user_prompt(original_prompt, api_key, config):
@@ -431,7 +450,7 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    print("Using the verified OVH/gpt-oss-20b story model; offline fallback is available.", flush=True)
+    print("Story order: Gemini (3 attempts) -> OVH -> Kilo -> OpenRouter; offline fallback enabled.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -520,8 +539,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Use only the model verified in the latest successful workflow run.
-        # Avoid cascading through unreliable providers and spending minutes on timeouts.
+        # Gemini gets three short attempts; each backup gets one bounded request.
         provider_models = _prompt_provider_models(api_key, config)
         for provider, provider_model in provider_models:
             if data is not None:
