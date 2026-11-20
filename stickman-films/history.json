@@ -3,13 +3,15 @@
     "The Door That Opens to Tomorrow",
     "The Snow Globe Summer",
     "The Borrowed Umbrella",
-    "The Rooftop Message Bottle"
+    "The Rooftop Message Bottle",
+    "The Last Coin"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
     "A snow globe shows a sunny memory whenever he feels alone.",
     "He lends his umbrella to a stranger and later gets it back with a note.",
-    "A bottle on his rooftop contains a wish written ten years earlier."
+    "A bottle on his rooftop contains a wish written ten years earlier.",
+    "He gives his last coin to a stranger, who leaves him a mysterious map."
   ],
   "films": [
     {
@@ -27,6 +29,10 @@
     {
       "date": "2026-11-19",
       "title": "The Rooftop Message Bottle"
+    },
+    {
+      "date": "2026-11-20",
+      "title": "The Last Coin"
     }
   ]
 }
