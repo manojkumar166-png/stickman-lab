@@ -141,12 +141,8 @@ def _call_story_model(api_key, model, prompt):
 
 
 def _prompt_provider_models(api_key, config):
-    """Return the ordered provider chain shared by prompt rewriting and story generation."""
-    models = []
-    if api_key:
-        models.append(("Gemini", str(config.get("gemini_model") or "gemini-3.8-flash")))
-    models.append(("OVH", "gpt-oss-20b"))
-    return models
+    """Use the verified OVH model only; avoid slow, unreliable provider fallbacks."""
+    return [("OVH", "gpt-oss-20b")]
 
 
 def _rewrite_user_prompt(original_prompt, api_key, config):
@@ -435,10 +431,7 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if api_key:
-        print("Gemini API key detected; using the short Gemini → OVH fallback chain.", flush=True)
-    else:
-        print("GEMINI_API_KEY is not set; using OVH and offline generation.", flush=True)
+    print("Using the verified OVH/gpt-oss-20b story model; offline fallback is available.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -527,9 +520,8 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Gemini is preferred when a secret is configured. Keyless providers and
-        # the deterministic local generator remain available as automatic fallbacks.
-        # Shared provider order keeps story generation aligned with prompt rewriting.
+        # Use only the model verified in the latest successful workflow run.
+        # Avoid cascading through unreliable providers and spending minutes on timeouts.
         provider_models = _prompt_provider_models(api_key, config)
         for provider, provider_model in provider_models:
             if data is not None:
