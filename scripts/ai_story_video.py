@@ -167,7 +167,7 @@ Every field must be non-empty. Preserve continuity, avoid repeating prior scenes
 def gemini(prompt):
     errors=[]
     if KEY:
-        for model in dict.fromkeys([MODEL]+FALLBACK):
+        for model in [MODEL]:
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             for attempt in range(1,4):
                 try:
@@ -176,7 +176,7 @@ def gemini(prompt):
                         params={"key":KEY},
                         json={"contents":[{"parts":[{"text":prompt}]}],
                               "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},
-                        timeout=(20,180),
+                        timeout=(3,18),
                     )
                     if r.status_code in (400,403,404):
                         error=f"Gemini {model} permanent HTTP {r.status_code}: {r.text[:900]}"
@@ -201,8 +201,43 @@ def gemini(prompt):
         errors.append("GEMINI_API_KEY is not configured; skipped Gemini.")
         print("Gemini skipped: GEMINI_API_KEY is not configured.",flush=True)
 
-    # Groq is the first open-weight backup. It is optional; the no-key Kilo
-    # free-model gateway below remains available when this secret is absent.
+    # First backup after Gemini: one bounded anonymous OVHcloud request.
+    global _OVH_LAST_CALL
+    ovh_url="https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions"
+    ovh_errors=[]
+    for attempt in range(1,2):
+        try:
+            if _OVH_LAST_CALL:
+                wait=max(0,31-(time.monotonic()-_OVH_LAST_CALL))
+                if wait:
+                    print(f"Respecting OVHcloud anonymous limit; waiting {wait:.1f}s.",flush=True)
+                    time.sleep(wait)
+            _OVH_LAST_CALL=time.monotonic()
+            response=requests.post(ovh_url,
+                headers={"Content-Type":"application/json"},
+                json={"model":OVH_MODEL,"messages":[
+                    {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
+                    {"role":"user","content":prompt}],
+                    "temperature":0.8,"max_tokens":32768},
+                timeout=(3,18))
+            if response.status_code in (408,425,429,500,502,503,504):
+                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:900]}")
+            if not response.ok:
+                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:1200]}")
+            choices=response.json().get("choices") or []
+            message=choices[0].get("message",{}) if choices else {}
+            content=message.get("content","")
+            if isinstance(content,list):
+                content="".join(part.get("text","") for part in content if isinstance(part,dict))
+            result=parse_json(content)
+            print(f"Free anonymous planner backup active: OVHcloud {OVH_MODEL}",flush=True)
+            return result
+        except Exception as exc:
+            ovh_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
+            print(f"OVHcloud backup failed: {type(exc).__name__}: {exc}",flush=True)
+
+
+    # Groq follows OVH as the next configured backup; Kilo follows Groq.
     groq_errors=[]
     if GROQ_KEY:
         groq_url="https://api.groq.com/openai/v1/chat/completions"
@@ -214,7 +249,7 @@ def gemini(prompt):
                         {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
                         {"role":"user","content":prompt}],
                         "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
-                    timeout=TIMEOUT)
+                    timeout=(3,18))
                 if response.status_code in (408,429,500,502,503,504):
                     raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
                 response.raise_for_status()
@@ -254,7 +289,7 @@ def gemini(prompt):
                         kilo_url,
                         headers={"Content-Type":"application/json"},
                         json=body,
-                        timeout=(20,240),
+                        timeout=(3,18),
                     )
                     if response.status_code==400 and variant_index+1<len(request_bodies):
                         message=f"Kilo model {kilo_model} rejected optional token limits; retrying minimal request."
@@ -287,42 +322,6 @@ def gemini(prompt):
                     print(f"Kilo model {kilo_model} attempt {attempt}/2 failed: {exc}. Retrying in {delay}s.",flush=True)
                     time.sleep(delay)
 
-    # Last-resort anonymous endpoint from OVHcloud. Its public tier is
-    # limited to two requests per minute per IP and model, so retry slowly.
-    global _OVH_LAST_CALL
-    ovh_url="https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions"
-    ovh_errors=[]
-    for attempt in range(1,3):
-        try:
-            if _OVH_LAST_CALL:
-                wait=max(0,31-(time.monotonic()-_OVH_LAST_CALL))
-                if wait:
-                    print(f"Respecting OVHcloud anonymous limit; waiting {wait:.1f}s.",flush=True)
-                    time.sleep(wait)
-            _OVH_LAST_CALL=time.monotonic()
-            response=requests.post(ovh_url,
-                headers={"Content-Type":"application/json"},
-                json={"model":OVH_MODEL,"messages":[
-                    {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
-                    {"role":"user","content":prompt}],
-                    "temperature":0.8,"max_tokens":32768},
-                timeout=(20,240))
-            if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:900]}")
-            if not response.ok:
-                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:1200]}")
-            choices=response.json().get("choices") or []
-            message=choices[0].get("message",{}) if choices else {}
-            content=message.get("content","")
-            if isinstance(content,list):
-                content="".join(part.get("text","") for part in content if isinstance(part,dict))
-            result=parse_json(content)
-            print(f"Free anonymous planner backup active: OVHcloud {OVH_MODEL}",flush=True)
-            return result
-        except Exception as exc:
-            ovh_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-            if attempt<2:
-                print(f"OVHcloud anonymous backup attempt {attempt}/2 failed: {exc}. Retrying after the 2 RPM window.",flush=True)
 
     raise RuntimeError(
         "All planner providers failed. Gemini: "+" | ".join(errors)
