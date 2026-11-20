@@ -261,7 +261,7 @@ def gemini(prompt):
                 return result
             except Exception as exc:
                 groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-                if attempt<3:
+                if attempt<1:
                     delay=min(20,2**attempt)
                     print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
                     time.sleep(delay)
@@ -318,9 +318,9 @@ def gemini(prompt):
                 return result
             except Exception as exc:
                 kilo_errors.append(f"{kilo_model} try {attempt}: {type(exc).__name__}: {exc}")
-                if attempt<2:
+                if attempt<1:
                     delay=attempt*7
-                    print(f"Kilo model {kilo_model} attempt {attempt}/2 failed: {exc}. Retrying in {delay}s.",flush=True)
+                    print(f"Kilo model {kilo_model} attempt {attempt}/1 failed: {exc}. Retrying in {delay}s.",flush=True)
                     time.sleep(delay)
 
 
