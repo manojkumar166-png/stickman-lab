@@ -37,6 +37,7 @@ jobs:
           GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-120b' }}
           KILO_MODEL: ${{ vars.KILO_MODEL || 'kilo-auto/free' }}
           KILO_FALLBACK_MODELS: ${{ vars.KILO_FALLBACK_MODELS || 'nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free' }}
+          OVH_MODEL: ${{ vars.OVH_MODEL || 'gpt-oss-20b' }}
         run: python -u science-channel/scripts/gemini_planner.py
       - name: Identify generated episode
         id: generated
