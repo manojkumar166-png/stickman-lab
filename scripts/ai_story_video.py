@@ -562,15 +562,26 @@ async def speak(text,path,voice):
         raise RuntimeError(f"Edge TTS failed after 5 attempts ({last}); Google TTS fallback also failed: {fallback_error}") from fallback_error
 
 def command(args):
-    """Retry transient FFmpeg failures, then use MPEG-4 if H.264 encoding fails."""
+    """Run FFmpeg with retries and expose useful diagnostics instead of hiding stderr."""
     last_error = None
     for attempt in range(1, 4):
         try:
-            subprocess.run(args,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=900)
+            result = subprocess.run(
+                args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                text=True, timeout=900,
+            )
+            if result.stderr.strip():
+                print("FFmpeg notice: " + result.stderr.strip()[-2000:], file=sys.stderr, flush=True)
             return
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             last_error = exc
-            print(f"FFmpeg attempt {attempt}/3 failed: {exc}",file=sys.stderr,flush=True)
+            detail = getattr(exc, "stderr", None) or ""
+            if isinstance(detail, bytes):
+                detail = detail.decode("utf-8", errors="replace")
+            print(
+                f"FFmpeg attempt {attempt}/3 failed: {exc}\n{str(detail)[-4000:]}",
+                file=sys.stderr, flush=True,
+            )
             if attempt < 3:
                 time.sleep(attempt * 5)
     if "-c:v" in args and "libx264" in args:
@@ -585,10 +596,29 @@ def command(args):
                 fallback.extend(["mpeg4", "-q:v", "5"])
             else:
                 fallback.append(item)
-        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.",flush=True)
-        subprocess.run(fallback,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True,timeout=900)
-        return
-    raise RuntimeError(f"FFmpeg failed after 3 attempts: {last_error}") from last_error
+        print("FFmpeg H.264 failed after 3 attempts; trying MPEG-4 encoder fallback.", flush=True)
+        try:
+            result = subprocess.run(
+                fallback, check=True, stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE, text=True, timeout=900,
+            )
+            if result.stderr.strip():
+                print("FFmpeg fallback notice: " + result.stderr.strip()[-2000:], file=sys.stderr, flush=True)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            detail = getattr(exc, "stderr", None) or ""
+            if isinstance(detail, bytes):
+                detail = detail.decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"FFmpeg MPEG-4 fallback also failed: {exc}\n{str(detail)[-4000:]}"
+            ) from exc
+    detail = getattr(last_error, "stderr", None) or ""
+    if isinstance(detail, bytes):
+        detail = detail.decode("utf-8", errors="replace")
+    raise RuntimeError(
+        f"FFmpeg failed after 3 attempts: {last_error}\n{str(detail)[-4000:]}"
+    ) from last_error
+
 
 def media_has_stream(path,selector,minimum_bytes=1024):
     path=Path(path)
@@ -604,6 +634,47 @@ def media_has_stream(path,selector,minimum_bytes=1024):
     except (OSError,subprocess.SubprocessError):
         return False
 
+
+def media_is_valid(path, decode=False):
+    """Require both streams, a real duration, and optionally a full decode pass."""
+    path = Path(path)
+    if not path.is_file() or path.stat().st_size < 2048:
+        return False
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "stream=codec_type:format=duration", "-of", "json", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if probe.returncode != 0:
+            print(f"ffprobe rejected {path.name}: {probe.stderr[-1500:]}", file=sys.stderr, flush=True)
+            return False
+        metadata = json.loads(probe.stdout or "{}")
+        stream_types = {stream.get("codec_type") for stream in metadata.get("streams", [])}
+        duration = float((metadata.get("format") or {}).get("duration") or 0)
+        if not {"video", "audio"}.issubset(stream_types) or duration <= 0.05:
+            print(
+                f"Media validation failed for {path.name}: streams={sorted(stream_types)}, duration={duration:.3f}s",
+                file=sys.stderr, flush=True,
+            )
+            return False
+        if decode:
+            decoded = subprocess.run(
+                ["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+                capture_output=True, text=True, timeout=900,
+            )
+            if decoded.returncode != 0:
+                print(
+                    f"Decode validation failed for {path.name}: {decoded.stderr[-2500:]}",
+                    file=sys.stderr, flush=True,
+                )
+                return False
+        return True
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as exc:
+        print(f"Media validation error for {path.name}: {exc}", file=sys.stderr, flush=True)
+        return False
+
+
 def render(scenes,package,voice):
     aud=package/"audio"
     seg=package/"segments"
@@ -613,36 +684,97 @@ def render(scenes,package,voice):
     for s in scenes:
         n=s["scene_number"]
         audio=aud/f"scene-{n:02d}.mp3"
+        image=package/"images"/f"scene-{n:02d}.png"
         video=seg/f"segment-{n:02d}.mp4"
         if not media_has_stream(audio,"a:0",1000):
             audio.unlink(missing_ok=True)
             print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
             asyncio.run(speak(s["narration"],audio,voice))
             if not media_has_stream(audio,"a:0",1000):
-                raise RuntimeError(f"Scene {n}: Edge TTS audio failed media validation")
+                raise RuntimeError(f"Scene {n}: generated narration failed media validation")
         else:
             print(f"Edge TTS: reusing saved audio for scene {n}/{len(scenes)}",flush=True)
-        if not (media_has_stream(video,"v:0",100000) and media_has_stream(video,"a:0",100000)):
+
+        if not image.is_file():
+            raise FileNotFoundError(f"Scene {n}: generated image checkpoint is missing: {image}")
+        try:
+            with Image.open(image) as im:
+                im.verify()
+        except Exception as exc:
+            raise RuntimeError(f"Scene {n}: saved image is corrupt; refusing to render: {exc}") from exc
+
+        if not media_is_valid(video, decode=True):
+            if video.exists():
+                print(f"Scene {n}: discarding invalid/partial segment and rebuilding from saved inputs.", flush=True)
             video.unlink(missing_ok=True)
-            print(f"FFmpeg: rendering scene segment {n}/{len(scenes)}",flush=True)
-            command(["ffmpeg","-y","-loop","1","-i",str(package/"images"/f"scene-{n:02d}.png"),"-i",str(audio),
-              "-vf","scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
-              "-r","25","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-b:a","128k",
-              "-shortest","-movflags","+faststart",str(video)])
-            if not (media_has_stream(video,"v:0",100000) and media_has_stream(video,"a:0",100000)):
-                raise RuntimeError(f"Scene {n}: FFmpeg did not produce a valid audio/video segment")
+            temporary = video.with_name(video.stem + ".rendering.mp4")
+            last_error = None
+            for encoder in ("libx264", "mpeg4"):
+                temporary.unlink(missing_ok=True)
+                print(
+                    f"FFmpeg: rendering scene {n}/{len(scenes)} with {encoder}; "
+                    "saved image and narration will be reused.",
+                    flush=True,
+                )
+                args = [
+                    "ffmpeg", "-hide_banner", "-y", "-loop", "1", "-framerate", "25",
+                    "-i", str(image), "-i", str(audio), "-map", "0:v:0", "-map", "1:a:0",
+                    "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p",
+                    "-r", "25", "-c:v", encoder,
+                ]
+                if encoder == "libx264":
+                    args.extend(["-preset", "veryfast", "-tune", "stillimage", "-crf", "20"])
+                else:
+                    args.extend(["-q:v", "5"])
+                args.extend([
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+                    "-shortest", "-max_muxing_queue_size", "1024",
+                    "-movflags", "+faststart", str(temporary),
+                ])
+                try:
+                    command(args)
+                    if not media_is_valid(temporary, decode=True):
+                        raise RuntimeError(f"{encoder} output failed stream/duration/full-decode validation")
+                    temporary.replace(video)
+                    last_error = None
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    temporary.unlink(missing_ok=True)
+                    print(
+                        f"Scene {n}: {encoder} render attempt failed: {type(exc).__name__}: {exc}",
+                        file=sys.stderr, flush=True,
+                    )
+            if last_error is not None:
+                raise RuntimeError(
+                    f"Scene {n}: could not render from the preserved image/audio checkpoints "
+                    f"with H.264 or MPEG-4: {last_error}"
+                ) from last_error
         else:
-            print(f"FFmpeg: reusing saved video segment for scene {n}/{len(scenes)}",flush=True)
+            print(f"FFmpeg: reusing fully decoded segment for scene {n}/{len(scenes)}",flush=True)
         parts.append(video)
+
     concat=package/"concat.txt"
     concat.write_text("".join(f"file '{p.resolve().as_posix()}'\n" for p in parts),encoding="utf-8")
     final=package/"final-video.mp4"
-    if not (media_has_stream(final,"v:0",100000) and media_has_stream(final,"a:0",100000)):
+    if not media_is_valid(final, decode=True):
         final.unlink(missing_ok=True)
-        command(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-movflags","+faststart",str(final)])
-    if not (media_has_stream(final,"v:0",100000) and media_has_stream(final,"a:0",100000)):
-        raise RuntimeError("Final MP4 is missing, incomplete, or has no valid audio/video streams")
+        temporary_final = final.with_name(final.stem + ".rendering.mp4")
+        temporary_final.unlink(missing_ok=True)
+        try:
+            command([
+                "ffmpeg","-hide_banner","-y","-f","concat","-safe","0","-i",str(concat),
+                "-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p",
+                "-c:a","aac","-b:a","128k","-movflags","+faststart",str(temporary_final),
+            ])
+            if not media_is_valid(temporary_final, decode=True):
+                raise RuntimeError("Final video failed stream/duration/full-decode validation")
+            temporary_final.replace(final)
+        except Exception:
+            temporary_final.unlink(missing_ok=True)
+            raise
     return final
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--topic",default="")
