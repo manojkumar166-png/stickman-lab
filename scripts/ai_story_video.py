@@ -13,7 +13,7 @@ GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
 GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
 KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
-OVH_MODEL=os.getenv("OVH_MODEL","Qwen3.5-397B-A17B").strip()
+OVH_MODEL=os.getenv("OVH_MODEL","gpt-oss-20b").strip()
 # Keep planner calls on Gemini API models listed as free-tier eligible.
 # Paid or unknown model IDs supplied through Actions variables are ignored.
 FREE_GEMINI_MODELS=(
