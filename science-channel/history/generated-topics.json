@@ -48,7 +48,8 @@
     "How do touchscreens know where your finger is?",
     "Why do caves echo?",
     "Why do we get dizzy when we spin?",
-    "Why do hot pavement surfaces look wet?"
+    "Why do hot pavement surfaces look wet?",
+    "Why do raindrops fall as teardrops instead of spheres?"
   ],
   "topic_details": [
     {
@@ -280,6 +281,11 @@
       "title": "Why do hot pavement surfaces look wet?",
       "angle": "Exploring the physics of mirages by showing how light bends as it passes through layers of air at different temperatures, creating the optical illusion of a shimmering pool of water on a dry road.",
       "pillar": "Light, sound and vision"
+    },
+    {
+      "title": "Why do raindrops fall as teardrops instead of spheres?",
+      "angle": "Explore how surface tension, air resistance, and aerodynamic pressure constantly reshape falling water droplets into tiny parachute-like shapes.",
+      "pillar": "Weather, clouds and the water cycle"
     }
   ]
 }
