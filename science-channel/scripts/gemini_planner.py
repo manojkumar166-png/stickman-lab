@@ -73,7 +73,7 @@ def gemini(prompt, temperature=0.7):
     succeeds, it becomes the preferred model for the remaining calls in this process.
     """
     global MODEL, API
-    configured = ([MODEL] + SETTINGS.get("gemini_fallback_models", [])) if API_KEY else []
+    configured = [MODEL] if API_KEY else []
     if not API_KEY:
         failures_note = "GEMINI_API_KEY is not configured; skipped Gemini."
         print(failures_note, flush=True)
@@ -101,7 +101,7 @@ def gemini(prompt, temperature=0.7):
             }
             try:
                 response = requests.post(
-                    model_api, params={"key": API_KEY}, json=payload, timeout=(20, 180)
+                    model_api, params={"key": API_KEY}, json=payload, timeout=(3, 18)
                 )
                 if not response.ok:
                     detail = response.text[:2000]
@@ -187,6 +187,36 @@ def gemini(prompt, temperature=0.7):
                 flush=True
             )
 
+    # OVHcloud is the first backup after the three Gemini attempts.
+    ovh_url = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions"
+    ovh_errors = []
+    try:
+        response = requests.post(
+            ovh_url,
+            headers={"Content-Type": "application/json"},
+            json={
+                "model": os.getenv("OVH_MODEL", "gpt-oss-20b").strip(),
+                "messages": [
+                    {"role": "system", "content": "Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": 16000,
+            },
+            timeout=(3, 18),
+        )
+        if response.status_code in (408, 425, 429, 500, 502, 503, 504):
+            raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:1200]}")
+        response.raise_for_status()
+        choices = response.json().get("choices") or []
+        result_text = choices[0].get("message", {}).get("content", "") if choices else ""
+        result = parse_gemini_json(result_text)
+        print("OVHcloud planner fallback active.", flush=True)
+        return result
+    except Exception as exc:
+        ovh_errors.append(f"{type(exc).__name__}: {exc}")
+        print(f"OVHcloud backup failed: {ovh_errors[-1]}", flush=True)
+
     # Try Groq when its optional secret is configured.
     if GROQ_API_KEY:
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
@@ -211,7 +241,7 @@ def gemini(prompt, temperature=0.7):
                         "max_completion_tokens": 16000,
                         "temperature": temperature,
                     },
-                    timeout=(20, 180),
+                    timeout=(3, 18),
                 )
                 if response.status_code in (408, 425, 429, 500, 502, 503, 504):
                     raise RuntimeError(
@@ -258,7 +288,7 @@ def gemini(prompt, temperature=0.7):
                         kilo_url,
                         headers={"Content-Type": "application/json"},
                         json=body,
-                        timeout=(20, 240),
+                        timeout=(3, 18),
                     )
                     if response.status_code == 400 and variant_index + 1 < len(request_bodies):
                         print(
@@ -302,6 +332,7 @@ def gemini(prompt, temperature=0.7):
     raise RuntimeError(
         "All configured story-planning providers failed. "
         + "Gemini: " + (" | ".join(failures) if failures else "skipped")
+        + " | OVHcloud: " + (" | ".join(ovh_errors) if ovh_errors else "not attempted")
         + " | Kilo: " + (" | ".join(kilo_errors) if kilo_errors else "no model response")
     )
 
