@@ -156,41 +156,91 @@ jobs:
           if not safe_title or safe_title in {".", ".."}:
               raise SystemExit("Could not make a safe filename from the story title.")
 
+          def valid_media(path, require_video=False):
+              path = Path(path)
+              if not path.is_file() or path.stat().st_size < 2048:
+                  return False
+              try:
+                  probe = subprocess.run(
+                      ["ffprobe", "-v", "error", "-show_entries",
+                       "stream=codec_type:format=duration", "-of", "json", str(path)],
+                      capture_output=True, text=True, timeout=30
+                  )
+                  if probe.returncode != 0:
+                      return False
+                  metadata = json.loads(probe.stdout or "{}")
+                  streams = {item.get("codec_type") for item in metadata.get("streams", [])}
+                  duration = float((metadata.get("format") or {}).get("duration") or 0)
+                  required = {"audio", "video"} if require_video else {"audio"}
+                  if not required.issubset(streams) or duration <= 0.05:
+                      return False
+                  decoded = subprocess.run(
+                      ["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+                      capture_output=True, text=True, timeout=900
+                  )
+                  return decoded.returncode == 0
+              except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+                  return False
+
           video = package / "final-video.mp4"
-          if not video.is_file() or video.stat().st_size < 100000:
-              raise SystemExit("Final video is missing or too small.")
+          if not valid_media(video, require_video=True):
+              raise SystemExit("Final scene video is missing or failed full media validation.")
 
           work = package / "subtitle-work"
           work.mkdir(exist_ok=True)
           audio = work / "narration-for-whisper.mp3"
           captions = work / "karaoke-captions.ass"
-          run_ffmpeg([
-              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-              "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
-          ])
-
-          import sys
-          sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
-          from karaoke_subtitles import generate_karaoke_ass
-          config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
-          words = generate_karaoke_ass(
-              str(audio), str(captions), int(config["width"]), int(config["height"])
-          )
-          if not captions.is_file() or captions.stat().st_size == 0:
-              raise SystemExit("Karaoke subtitle generation did not produce an ASS file.")
-
           final_video = root / f"{safe_title}.mp4"
-          run_ffmpeg([
-              "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-              "-i", str(video),
-              "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
-              "-map", "0:v:0", "-map", "0:a:0",
-              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-              "-c:a", "aac", "-b:a", "192k", "-shortest",
-              "-movflags", "+faststart", str(final_video)
-          ])
-          if not final_video.is_file() or final_video.stat().st_size < 100000:
-              raise SystemExit("Final subtitled video is missing or too small.")
+
+          if valid_media(final_video, require_video=True):
+              print(f"Reusing validated subtitled video checkpoint: {final_video}", flush=True)
+              words = 0
+          else:
+              if valid_media(audio):
+                  print("Reusing validated narration audio extracted for Whisper.", flush=True)
+              else:
+                  audio.unlink(missing_ok=True)
+                  run_ffmpeg([
+                      "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                      "-i", str(video), "-vn", "-ac", "1", "-ar", "24000", str(audio)
+                  ])
+                  if not valid_media(audio):
+                      raise SystemExit("Narration audio extraction failed validation.")
+
+              import sys
+              sys.path.insert(0, str(Path("science-channel/scripts").resolve()))
+              from karaoke_subtitles import generate_karaoke_ass
+              config = json.loads(Path("science-channel/settings.json").read_text(encoding="utf-8"))
+
+              if captions.is_file() and captions.stat().st_size > 100:
+                  print("Reusing saved karaoke subtitle checkpoint.", flush=True)
+                  words = sum(1 for line in captions.read_text(encoding="utf-8", errors="replace").splitlines()
+                               if line.startswith("Dialogue:"))
+              else:
+                  words = generate_karaoke_ass(
+                      str(audio), str(captions), int(config["width"]), int(config["height"])
+                  )
+              if not captions.is_file() or captions.stat().st_size <= 100:
+                  raise SystemExit("Karaoke subtitle generation did not produce a valid ASS file.")
+
+              temporary_final = final_video.with_name(final_video.stem + ".rendering.mp4")
+              temporary_final.unlink(missing_ok=True)
+              try:
+                  run_ffmpeg([
+                      "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                      "-i", str(video),
+                      "-vf", f"subtitles={captions}:fontsdir=/usr/share/fonts/truetype/dejavu",
+                      "-map", "0:v:0", "-map", "0:a:0",
+                      "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+                      "-c:a", "aac", "-b:a", "192k", "-shortest",
+                      "-movflags", "+faststart", str(temporary_final)
+                  ])
+                  if not valid_media(temporary_final, require_video=True):
+                      raise SystemExit("Final subtitled video failed full media validation.")
+                  temporary_final.replace(final_video)
+              except Exception:
+                  temporary_final.unlink(missing_ok=True)
+                  raise
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"video={final_video.as_posix()}\n")
