@@ -50,6 +50,10 @@ jobs:
       - name: Generate story, original 3D scenes, narration and MP4
         env:
           TARGET_MINUTES: ${{ inputs.target_minutes }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PYTHONUNBUFFERED: "1"
         shell: bash
         run: |
