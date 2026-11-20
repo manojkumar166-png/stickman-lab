@@ -829,7 +829,7 @@ def main():
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
     print("Images: OVHcloud primary (up to 5 attempts), then AI Horde, Vexa and Pollinations fallbacks.",flush=True)
-    print("Narration: Edge TTS | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
+    print("Narration: male Edge Neural voice with retried Google TTS fallback | Rendering: FFmpeg | Delivery: GitHub Actions artifact",flush=True)
     print("::endgroup::",flush=True)
     OUT.mkdir(parents=True,exist_ok=True)
 
@@ -873,9 +873,12 @@ def main():
         print("Gemini selected format: "+data["mode"],flush=True)
     else:
         data.setdefault("scene_count",a.scenes)
-        data.setdefault("voice",a.voice)
         data.setdefault("completed",False)
         print("Reusing the saved story without asking Gemini to replace it.",flush=True)
+
+    # The selected workflow voice is authoritative, including when resuming an
+    # older checkpoint that may have stored a different narrator.
+    data["voice"]=a.voice or "en-US-AndrewMultilingualNeural"
 
     story_file=package/"story.json"
     temporary_story=story_file.with_name(story_file.name+".tmp")
