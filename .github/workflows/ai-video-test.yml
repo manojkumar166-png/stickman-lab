@@ -126,6 +126,7 @@ jobs:
           done
 
       - name: Generate and burn karaoke subtitles
+        if: vars.ENABLE_KARAOKE_SUBTITLES == 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
           KARAOKE_WHISPER_BACKEND: faster-whisper
