@@ -163,5 +163,10 @@
     "title": "Why Owls Fly Silently: The Aeroacoustic Physics of Stealth Flight",
     "topic": "The precise aeroacoustic mechanisms of leading-edge comb serrations, flexible trailing-edge fringes, and micro-velvety dorsal plumage that disrupt vortex shedding and suppress pressure fluctuations during owl flight.",
     "description": "An in-depth scientific documentary exploring the acoustic engineering of owl feathers. We investigate how specialized micro-structures break up turbulent air eddies, allowing these nocturnal predators to glide in near-absolute silence."
+  },
+  {
+    "title": "The Quantum Clock: Why Atomic Oscillations Define Reality",
+    "topic": "The precise mechanism of using hyperfine transitions in Cesium-133 atoms to define the second based on constant electromagnetic oscillation frequencies.",
+    "description": "We explore the microscopic heart of timekeeping, where we venture inside an atomic clock to observe how atoms are cooled and measured. This documentary reveals how the invariant natural frequency of electron transitions serves as the universal anchor for our perception of duration."
   }
 ]
