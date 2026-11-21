@@ -90,8 +90,7 @@ def refresh_model_catalogs():
                         1 if "preview" in name.lower() else 0,
                         tuple(-x for x in nums),name)
             found=sorted(set(found),key=gemini_rank)
-            if found:
-                GEMINI_CANDIDATES=found[:6]
+            GEMINI_CANDIDATES=found[:6]
             print(f"Gemini catalogue: {len(found)} text Flash models; priority={GEMINI_CANDIDATES[:5]}",flush=True)
         except Exception as exc:
             print(f"Gemini catalogue refresh failed; retaining configured candidates: {exc}",flush=True)
@@ -962,7 +961,6 @@ def render(scenes,package,voice):
     return final
 
 def main():
-    refresh_model_catalogs()
     p=argparse.ArgumentParser()
     p.add_argument("--topic",default="")
     p.add_argument("--scenes",type=int,default=8)
@@ -970,6 +968,7 @@ def main():
     a=p.parse_args()
     if not 4<=a.scenes<=48:
         p.error("Scene count must be 4–48")
+    refresh_model_catalogs()
     print("::group::RUN CONFIGURATION",flush=True)
     print(f"Format=Gemini decides | Scenes={a.scenes} | Voice={a.voice}",flush=True)
     print("Images: OVHcloud primary (up to 5 attempts), then AI Horde, Vexa and Pollinations fallbacks.",flush=True)
