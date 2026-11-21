@@ -85,13 +85,13 @@ def refresh_model_catalogs():
                     continue
                 found.append(name)
             def gemini_rank(name):
-                nums=tuple(int(x) for x in re.findall(r"\\d+",name))
+                nums=tuple(int(x) for x in re.findall(r"\d+",name))
                 return (0 if "flash-lite" in name.lower() else 1,
                         1 if "preview" in name.lower() else 0,
                         tuple(-x for x in nums),name)
             found=sorted(set(found),key=gemini_rank)
             if found:
-                GEMINI_CANDIDATES=found[:10]
+                GEMINI_CANDIDATES=found[:6]
             print(f"Gemini catalogue: {len(found)} text Flash models; priority={GEMINI_CANDIDATES[:5]}",flush=True)
         except Exception as exc:
             print(f"Gemini catalogue refresh failed; retaining configured candidates: {exc}",flush=True)
@@ -126,13 +126,13 @@ def refresh_model_catalogs():
             specs=(metadata.get("model_specs") or {})
             capabilities=specs.get("capabilities") or {}
             output=capabilities.get("output_modality") or []
+            if isinstance(output,str): output=[output]
             if output and not any("text" in str(x).lower() for x in output): continue
             if model_id in OVH_CANDIDATES or _is_zero_priced(metadata.get("usage_information",{})):
                 active.append(model_id)
-        if active:
-            OVH_CANDIDATES=list(dict.fromkeys(
-                [m for m in OVH_CANDIDATES if m in active]+active
-            ))[:10]
+        OVH_CANDIDATES=list(dict.fromkeys(
+            [m for m in OVH_CANDIDATES if m in active]+active
+        ))[:3]
         print(f"OVHcloud catalogue: {len(active)} active text/free candidates; selected={OVH_CANDIDATES[:5]}",flush=True)
     except Exception as exc:
         print(f"OVHcloud catalogue refresh failed; retaining configured candidates: {exc}",flush=True)
@@ -163,8 +163,7 @@ def refresh_model_catalogs():
             entries=response.json().get("data",[])
             available={item.get("id") for item in entries if isinstance(item,dict)
                        and item.get("active",True) is not False and isinstance(item.get("id"),str)}
-            if GROQ_MODEL in available:
-                GROQ_CANDIDATES=[GROQ_MODEL]
+            GROQ_CANDIDATES=[GROQ_MODEL] if GROQ_MODEL in available else []
             print(f"Groq catalogue: {len(available)} active model IDs; configured choice={'available' if GROQ_MODEL in available else 'not listed'}.",flush=True)
         except Exception as exc:
             print(f"Groq catalogue refresh failed; retaining configured choice: {exc}",flush=True)
