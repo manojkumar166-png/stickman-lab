@@ -126,7 +126,7 @@ jobs:
           done
 
       - name: Generate and burn karaoke subtitles
-        if: vars.ENABLE_KARAOKE_SUBTITLES == 'true'
+        if: vars.ENABLE_KARAOKE_SUBTITLES != 'false'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
           KARAOKE_WHISPER_BACKEND: faster-whisper
@@ -285,29 +285,37 @@ jobs:
           RUN_KEY="${{ steps.get_topic.outputs.run_key }}"
           TELEGRAM_VIDEO="output/telegram-${RUN_KEY}.mp4"
           test -s "$INPUT_VIDEO" || { echo "::error::Video for Telegram compression is missing: $INPUT_VIDEO"; exit 1; }
-          DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$INPUT_VIDEO")"
-          VIDEO_BITRATE="$(awk -v duration="$DURATION" 'BEGIN {
-            if (duration <= 0) exit 1;
-            total_kbps = (35000000 * 8 / duration) / 1000;
-            video_kbps = total_kbps - 112;
-            if (video_kbps < 300) video_kbps = 300;
-            printf "%.0fk", video_kbps;
-          }')"
-          echo "Creating Telegram copy at approximately 35 MB; keeping the original full-quality artifact unchanged."
-          PASSLOG="$RUNNER_TEMP/telegram-encode"
-          ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
-            -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
-            -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
-            -pass 1 -passlogfile "$PASSLOG" -an -f mp4 /dev/null
-          ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
-            -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
-            -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
-            -pass 2 -passlogfile "$PASSLOG" -c:a aac -b:a 96k \
-            -movflags +faststart "$TELEGRAM_VIDEO"
+          ORIGINAL_SIZE="$(stat -c%s "$INPUT_VIDEO")"
+          TELEGRAM_LIMIT=38000000
+          echo "Original rendered video size: $ORIGINAL_SIZE bytes"
+          if [[ "$ORIGINAL_SIZE" -le "$TELEGRAM_LIMIT" ]]; then
+            echo "Original is within Telegram's safe upload limit; sending it unchanged."
+            cp -- "$INPUT_VIDEO" "$TELEGRAM_VIDEO"
+          else
+            echo "Original exceeds Telegram's safe upload limit; creating a compressed delivery copy. The original remains unchanged for the full-quality artifact."
+            DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$INPUT_VIDEO")"
+            VIDEO_BITRATE="$(awk -v duration="$DURATION" 'BEGIN {
+              if (duration <= 0) exit 1;
+              total_kbps = (35000000 * 8 / duration) / 1000;
+              video_kbps = total_kbps - 112;
+              if (video_kbps < 300) video_kbps = 300;
+              printf "%.0fk", video_kbps;
+            }')"
+            PASSLOG="$RUNNER_TEMP/telegram-encode"
+            ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
+              -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
+              -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
+              -pass 1 -passlogfile "$PASSLOG" -an -f mp4 /dev/null
+            ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
+              -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
+              -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
+              -pass 2 -passlogfile "$PASSLOG" -c:a aac -b:a 96k \
+              -movflags +faststart "$TELEGRAM_VIDEO"
+          fi
           SIZE="$(stat -c%s "$TELEGRAM_VIDEO")"
-          echo "Telegram-ready video size: $SIZE bytes"
-          if [[ "$SIZE" -gt 38000000 ]]; then
-            echo "::error::Compressed Telegram video is still larger than 38 MB; refusing a likely HTTP 413 upload."
+          echo "Telegram upload copy size: $SIZE bytes"
+          if [[ "$SIZE" -gt "$TELEGRAM_LIMIT" ]]; then
+            echo "::error::Telegram upload copy is still larger than 38 MB; refusing a likely HTTP 413 upload."
             exit 1
           fi
       - name: Upload AI Video
