@@ -118,10 +118,32 @@ def main():
     if valid_media(video_path, 100000):
         print(f"Reusing completed render checkpoint: {video_path.name}", flush=True)
     else:
-        print("Rendering video; previous story, images and narration are preserved.", flush=True)
-        render_video(scene_dir, narration_path, video_path, story, config)
-        if not valid_media(video_path, 100000):
-            raise RuntimeError("Video-render stage did not produce a valid MP4.")
+        renderer = os.environ.get("AI_VIDEO_RENDERER", "ffmpeg").strip().lower()
+        rendered_with_remotion = False
+        if renderer == "remotion":
+            remotion_output = OUT / f"remotion-{run_key}.mp4"
+            print("Trying Remotion cinematic render. Original AI images and narration remain untouched.", flush=True)
+            try:
+                subprocess.run(
+                    ["node", str(ROOT / "ai-video-experiment" / "remotion" / "render.mjs"), run_key],
+                    cwd=ROOT, check=True, timeout=3600
+                )
+                if not valid_media(remotion_output, 100000):
+                    raise RuntimeError("Remotion output did not pass MP4 validation.")
+                shutil.copy2(remotion_output, video_path)
+                rendered_with_remotion = valid_media(video_path, 100000)
+                if not rendered_with_remotion:
+                    video_path.unlink(missing_ok=True)
+                    raise RuntimeError("Copied Remotion video failed validation.")
+                print("Remotion render validated successfully.", flush=True)
+            except Exception as exc:
+                print(f"Remotion render failed; falling back to the original FFmpeg renderer: {exc}", flush=True)
+                video_path.unlink(missing_ok=True)
+        if not rendered_with_remotion:
+            print("Rendering video with the existing FFmpeg renderer; AI images and narration are preserved.", flush=True)
+            render_video(scene_dir, narration_path, video_path, story, config)
+            if not valid_media(video_path, 100000):
+                raise RuntimeError("Video-render stage did not produce a valid MP4.")
 
     print(f"PIPELINE_VIDEO={video_path}", flush=True)
     print(f"PIPELINE_RUN_KEY={run_key}", flush=True)
