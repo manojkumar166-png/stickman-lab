@@ -30,15 +30,6 @@ const Scene = ({scene, index, duration}) => {
         }}
       />
       <AbsoluteFill style={{background: "linear-gradient(90deg, rgba(3,8,18,.78) 0%, rgba(3,8,18,.30) 62%, rgba(3,8,18,.06) 100%), linear-gradient(0deg, rgba(0,0,0,.55), transparent 48%)"}} />
-      <AbsoluteFill style={{justifyContent: "flex-end", padding: "0 86px 76px", opacity}}>
-        <div style={{fontFamily: "Arial, sans-serif", color: "#9fe7ff", fontSize: 22, fontWeight: 700, letterSpacing: 5, textTransform: "uppercase", marginBottom: 18}}>
-          {String(index + 1).padStart(2, "0")} / {scene.total}
-        </div>
-        <div style={{fontFamily: "Arial, sans-serif", color: "white", fontSize: 52, lineHeight: 1.12, fontWeight: 800, maxWidth: width * 0.78, textShadow: "0 4px 24px rgba(0,0,0,.45)"}}>
-          {scene.heading}
-        </div>
-        <div style={{height: 5, width: 104, background: "#72d7ff", marginTop: 26, borderRadius: 8}} />
-      </AbsoluteFill>
       <Audio src={staticFile(scene.audio)} />
     </AbsoluteFill>
   );
