@@ -275,6 +275,40 @@ jobs:
           else
             echo "sent=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Prepare Telegram-sized video
+        if: steps.telegram_check.outputs.sent != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_VIDEO="output/${{ steps.get_topic.outputs.filename }}"
+          RUN_KEY="${{ steps.get_topic.outputs.run_key }}"
+          TELEGRAM_VIDEO="output/telegram-${RUN_KEY}.mp4"
+          test -s "$INPUT_VIDEO" || { echo "::error::Video for Telegram compression is missing: $INPUT_VIDEO"; exit 1; }
+          DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$INPUT_VIDEO")"
+          VIDEO_BITRATE="$(awk -v duration="$DURATION" 'BEGIN {
+            if (duration <= 0) exit 1;
+            total_kbps = (42000000 * 8 / duration) / 1000;
+            video_kbps = total_kbps - 112;
+            if (video_kbps < 300) video_kbps = 300;
+            printf "%.0fk", video_kbps;
+          }')"
+          echo "Creating Telegram copy at approximately 42 MB; keeping the original full-quality artifact unchanged."
+          PASSLOG="$RUNNER_TEMP/telegram-encode"
+          ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
+            -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
+            -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
+            -pass 1 -passlogfile "$PASSLOG" -an -f mp4 /dev/null
+          ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
+            -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
+            -b:v "$VIDEO_BITRATE" -maxrate "$VIDEO_BITRATE" -bufsize "$VIDEO_BITRATE" \
+            -pass 2 -passlogfile "$PASSLOG" -c:a aac -b:a 96k \
+            -movflags +faststart "$TELEGRAM_VIDEO"
+          SIZE="$(stat -c%s "$TELEGRAM_VIDEO")"
+          echo "Telegram-ready video size: $SIZE bytes"
+          if [[ "$SIZE" -gt 45000000 ]]; then
+            echo "::error::Compressed Telegram video is still larger than 45 MB; refusing a likely HTTP 413 upload."
+            exit 1
+          fi
       - name: Upload AI Video
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -322,7 +356,7 @@ jobs:
         with:
           bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat_id: ${{ secrets.TELEGRAM_CHAT_ID }}
-          files: output/${{ steps.get_topic.outputs.filename }}
+          files: output/telegram-${{ steps.get_topic.outputs.run_key }}.mp4
           message: "🎨 AI Video Experiment — created by workflow: AI Video Experiment\nTopic: ${{ steps.get_topic.outputs.topic }}"
 
       - name: Mark Telegram delivery checkpoint
