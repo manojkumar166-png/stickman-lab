@@ -42,7 +42,16 @@ const packages = fs.readdirSync(outputRoot, {withFileTypes: true})
 const packageDir = packages.find((dir) => {
   try {
     const story = JSON.parse(fs.readFileSync(path.join(dir, "story.json"), "utf8"));
-    return story.completed !== true && Array.isArray(story.scenes) && story.scenes.length > 0;
+    return story.completed !== true
+      && Array.isArray(story.scenes)
+      && story.scenes.length > 0
+      && Number(story.scene_count) === story.scenes.length
+      && story.scenes.every((scene, index) =>
+        scene && Number(scene.scene_number) === index + 1
+        && ["heading", "narration", "visual_description", "image_prompt"].every((key) =>
+          typeof scene[key] === "string" && scene[key].trim().length > 0
+        )
+      );
   } catch { return false; }
 });
 if (!packageDir) throw new Error("No unfinished AI story package with scenes was found.");
