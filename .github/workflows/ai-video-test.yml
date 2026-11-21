@@ -126,6 +126,7 @@ jobs:
           done
 
       - name: Generate and burn karaoke subtitles
+        if: vars.ENABLE_KARAOKE_SUBTITLES == 'true'
         env:
           HF_HOME: ${{ runner.temp }}/huggingface
           KARAOKE_WHISPER_BACKEND: faster-whisper
@@ -287,12 +288,12 @@ jobs:
           DURATION="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$INPUT_VIDEO")"
           VIDEO_BITRATE="$(awk -v duration="$DURATION" 'BEGIN {
             if (duration <= 0) exit 1;
-            total_kbps = (42000000 * 8 / duration) / 1000;
+            total_kbps = (35000000 * 8 / duration) / 1000;
             video_kbps = total_kbps - 112;
             if (video_kbps < 300) video_kbps = 300;
             printf "%.0fk", video_kbps;
           }')"
-          echo "Creating Telegram copy at approximately 42 MB; keeping the original full-quality artifact unchanged."
+          echo "Creating Telegram copy at approximately 35 MB; keeping the original full-quality artifact unchanged."
           PASSLOG="$RUNNER_TEMP/telegram-encode"
           ffmpeg -y -hide_banner -loglevel error -i "$INPUT_VIDEO" \
             -vf "scale='min(1280,iw)':-2" -c:v libx264 -preset veryfast \
@@ -305,8 +306,8 @@ jobs:
             -movflags +faststart "$TELEGRAM_VIDEO"
           SIZE="$(stat -c%s "$TELEGRAM_VIDEO")"
           echo "Telegram-ready video size: $SIZE bytes"
-          if [[ "$SIZE" -gt 45000000 ]]; then
-            echo "::error::Compressed Telegram video is still larger than 45 MB; refusing a likely HTTP 413 upload."
+          if [[ "$SIZE" -gt 38000000 ]]; then
+            echo "::error::Compressed Telegram video is still larger than 38 MB; refusing a likely HTTP 413 upload."
             exit 1
           fi
       - name: Upload AI Video
