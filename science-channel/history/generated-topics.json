@@ -49,7 +49,8 @@
     "Why do caves echo?",
     "Why do we get dizzy when we spin?",
     "Why do hot pavement surfaces look wet?",
-    "Why do raindrops fall as teardrops instead of spheres?"
+    "Why do raindrops fall as teardrops instead of spheres?",
+    "How do amber fossils preserve tiny insects in 3D?"
   ],
   "topic_details": [
     {
@@ -286,6 +287,11 @@
       "title": "Why do raindrops fall as teardrops instead of spheres?",
       "angle": "Explore how surface tension, air resistance, and aerodynamic pressure constantly reshape falling water droplets into tiny parachute-like shapes.",
       "pillar": "Weather, clouds and the water cycle"
+    },
+    {
+      "title": "How do amber fossils preserve tiny insects in 3D?",
+      "angle": "We explore how sticky tree resin transforms into clear amber over millions of years, perfectly locking away microscopic details of ancient organisms like insects and feathers in three dimensions.",
+      "pillar": "Dinosaurs, fossils and ancient Earth"
     }
   ]
 }
