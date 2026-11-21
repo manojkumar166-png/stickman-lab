@@ -11,7 +11,7 @@ Workflow file: `.github/workflows/ai-video-test.yml`
 - Runs automatically every day at **05:30 UTC (11:00 India Standard Time)**.
 - Can also be started manually from Actions → **AI Video Experiment** → Run workflow.
 - Uses Python 3.11, installs FFmpeg and `requirements.txt`, then runs `python main_ai.py`.
-- Generates a story using Gemini, creates all scene illustrations using Cloudflare Workers AI only, creates an MP3 narration with Edge TTS, and renders an MP4 with FFmpeg. Valid stage outputs are reused on retry.
+- Generates a story using Gemini, creates all scene illustrations using Cloudflare Workers AI only, creates an MP3 narration with Edge TTS, and renders an MP4 with Remotion (cinematic pan/zoom and scene headings). If Remotion fails validation or errors, the existing FFmpeg renderer automatically takes over using the same saved images and narration. Original scene images, story JSON and narration checkpoints are never overwritten by Remotion. Valid stage outputs are reused on retry.
 - Uploads the rendered MP4 as a GitHub Actions artifact retained for **2 days**, commits `topic_history.json` to main, and then sends the MP4 to the configured Telegram chat. Telegram delivery is retried without regenerating the story, images, narration or video. A delivery marker prevents duplicate sends if a later completion/cleanup step fails.
 
 ## 2. Files and what they control
