@@ -45,6 +45,133 @@ FALLBACK=list(dict.fromkeys(FALLBACK + [
 TIMEOUT=(20,180)
 _OVH_LAST_CALL=0.0
 
+# Model catalogues are refreshed on every generator run. Catalogue discovery is
+# free/read-only; the real story request doubles as the live availability test,
+# avoiding extra billable "ping" generations.
+GEMINI_CANDIDATES=list(dict.fromkeys([MODEL,*FALLBACK]))
+KILO_CANDIDATES=["kilo-auto/free",*KILO_FALLBACK_MODELS]
+OVH_CANDIDATES=list(dict.fromkeys([OVH_MODEL,*OVH_FALLBACK_MODELS]))
+OPENROUTER_CANDIDATES=["openrouter/free"]
+GROQ_CANDIDATES=[GROQ_MODEL]
+
+def _is_zero_priced(entry):
+    pricing=entry.get("pricing") or {}
+    try:
+        return (float(pricing.get("prompt",pricing.get("input",1)) or 0)==0
+                and float(pricing.get("completion",pricing.get("output",1)) or 0)==0)
+    except (TypeError,ValueError):
+        return False
+
+def refresh_model_catalogs():
+    """Refresh public provider catalogues, keeping only suitable active/free candidates."""
+    global GEMINI_CANDIDATES,KILO_CANDIDATES,OVH_CANDIDATES
+    global OPENROUTER_CANDIDATES,GROQ_CANDIDATES
+    print("::group::LIVE MODEL CATALOGUE REFRESH",flush=True)
+
+    if KEY:
+        try:
+            response=requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+                params={"key":KEY,"pageSize":1000},timeout=(5,20))
+            response.raise_for_status()
+            entries=response.json().get("models",[])
+            found=[]
+            for item in entries:
+                if not isinstance(item,dict): continue
+                methods=item.get("supportedGenerationMethods") or []
+                name=str(item.get("name","")).replace("models/","",1)
+                low=name.lower()
+                if ("generateContent" not in methods or "flash" not in low
+                        or any(x in low for x in ("tts","image","embedding","live","transcribe","robotics"))):
+                    continue
+                found.append(name)
+            def gemini_rank(name):
+                nums=tuple(int(x) for x in re.findall(r"\\d+",name))
+                return (0 if "flash-lite" in name.lower() else 1,
+                        1 if "preview" in name.lower() else 0,
+                        tuple(-x for x in nums),name)
+            found=sorted(set(found),key=gemini_rank)
+            if found:
+                GEMINI_CANDIDATES=found[:10]
+            print(f"Gemini catalogue: {len(found)} text Flash models; priority={GEMINI_CANDIDATES[:5]}",flush=True)
+        except Exception as exc:
+            print(f"Gemini catalogue refresh failed; retaining configured candidates: {exc}",flush=True)
+    else:
+        print("Gemini catalogue skipped: GEMINI_API_KEY missing.",flush=True)
+
+    try:
+        response=requests.get("https://ai-gateway.kilo.ai/api/v1/models",timeout=(5,20))
+        response.raise_for_status()
+        entries=response.json().get("data",[])
+        free=["kilo-auto/free"]
+        for item in entries if isinstance(entries,list) else []:
+            if not isinstance(item,dict) or not isinstance(item.get("id"),str): continue
+            if _is_zero_priced(item) or item["id"].endswith(":free"):
+                free.append(item["id"])
+        KILO_CANDIDATES=list(dict.fromkeys(free))[:9]
+        print(f"Kilo catalogue: {len(KILO_CANDIDATES)} free routes found.",flush=True)
+    except Exception as exc:
+        print(f"Kilo catalogue refresh failed; retaining safe defaults: {exc}",flush=True)
+
+    try:
+        response=requests.get("https://catalog.endpoints.ai.ovh.net/rest/v1/models_v2",timeout=(5,20))
+        response.raise_for_status()
+        payload=response.json()
+        entries=payload if isinstance(payload,list) else payload.get("data",[])
+        active=[]
+        for item in entries:
+            if not isinstance(item,dict) or item.get("available") is not True: continue
+            model_id=item.get("id")
+            if not isinstance(model_id,str): continue
+            metadata=item.get("metadata") or {}
+            specs=(metadata.get("model_specs") or {})
+            capabilities=specs.get("capabilities") or {}
+            output=capabilities.get("output_modality") or []
+            if output and not any("text" in str(x).lower() for x in output): continue
+            if model_id in OVH_CANDIDATES or _is_zero_priced(metadata.get("usage_information",{})):
+                active.append(model_id)
+        if active:
+            OVH_CANDIDATES=list(dict.fromkeys(
+                [m for m in OVH_CANDIDATES if m in active]+active
+            ))[:10]
+        print(f"OVHcloud catalogue: {len(active)} active text/free candidates; selected={OVH_CANDIDATES[:5]}",flush=True)
+    except Exception as exc:
+        print(f"OVHcloud catalogue refresh failed; retaining configured candidates: {exc}",flush=True)
+
+    if OPENROUTER_KEY:
+        try:
+            response=requests.get("https://openrouter.ai/api/v1/models",
+                headers={"Authorization":f"Bearer {OPENROUTER_KEY}"},timeout=(5,20))
+            response.raise_for_status()
+            entries=response.json().get("data",[])
+            free=["openrouter/free"]
+            for item in entries if isinstance(entries,list) else []:
+                if isinstance(item,dict) and isinstance(item.get("id"),str):
+                    if item["id"].endswith(":free") or _is_zero_priced(item):
+                        free.append(item["id"])
+            OPENROUTER_CANDIDATES=list(dict.fromkeys(free))[:9]
+            print(f"OpenRouter catalogue: {len(OPENROUTER_CANDIDATES)} free routes found.",flush=True)
+        except Exception as exc:
+            print(f"OpenRouter catalogue refresh failed; retaining free router: {exc}",flush=True)
+    else:
+        print("OpenRouter catalogue skipped: OPENROUTER_API_KEY missing.",flush=True)
+
+    if GROQ_KEY:
+        try:
+            response=requests.get("https://api.groq.com/openai/v1/models",
+                headers={"Authorization":f"Bearer {GROQ_KEY}"},timeout=(5,20))
+            response.raise_for_status()
+            entries=response.json().get("data",[])
+            available={item.get("id") for item in entries if isinstance(item,dict)
+                       and item.get("active",True) is not False and isinstance(item.get("id"),str)}
+            if GROQ_MODEL in available:
+                GROQ_CANDIDATES=[GROQ_MODEL]
+            print(f"Groq catalogue: {len(available)} active model IDs; configured choice={'available' if GROQ_MODEL in available else 'not listed'}.",flush=True)
+        except Exception as exc:
+            print(f"Groq catalogue refresh failed; retaining configured choice: {exc}",flush=True)
+    else:
+        print("Groq catalogue skipped: GROQ_API_KEY missing.",flush=True)
+    print("::endgroup::",flush=True)
+
 def parse_json(raw):
     """Parse a full JSON object, or recover complete scenes from a truncated story."""
     fence=chr(96)*3
@@ -181,7 +308,7 @@ def gemini(prompt):
     errors=[]
     if KEY:
         # Try the configured primary, then every allowed fallback in order.
-        for model in [MODEL, *FALLBACK]:
+        for model in GEMINI_CANDIDATES:
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             model_failed=False
             for attempt in range(1,4):
@@ -225,7 +352,7 @@ def gemini(prompt):
     global _OVH_LAST_CALL
     ovh_url="https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions"
     ovh_errors=[]
-    ovh_models=list(dict.fromkeys([OVH_MODEL,*OVH_FALLBACK_MODELS]))
+    ovh_models=OVH_CANDIDATES
     ovh_headers={"Content-Type":"application/json"}
     if OVH_API_KEY:
         ovh_headers["Authorization"]=f"Bearer {OVH_API_KEY}"
@@ -260,26 +387,7 @@ def gemini(prompt):
     kilo_errors=[]
     kilo_headers={"Content-Type":"application/json"}
     if KILO_API_KEY: kilo_headers["Authorization"]=f"Bearer {KILO_API_KEY}"
-    requested_kilo=list(dict.fromkeys([KILO_MODEL,*KILO_FALLBACK_MODELS]))
-    live_free=[]
-    try:
-        catalog=requests.get("https://ai-gateway.kilo.ai/api/v1/models",
-            headers=({"Authorization":f"Bearer {KILO_API_KEY}"} if KILO_API_KEY else {}),timeout=(5,20))
-        catalog.raise_for_status()
-        entries=catalog.json().get("data",[])
-        for entry in entries if isinstance(entries,list) else []:
-            if not isinstance(entry,dict) or not isinstance(entry.get("id"),str): continue
-            pricing=entry.get("pricing") or {}
-            try: is_zero=float(pricing.get("prompt",1))==0 and float(pricing.get("completion",1))==0
-            except (TypeError,ValueError): is_zero=False
-            if is_zero or entry["id"].endswith(":free"): live_free.append(entry["id"])
-        print(f"Kilo catalogue returned {len(live_free)} explicitly free models.",flush=True)
-    except Exception as exc:
-        print(f"Kilo catalogue lookup failed: {type(exc).__name__}: {exc}",flush=True)
-    kilo_candidates=["kilo-auto/free"]
-    kilo_candidates.extend(model for model in requested_kilo if model=="kilo-auto/free" or model in live_free)
-    kilo_candidates.extend(model for model in live_free if model not in kilo_candidates)
-    kilo_candidates=list(dict.fromkeys(kilo_candidates))
+    kilo_candidates=KILO_CANDIDATES
     messages=[
         {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
         {"role":"user","content":prompt},
@@ -308,26 +416,27 @@ def gemini(prompt):
                 if attempt<2: time.sleep(3)
     if not kilo_candidates: kilo_errors.append("No Kilo free models found in live catalogue.")
     if OPENROUTER_KEY:
-        try:
-            response=requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization":f"Bearer {OPENROUTER_KEY}","Content-Type":"application/json",
-                         "HTTP-Referer":"https://github.com/manojkumar166-png/stickman-lab",
-                         "X-Title":"AI Story Science Video"},
-                json={"model":"openrouter/free","messages":[
-                    {"role":"system","content":"Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
-                    {"role":"user","content":prompt}],"max_tokens":16000},
-                timeout=(3,18))
-            if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"OpenRouter HTTP {response.status_code}: {response.text[:800]}")
-            response.raise_for_status()
-            choices=response.json().get("choices") or []
-            content=choices[0].get("message",{}).get("content","") if choices else ""
-            result=parse_json(content)
-            print("OpenRouter free planner fallback active.",flush=True)
-            return result
-        except Exception as exc:
-            print(f"OpenRouter backup failed: {type(exc).__name__}: {exc}",flush=True)
+        for or_model in OPENROUTER_CANDIDATES:
+            try:
+                response=requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization":f"Bearer {OPENROUTER_KEY}","Content-Type":"application/json",
+                             "HTTP-Referer":"https://github.com/manojkumar166-png/stickman-lab",
+                             "X-Title":"AI Story Science Video"},
+                    json={"model":or_model,"messages":[
+                        {"role":"system","content":"Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
+                        {"role":"user","content":prompt}],"max_tokens":16000},
+                    timeout=(3,30))
+                if response.status_code in (408,425,429,500,502,503,504):
+                    raise RuntimeError(f"OpenRouter {or_model} HTTP {response.status_code}: {response.text[:800]}")
+                response.raise_for_status()
+                choices=response.json().get("choices") or []
+                content=choices[0].get("message",{}).get("content","") if choices else ""
+                result=parse_json(content)
+                print(f"OpenRouter free planner fallback active: {or_model}.",flush=True)
+                return result
+            except Exception as exc:
+                print(f"OpenRouter model {or_model} failed: {type(exc).__name__}: {exc}",flush=True)
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.",flush=True)
 
@@ -335,29 +444,26 @@ def gemini(prompt):
     groq_errors=[]
     if GROQ_KEY:
         groq_url="https://api.groq.com/openai/v1/chat/completions"
-        for attempt in range(1,2):
+        for groq_model in GROQ_CANDIDATES:
             try:
                 response=requests.post(groq_url,
                     headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
-                    json={"model":GROQ_MODEL,"messages":[
+                    json={"model":groq_model,"messages":[
                         {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
                         {"role":"user","content":prompt}],
                         "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
-                    timeout=(3,18))
+                    timeout=(3,30))
                 if response.status_code in (408,429,500,502,503,504):
-                    raise RuntimeError(f"Groq HTTP {response.status_code}: {response.text[:500]}")
+                    raise RuntimeError(f"Groq {groq_model} HTTP {response.status_code}: {response.text[:500]}")
                 response.raise_for_status()
                 choices=response.json().get("choices") or []
                 content=choices[0].get("message",{}).get("content","") if choices else ""
                 result=parse_json(content)
-                print(f"Open-weight planner backup active: Groq {GROQ_MODEL}",flush=True)
+                print(f"Open-weight planner backup active: Groq {groq_model}",flush=True)
                 return result
             except Exception as exc:
-                groq_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-                if attempt<1:
-                    delay=min(20,2**attempt)
-                    print(f"Groq backup attempt {attempt}/3 failed: {exc}. Retrying in {delay}s.",flush=True)
-                    time.sleep(delay)
+                groq_errors.append(f"{groq_model}: {type(exc).__name__}: {exc}")
+                print(f"Groq model {groq_model} failed: {type(exc).__name__}: {exc}",flush=True)
     else:
         print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
 
@@ -857,6 +963,7 @@ def render(scenes,package,voice):
     return final
 
 def main():
+    refresh_model_catalogs()
     p=argparse.ArgumentParser()
     p.add_argument("--topic",default="")
     p.add_argument("--scenes",type=int,default=8)
