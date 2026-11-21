@@ -61,17 +61,17 @@ const Story = ({scenes}) => {
   );
 };
 
-export const RemotionRoot = ({scenes = []}) => {
-  const durationInFrames = Math.max(1, scenes.reduce((sum, scene) => sum + scene.durationInFrames, 0));
-  return (
-    <Composition
-      id="AIStoryVideo"
-      component={Story}
-      width={1280}
-      height={720}
-      fps={FPS}
-      durationInFrames={durationInFrames}
-      defaultProps={{scenes}}
-    />
-  );
-};
+export const RemotionRoot = () => (
+  <Composition
+    id="AIStoryVideo"
+    component={Story}
+    width={1280}
+    height={720}
+    fps={FPS}
+    durationInFrames={1}
+    defaultProps={{scenes: []}}
+    calculateMetadata={({props}) => ({
+      durationInFrames: Math.max(1, props.scenes.reduce((sum, scene) => sum + scene.durationInFrames, 0))
+    })}
+  />
+);
