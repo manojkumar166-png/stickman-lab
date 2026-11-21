@@ -522,9 +522,41 @@ Create exactly {count} scenes for a narrated 16:9 video. Return JSON only:
 "scenes":[{{"scene_number":1,"heading":"short heading","narration":"2-4 natural spoken sentences",
 "visual_description":"concrete visible action/composition","image_prompt":"standalone detailed prompt for a polished 3D CGI render; specify camera, composition, lighting, materials, depth and visual style; 16:9; no text, logo or watermark"}}]}}
 Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coherent beginning/middle/end; each prompt independently usable and includes relevant continuity details. Every scene must be a polished 3D CGI image, not a 2D illustration. For every scene, ALWAYS include all four non-empty fields: heading, narration, visual_description, and image_prompt. visual_description must be a short plain-language description and must not be omitted. Science must be factual; animation must be original and must not copy any existing studio, franchise, film or character design. The title and story must be based on a newly invented topic, not an existing topics.txt entry or a previously used core topic."""
-    data=gemini(prompt)
-    if not isinstance(data,dict):
-        raise ValueError("Planner returned a non-object response.")
+    normalize=lambda value: re.sub(r"[^a-z0-9]+"," ",str(value).casefold()).strip()
+    used_core={normalize(item.get("topic","")) for item in used_topics if item.get("topic")}
+    rejected_topics=[]
+    data=None
+    # A duplicate is a content-selection issue, not a reason to fail the whole
+    # workflow. Ask the planner again, explicitly excluding each rejected topic.
+    for topic_attempt in range(1,4):
+        candidate=gemini(prompt)
+        if not isinstance(candidate,dict):
+            raise ValueError("Planner returned a non-object response.")
+        candidate_topic=str(candidate.get("topic") or candidate.get("title") or "").strip()
+        if normalize(candidate_topic) in used_core:
+            rejected_topics.append(candidate_topic)
+            print(
+                f"Planner chose a previously used topic (attempt {topic_attempt}/3): "
+                f"{candidate_topic!r}. Requesting a genuinely different subject.",
+                flush=True,
+            )
+            if topic_attempt==3:
+                raise ValueError(
+                    "Planner selected previously used core topics after 3 attempts: "
+                    + "; ".join(rejected_topics)
+                )
+            prompt += (
+                "\\n\\nTOPIC REJECTION — IMPORTANT: Your previous response selected a "
+                "previously used topic. Do NOT use or rephrase any of these rejected topics:\\n"
+                + "\\n".join("- "+item for item in rejected_topics)
+                + "\\nChoose a different underlying phenomenon, mechanism, question, or story premise. "
+                  "Return a completely new title, topic, and story."
+            )
+            continue
+        data=candidate
+        break
+    if data is None:
+        raise RuntimeError("Planner could not select a fresh topic.")
     if not data.get("topic") and data.get("title"):
         data["topic"]=data["title"]
     if not data.get("title") and data.get("topic"):
@@ -553,12 +585,8 @@ Rules: exactly {count} scenes numbered 1..{count}; all fields non-empty; coheren
             print(f"Scene {i}: visual_description was omitted; recovered it from image_prompt.",flush=True)
     for k in ("title","topic","description","visual_style","continuity_bible"):
         if not isinstance(data.get(k),str) or not data[k].strip(): raise ValueError(f"Missing {k}")
-    normalize=lambda value: re.sub(r"[^a-z0-9]+"," ",value.casefold()).strip()
     if normalize(data["title"]) in {normalize(item) for item in topic_examples}:
         raise ValueError("Gemini copied a title from topics.txt instead of inventing a new topic.")
-    used_core={normalize(item.get("topic","")) for item in used_topics if item.get("topic")}
-    if normalize(data["topic"]) in used_core:
-        raise ValueError("Gemini selected a previously used core topic. Choose a different subject.")
     return data
 
 def valid_png(raw):
