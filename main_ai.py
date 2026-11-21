@@ -115,14 +115,26 @@ def main():
 
     topic_slug = re.sub(r"[^a-z0-9]+", "-", story["topic"].lower()).strip("-")[:80].strip("-") or "science-video"
     video_path = OUT / f"{topic_slug}-{run_key}.mp4"
-    if valid_media(video_path, 100000):
+    renderer = os.environ.get("AI_VIDEO_RENDERER", "ffmpeg").strip().lower()
+    # Force one fresh Remotion render after the image-only composition change.
+    # The marker prevents a Telegram-only retry from needlessly rendering again.
+    remotion_refresh_marker = OUT / f"remotion-image-only-v1-{run_key}.done"
+    force_remotion_render = renderer == "remotion" and not remotion_refresh_marker.is_file()
+
+    if valid_media(video_path, 100000) and not force_remotion_render:
         print(f"Reusing completed render checkpoint: {video_path.name}", flush=True)
     else:
-        renderer = os.environ.get("AI_VIDEO_RENDERER", "ffmpeg").strip().lower()
         rendered_with_remotion = False
         if renderer == "remotion":
             remotion_output = OUT / f"remotion-{run_key}.mp4"
-            print("Trying Remotion cinematic render. Original AI images and narration remain untouched.", flush=True)
+            if force_remotion_render:
+                print("Refreshing the saved video with the image-only Remotion composition.", flush=True)
+                # The prior subtitle render is based on the old video, so it must
+                # be regenerated from the newly rendered image-only video.
+                (OUT / f"subtitled-{run_key}.mp4").unlink(missing_ok=True)
+                (OUT / f"subtitles-{run_key}.done").unlink(missing_ok=True)
+                (OUT / f"karaoke-captions-{run_key}.ass").unlink(missing_ok=True)
+            print("Trying Remotion image-only render. Original AI images and narration remain untouched.", flush=True)
             try:
                 subprocess.run(
                     ["node", str(ROOT / "ai-video-experiment" / "remotion" / "render.mjs"), run_key],
@@ -135,7 +147,8 @@ def main():
                 if not rendered_with_remotion:
                     video_path.unlink(missing_ok=True)
                     raise RuntimeError("Copied Remotion video failed validation.")
-                print("Remotion render validated successfully.", flush=True)
+                remotion_refresh_marker.touch()
+                print("Image-only Remotion render validated successfully.", flush=True)
             except Exception as exc:
                 print(f"Remotion render failed; falling back to the original FFmpeg renderer: {exc}", flush=True)
                 video_path.unlink(missing_ok=True)
