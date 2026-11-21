@@ -31,8 +31,11 @@ const scenes=sourceImages.map((name,index)=>{
 const duration=Number(execFileSync("ffprobe",["-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",audioPath],{encoding:"utf8"}).trim());
 if(!Number.isFinite(duration)||duration<=0) throw new Error("Narration duration is invalid.");
 fs.copyFileSync(audioPath,path.join(publicDir,"narration.mp3"));
-const sceneFrames=Math.max(24,Math.ceil(duration*24/scenes.length));
-const inputProps={scenes,audio:"narration.mp3",sceneFrames};
+const totalFrames=Math.max(scenes.length*24,Math.ceil(duration*24));
+const baseFrames=Math.floor(totalFrames/scenes.length);
+const extraFrames=totalFrames%scenes.length;
+const sceneDurations=scenes.map((_,index)=>baseFrames+(index<extraFrames?1:0));
+const inputProps={scenes,audio:"narration.mp3",sceneDurations};
 const serveUrl=await bundle({entryPoint:path.join(here,"src","index.jsx"),publicDir});
 const composition=await selectComposition({serveUrl,id:"AIExperiment",inputProps});
 const output=path.join(outputDir,`remotion-${runKey}.mp4`);
