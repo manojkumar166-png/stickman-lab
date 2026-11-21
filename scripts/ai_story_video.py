@@ -104,8 +104,10 @@ def refresh_model_catalogs():
         free=["kilo-auto/free"]
         for item in entries if isinstance(entries,list) else []:
             if not isinstance(item,dict) or not isinstance(item.get("id"),str): continue
-            if _is_zero_priced(item) or item["id"].endswith(":free"):
-                free.append(item["id"])
+            model_id=item["id"]
+            if any(token in model_id.lower() for token in ("embed","rerank","tts","image","transcribe")): continue
+            if _is_zero_priced(item) or model_id.endswith(":free"):
+                free.append(model_id)
         KILO_CANDIDATES=list(dict.fromkeys(free))[:9]
         print(f"Kilo catalogue: {len(KILO_CANDIDATES)} free routes found.",flush=True)
     except Exception as exc:
@@ -139,6 +141,7 @@ def refresh_model_catalogs():
     if OPENROUTER_KEY:
         try:
             response=requests.get("https://openrouter.ai/api/v1/models",
+                params={"output_modalities":"text"},
                 headers={"Authorization":f"Bearer {OPENROUTER_KEY}"},timeout=(5,20))
             response.raise_for_status()
             entries=response.json().get("data",[])
