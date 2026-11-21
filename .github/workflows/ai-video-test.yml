@@ -86,15 +86,9 @@ jobs:
           python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
           python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
-      - name: Set up Node.js for AI Video Experiment Remotion
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "20"
-      - name: Install AI Video Experiment Remotion dependencies
-        run: npm install --prefix ai-video-experiment/remotion --no-audit --no-fund
       - name: Generate AI Video
         env:
-          AI_VIDEO_RENDERER: remotion
+          AI_VIDEO_RENDERER: ffmpeg
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           GEMINI_FALLBACK_MODELS: ${{ vars.GEMINI_FALLBACK_MODELS || 'gemini-3.8-flash,gemini-3.5-flash-lite' }}
