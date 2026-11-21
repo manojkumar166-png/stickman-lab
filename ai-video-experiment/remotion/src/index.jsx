@@ -42,16 +42,24 @@ const Scene = ({scene, index, duration, total}) => {
   );
 };
 
-const Video = ({scenes, audio, sceneFrames}) => (
-  <AbsoluteFill style={{background:"#080d18"}}>
-    {scenes.map((scene,index)=>(
-      <Sequence key={scene.image} from={index*sceneFrames} durationInFrames={sceneFrames}>
-        <Scene scene={scene} index={index} duration={sceneFrames} total={scenes.length}/>
-      </Sequence>
-    ))}
-    <Audio src={staticFile(audio)} />
-  </AbsoluteFill>
-);
+const Video = ({scenes, audio, sceneDurations}) => {
+  let cursor = 0;
+  return (
+    <AbsoluteFill style={{background:"#080d18"}}>
+      {scenes.map((scene,index)=>{
+        const from = cursor;
+        const duration = sceneDurations[index];
+        cursor += duration;
+        return (
+          <Sequence key={scene.image} from={from} durationInFrames={duration}>
+            <Scene scene={scene} index={index} duration={duration} total={scenes.length}/>
+          </Sequence>
+        );
+      })}
+      <Audio src={staticFile(audio)} />
+    </AbsoluteFill>
+  );
+};
 
 const Root = () => (
   <Composition
@@ -61,9 +69,9 @@ const Root = () => (
     height={720}
     fps={24}
     durationInFrames={24}
-    defaultProps={{scenes:[],audio:"narration.mp3",sceneFrames:24}}
+    defaultProps={{scenes:[],audio:"narration.mp3",sceneDurations:[24]}}
     calculateMetadata={({props})=>({
-      durationInFrames: Math.max(24, props.scenes.length * props.sceneFrames)
+      durationInFrames: Math.max(24, props.sceneDurations.reduce((sum, frames) => sum + frames, 0))
     })}
   />
 );
