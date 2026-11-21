@@ -43,7 +43,7 @@ During the run, the job creates story.json, script.md, images/scene-XX.png, audi
 
 
 ## Gemini model configuration
-The workflow defaults to `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite`. These defaults were updated after Gemini API returned 404 for the retired/unavailable 2.5 and 2.0 model IDs. You can override them with repository variables `GEMINI_MODEL` and `GEMINI_FALLBACK_MODELS`.
+The workflow tries stable Gemini Flash-Lite models first: `gemini-3.5-flash-lite`, then `gemini-3.1-flash-lite`. If both are unavailable or quota-limited, it tries `gemini-3.8-flash` and `gemini-3.5-flash`. Each model receives up to three attempts for transient failures before moving to the next; after all Gemini models fail, the existing OVHcloud, Kilo, OpenRouter and Groq backup providers remain available. These model IDs are drawn from Google's current supported-model list; retired Gemini 2.0 and 2.5 IDs are intentionally excluded. You can override the primary and fallback order with repository variables `GEMINI_MODEL` and `GEMINI_FALLBACK_MODELS`, but only allowlisted models are accepted.
 
 
 ## Visible progress and 48-scene runs
