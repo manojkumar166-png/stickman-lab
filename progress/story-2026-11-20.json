@@ -1,0 +1,344 @@
+{
+  "topic": "How can we understand moon phases through a fresh everyday example?",
+  "description": "A simple step-by-step visual introduction to moon phases.",
+  "scenes": [
+    {
+      "title": "Start with a question (1)",
+      "narration": "Everyday experience gives us clues about moon phases, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.",
+      "visual": "A curious stick figure studies a simple everyday example; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "think"
+    },
+    {
+      "title": "Notice the key parts (2)",
+      "narration": "First identify the main parts involved in moon phases. Each part has a role, and understanding those roles makes the larger process easier to follow.",
+      "visual": "A character points to three simple illustrated components; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "point"
+    },
+    {
+      "title": "Follow the first change (3)",
+      "narration": "When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding moon phases.",
+      "visual": "Connected objects respond one after another; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Look for a pattern (4)",
+      "narration": "Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.",
+      "visual": "A character compares several clear visual examples; clean colorful educational cartoon, no written words",
+      "background": "city",
+      "action": "explain"
+    },
+    {
+      "title": "Test the explanation (5)",
+      "narration": "A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.",
+      "visual": "A simple experiment with one changing variable; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Avoid a common mix-up (6)",
+      "narration": "It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.",
+      "visual": "Two parallel timelines are compared by a character; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "think"
+    },
+    {
+      "title": "Connect the bigger picture (7)",
+      "narration": "Now connect the individual parts. Their interactions explain why moon phases can produce an outcome that no single part could create alone.",
+      "visual": "Small pieces combine into one larger system; clean colorful educational cartoon, no written words",
+      "background": "space",
+      "action": "explain"
+    },
+    {
+      "title": "See it in daily life (8)",
+      "narration": "This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.",
+      "visual": "A stick figure spots the concept in daily surroundings; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "surprised"
+    },
+    {
+      "title": "Remember the limits (9)",
+      "narration": "Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.",
+      "visual": "A simple model gains additional surrounding details; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Take away the main idea (10)",
+      "narration": "The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.",
+      "visual": "The character celebrates as the complete visual system comes together; clean colorful educational cartoon, no written words",
+      "background": "sky",
+      "action": "celebrate"
+    },
+    {
+      "title": "Start with a question (11)",
+      "narration": "Everyday experience gives us clues about moon phases, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.",
+      "visual": "A curious stick figure studies a simple everyday example; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "think"
+    },
+    {
+      "title": "Notice the key parts (12)",
+      "narration": "First identify the main parts involved in moon phases. Each part has a role, and understanding those roles makes the larger process easier to follow.",
+      "visual": "A character points to three simple illustrated components; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "point"
+    },
+    {
+      "title": "Follow the first change (13)",
+      "narration": "When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding moon phases.",
+      "visual": "Connected objects respond one after another; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Look for a pattern (14)",
+      "narration": "Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.",
+      "visual": "A character compares several clear visual examples; clean colorful educational cartoon, no written words",
+      "background": "city",
+      "action": "explain"
+    },
+    {
+      "title": "Test the explanation (15)",
+      "narration": "A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.",
+      "visual": "A simple experiment with one changing variable; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Avoid a common mix-up (16)",
+      "narration": "It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.",
+      "visual": "Two parallel timelines are compared by a character; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "think"
+    },
+    {
+      "title": "Connect the bigger picture (17)",
+      "narration": "Now connect the individual parts. Their interactions explain why moon phases can produce an outcome that no single part could create alone.",
+      "visual": "Small pieces combine into one larger system; clean colorful educational cartoon, no written words",
+      "background": "space",
+      "action": "explain"
+    },
+    {
+      "title": "See it in daily life (18)",
+      "narration": "This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.",
+      "visual": "A stick figure spots the concept in daily surroundings; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "surprised"
+    },
+    {
+      "title": "Remember the limits (19)",
+      "narration": "Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.",
+      "visual": "A simple model gains additional surrounding details; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Take away the main idea (20)",
+      "narration": "The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.",
+      "visual": "The character celebrates as the complete visual system comes together; clean colorful educational cartoon, no written words",
+      "background": "sky",
+      "action": "celebrate"
+    },
+    {
+      "title": "Start with a question (21)",
+      "narration": "Everyday experience gives us clues about moon phases, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.",
+      "visual": "A curious stick figure studies a simple everyday example; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "think"
+    },
+    {
+      "title": "Notice the key parts (22)",
+      "narration": "First identify the main parts involved in moon phases. Each part has a role, and understanding those roles makes the larger process easier to follow.",
+      "visual": "A character points to three simple illustrated components; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "point"
+    },
+    {
+      "title": "Follow the first change (23)",
+      "narration": "When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding moon phases.",
+      "visual": "Connected objects respond one after another; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Look for a pattern (24)",
+      "narration": "Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.",
+      "visual": "A character compares several clear visual examples; clean colorful educational cartoon, no written words",
+      "background": "city",
+      "action": "explain"
+    },
+    {
+      "title": "Test the explanation (25)",
+      "narration": "A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.",
+      "visual": "A simple experiment with one changing variable; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Avoid a common mix-up (26)",
+      "narration": "It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.",
+      "visual": "Two parallel timelines are compared by a character; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "think"
+    },
+    {
+      "title": "Connect the bigger picture (27)",
+      "narration": "Now connect the individual parts. Their interactions explain why moon phases can produce an outcome that no single part could create alone.",
+      "visual": "Small pieces combine into one larger system; clean colorful educational cartoon, no written words",
+      "background": "space",
+      "action": "explain"
+    },
+    {
+      "title": "See it in daily life (28)",
+      "narration": "This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.",
+      "visual": "A stick figure spots the concept in daily surroundings; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "surprised"
+    },
+    {
+      "title": "Remember the limits (29)",
+      "narration": "Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.",
+      "visual": "A simple model gains additional surrounding details; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Take away the main idea (30)",
+      "narration": "The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.",
+      "visual": "The character celebrates as the complete visual system comes together; clean colorful educational cartoon, no written words",
+      "background": "sky",
+      "action": "celebrate"
+    },
+    {
+      "title": "Start with a question (31)",
+      "narration": "Everyday experience gives us clues about moon phases, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.",
+      "visual": "A curious stick figure studies a simple everyday example; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "think"
+    },
+    {
+      "title": "Notice the key parts (32)",
+      "narration": "First identify the main parts involved in moon phases. Each part has a role, and understanding those roles makes the larger process easier to follow.",
+      "visual": "A character points to three simple illustrated components; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "point"
+    },
+    {
+      "title": "Follow the first change (33)",
+      "narration": "When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding moon phases.",
+      "visual": "Connected objects respond one after another; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Look for a pattern (34)",
+      "narration": "Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.",
+      "visual": "A character compares several clear visual examples; clean colorful educational cartoon, no written words",
+      "background": "city",
+      "action": "explain"
+    },
+    {
+      "title": "Test the explanation (35)",
+      "narration": "A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.",
+      "visual": "A simple experiment with one changing variable; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Avoid a common mix-up (36)",
+      "narration": "It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.",
+      "visual": "Two parallel timelines are compared by a character; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "think"
+    },
+    {
+      "title": "Connect the bigger picture (37)",
+      "narration": "Now connect the individual parts. Their interactions explain why moon phases can produce an outcome that no single part could create alone.",
+      "visual": "Small pieces combine into one larger system; clean colorful educational cartoon, no written words",
+      "background": "space",
+      "action": "explain"
+    },
+    {
+      "title": "See it in daily life (38)",
+      "narration": "This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.",
+      "visual": "A stick figure spots the concept in daily surroundings; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "surprised"
+    },
+    {
+      "title": "Remember the limits (39)",
+      "narration": "Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.",
+      "visual": "A simple model gains additional surrounding details; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Take away the main idea (40)",
+      "narration": "The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.",
+      "visual": "The character celebrates as the complete visual system comes together; clean colorful educational cartoon, no written words",
+      "background": "sky",
+      "action": "celebrate"
+    },
+    {
+      "title": "Start with a question (41)",
+      "narration": "Everyday experience gives us clues about moon phases, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.",
+      "visual": "A curious stick figure studies a simple everyday example; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "think"
+    },
+    {
+      "title": "Notice the key parts (42)",
+      "narration": "First identify the main parts involved in moon phases. Each part has a role, and understanding those roles makes the larger process easier to follow.",
+      "visual": "A character points to three simple illustrated components; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "point"
+    },
+    {
+      "title": "Follow the first change (43)",
+      "narration": "When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding moon phases.",
+      "visual": "Connected objects respond one after another; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Look for a pattern (44)",
+      "narration": "Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.",
+      "visual": "A character compares several clear visual examples; clean colorful educational cartoon, no written words",
+      "background": "city",
+      "action": "explain"
+    },
+    {
+      "title": "Test the explanation (45)",
+      "narration": "A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.",
+      "visual": "A simple experiment with one changing variable; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "observe"
+    },
+    {
+      "title": "Avoid a common mix-up (46)",
+      "narration": "It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.",
+      "visual": "Two parallel timelines are compared by a character; clean colorful educational cartoon, no written words",
+      "background": "lab",
+      "action": "think"
+    },
+    {
+      "title": "Connect the bigger picture (47)",
+      "narration": "Now connect the individual parts. Their interactions explain why moon phases can produce an outcome that no single part could create alone.",
+      "visual": "Small pieces combine into one larger system; clean colorful educational cartoon, no written words",
+      "background": "space",
+      "action": "explain"
+    },
+    {
+      "title": "See it in daily life (48)",
+      "narration": "This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.",
+      "visual": "A stick figure spots the concept in daily surroundings; clean colorful educational cartoon, no written words",
+      "background": "home",
+      "action": "surprised"
+    }
+  ],
+  "generation_mode": "offline_fallback",
+  "completed": false
+}
