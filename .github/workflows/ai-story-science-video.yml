@@ -94,6 +94,16 @@ jobs:
           set -euo pipefail
           # One-click default: Gemini invents a fresh topic and creates 48 scenes.
           python -u scripts/ai_story_video.py --topic "" --scenes 48 --voice "en-US-AndrewMultilingualNeural"
+      - name: Set up Node.js for AI Story Remotion render
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - name: Render AI Story scenes with Remotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix ai-story-remotion --no-audit --no-fund
+          node ai-story-remotion/render.mjs
       - name: Generate karaoke subtitles and name final video
         id: final_video
         env:
