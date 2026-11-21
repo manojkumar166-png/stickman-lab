@@ -280,7 +280,7 @@ jobs:
           TELEGRAM_VIDEO="output/telegram-${RUN_KEY}.mp4"
           test -s "$INPUT_VIDEO" || { echo "::error::Video for Telegram compression is missing: $INPUT_VIDEO"; exit 1; }
           ORIGINAL_SIZE="$(stat -c%s "$INPUT_VIDEO")"
-          TELEGRAM_LIMIT=38000000
+          TELEGRAM_LIMIT=50000000
           echo "Original rendered video size: $ORIGINAL_SIZE bytes"
           if [[ "$ORIGINAL_SIZE" -le "$TELEGRAM_LIMIT" ]]; then
             echo "Original is within Telegram's safe upload limit; sending it unchanged."
@@ -309,7 +309,7 @@ jobs:
           SIZE="$(stat -c%s "$TELEGRAM_VIDEO")"
           echo "Telegram upload copy size: $SIZE bytes"
           if [[ "$SIZE" -gt "$TELEGRAM_LIMIT" ]]; then
-            echo "::error::Telegram upload copy is still larger than 38 MB; refusing a likely HTTP 413 upload."
+            echo "::error::Telegram upload copy is still larger than 50 MB; refusing a likely HTTP 413 upload."
             exit 1
           fi
       - name: Upload AI Video
