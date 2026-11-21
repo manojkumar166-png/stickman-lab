@@ -891,6 +891,32 @@ def media_is_valid(path, decode=False):
         return False
 
 
+def prepare_audio(scenes,package,voice):
+    """Prepare and validate the scene narration and image assets for Remotion."""
+    aud=package/"audio"
+    aud.mkdir(parents=True,exist_ok=True)
+    for s in scenes:
+        n=s["scene_number"]
+        audio=aud/f"scene-{n:02d}.mp3"
+        image=package/"images"/f"scene-{n:02d}.png"
+        if not image.is_file():
+            raise FileNotFoundError(f"Scene {n}: generated image checkpoint is missing: {image}")
+        try:
+            with Image.open(image) as im:
+                im.verify()
+        except Exception as exc:
+            raise RuntimeError(f"Scene {n}: saved image is corrupt; refusing to render: {exc}") from exc
+        if not media_has_stream(audio,"a:0",1000):
+            audio.unlink(missing_ok=True)
+            print(f"Edge TTS: scene {n}/{len(scenes)}",flush=True)
+            asyncio.run(speak(s["narration"],audio,voice))
+        else:
+            print(f"Edge TTS: reusing saved audio for scene {n}/{len(scenes)}",flush=True)
+        if not media_has_stream(audio,"a:0",1000):
+            raise RuntimeError(f"Scene {n}: generated narration failed media validation")
+    print(f"Prepared {len(scenes)} validated image/audio scene pairs for Remotion.",flush=True)
+
+
 def render(scenes,package,voice):
     aud=package/"audio"
     seg=package/"segments"
@@ -996,6 +1022,7 @@ def main():
     p.add_argument("--topic",default="")
     p.add_argument("--scenes",type=int,default=8)
     p.add_argument("--voice",default="en-US-AndrewMultilingualNeural")
+    p.add_argument("--skip-render",action="store_true",help="Prepare scene assets for an external renderer such as Remotion.")
     a=p.parse_args()
     if not 4<=a.scenes<=48:
         p.error("Scene count must be 4–48")
@@ -1075,7 +1102,12 @@ def main():
     print("::endgroup::",flush=True)
 
     print("::group::STEP 3/5 - Edge TTS narration and STEP 4/5 - FFmpeg rendering",flush=True)
-    final=render(data["scenes"],package,str(data["voice"]))
+    if a.skip_render:
+        prepare_audio(data["scenes"],package,str(data["voice"]))
+        final=package/"final-video.mp4"
+        print("Remotion rendering is delegated to the AI Story workflow.",flush=True)
+    else:
+        final=render(data["scenes"],package,str(data["voice"]))
     print("::endgroup::",flush=True)
 
     history_file=ROOT/"used_story_topics.json"
