@@ -12,9 +12,12 @@ KEY=os.getenv("GEMINI_API_KEY","").strip()
 GROQ_KEY=os.getenv("GROQ_API_KEY","").strip()
 OPENROUTER_KEY=os.getenv("OPENROUTER_API_KEY","").strip()
 GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
+KILO_API_KEY=os.getenv("KILO_API_KEY","").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
 KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
+OVH_API_KEY=os.getenv("OVH_AI_ENDPOINTS_API_KEY","").strip()
 OVH_MODEL=os.getenv("OVH_MODEL","gpt-oss-20b").strip()
+OVH_FALLBACK_MODELS=[x.strip() for x in os.getenv("OVH_FALLBACK_MODELS","gpt-oss-120b,Meta-Llama-3_3-70B-Instruct,Mistral-Small-3.2-24B-Instruct-2506").split(",") if x.strip()]
 # Stable Gemini Developer API models, ordered with Flash-Lite first.
 # Unknown/paid IDs are ignored so repository variables cannot silently select
 # a model outside this known free-tier-compatible allowlist.
@@ -218,99 +221,92 @@ def gemini(prompt):
         errors.append("GEMINI_API_KEY is not configured; skipped Gemini.")
         print("Gemini skipped: GEMINI_API_KEY is not configured.",flush=True)
 
-    # First backup after Gemini: one bounded anonymous OVHcloud request.
+    # OVHcloud AI Endpoints: documented OpenAI-compatible chat completions API.
     global _OVH_LAST_CALL
     ovh_url="https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions"
     ovh_errors=[]
-    for attempt in range(1,2):
+    ovh_models=list(dict.fromkeys([OVH_MODEL,*OVH_FALLBACK_MODELS]))
+    ovh_headers={"Content-Type":"application/json"}
+    if OVH_API_KEY:
+        ovh_headers["Authorization"]=f"Bearer {OVH_API_KEY}"
+    else:
+        print("OVH_AI_ENDPOINTS_API_KEY is not configured; trying anonymous OVH access.",flush=True)
+    for ovh_model in ovh_models:
         try:
             if _OVH_LAST_CALL:
                 wait=max(0,31-(time.monotonic()-_OVH_LAST_CALL))
-                if wait:
-                    print(f"Respecting OVHcloud anonymous limit; waiting {wait:.1f}s.",flush=True)
-                    time.sleep(wait)
+                if wait: time.sleep(wait)
             _OVH_LAST_CALL=time.monotonic()
-            response=requests.post(ovh_url,
-                headers={"Content-Type":"application/json"},
-                json={"model":OVH_MODEL,"messages":[
-                    {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
-                    {"role":"user","content":prompt}],
-                    "temperature":0.8,"max_tokens":32768},
-                timeout=(3,18))
-            if response.status_code in (408,425,429,500,502,503,504):
-                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:900]}")
-            if not response.ok:
-                raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:1200]}")
+            response=requests.post(ovh_url,headers=ovh_headers,
+                json={"model":ovh_model,"messages":[
+                    {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
+                    {"role":"user","content":prompt}], "temperature":0.8,"max_tokens":16384},timeout=(5,90))
+            if response.status_code in (400,401,403,404,422,408,425,429,500,502,503,504):
+                error=f"OVHcloud {ovh_model} HTTP {response.status_code}: {response.text[:900]}"
+                ovh_errors.append(error); print(error,flush=True); continue
+            response.raise_for_status()
             choices=response.json().get("choices") or []
             message=choices[0].get("message",{}) if choices else {}
             content=message.get("content","")
-            if isinstance(content,list):
-                content="".join(part.get("text","") for part in content if isinstance(part,dict))
+            if isinstance(content,list): content="".join(part.get("text","") for part in content if isinstance(part,dict))
             result=parse_json(content)
-            print(f"Free anonymous planner backup active: OVHcloud {OVH_MODEL}",flush=True)
+            print(f"OVHcloud planner active: {ovh_model}",flush=True)
             return result
         except Exception as exc:
-            ovh_errors.append(f"try {attempt}: {type(exc).__name__}: {exc}")
-            print(f"OVHcloud backup failed: {type(exc).__name__}: {exc}",flush=True)
-
-
-    # Kilo's free auto-router is OpenAI-compatible and supports anonymous
-    # requests for free models, so no KILO_API_KEY is required here.
+            ovh_errors.append(f"{ovh_model}: {type(exc).__name__}: {exc}")
+            print(f"OVHcloud model {ovh_model} failed: {type(exc).__name__}: {exc}",flush=True)
+    # Kilo Gateway: discover the live catalogue and try catalogue-confirmed free models.
     kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
     kilo_errors=[]
-    kilo_models=[KILO_MODEL]
-    for kilo_model in kilo_models:
-        messages=[
-            {"role":"system","content":"Return only one valid JSON object matching the user's requested schema. Do not use Markdown fences or add commentary."},
-            {"role":"user","content":prompt},
-        ]
-        request_bodies=[
-            {"model":kilo_model,"messages":messages,"max_tokens":16384},
-            {"model":kilo_model,"messages":messages},
-        ]
-        for attempt in range(1,2):
+    kilo_headers={"Content-Type":"application/json"}
+    if KILO_API_KEY: kilo_headers["Authorization"]=f"Bearer {KILO_API_KEY}"
+    requested_kilo=list(dict.fromkeys([KILO_MODEL,*KILO_FALLBACK_MODELS]))
+    live_free=[]
+    try:
+        catalog=requests.get("https://ai-gateway.kilo.ai/api/v1/models",
+            headers=({"Authorization":f"Bearer {KILO_API_KEY}"} if KILO_API_KEY else {}),timeout=(5,20))
+        catalog.raise_for_status()
+        entries=catalog.json().get("data",[])
+        for entry in entries if isinstance(entries,list) else []:
+            if not isinstance(entry,dict) or not isinstance(entry.get("id"),str): continue
+            pricing=entry.get("pricing") or {}
+            try: is_zero=float(pricing.get("prompt",1))==0 and float(pricing.get("completion",1))==0
+            except (TypeError,ValueError): is_zero=False
+            if is_zero or entry["id"].endswith(":free"): live_free.append(entry["id"])
+        print(f"Kilo catalogue returned {len(live_free)} explicitly free models.",flush=True)
+    except Exception as exc:
+        print(f"Kilo catalogue lookup failed: {type(exc).__name__}: {exc}",flush=True)
+    kilo_candidates=["kilo-auto/free"]
+    kilo_candidates.extend(model for model in requested_kilo if model=="kilo-auto/free" or model in live_free)
+    kilo_candidates.extend(model for model in live_free if model not in kilo_candidates)
+    kilo_candidates=list(dict.fromkeys(kilo_candidates))
+    messages=[
+        {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
+        {"role":"user","content":prompt},
+    ]
+    for kilo_model in kilo_candidates[:8]:
+        for attempt in range(1,3):
             try:
-                response=None
-                for variant_index,body in enumerate(request_bodies):
-                    response=requests.post(
-                        kilo_url,
-                        headers={"Content-Type":"application/json"},
-                        json=body,
-                        timeout=(3,18),
-                    )
-                    if response.status_code==400 and variant_index+1<len(request_bodies):
-                        message=f"Kilo model {kilo_model} rejected optional token limits; retrying minimal request."
-                        print(message,flush=True)
-                        continue
-                    if response.status_code in (408,425,429,500,502,503,504):
-                        raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:1200]}")
-                    if not response.ok:
-                        error=f"Kilo model {kilo_model} HTTP {response.status_code}: {response.text[:1400]}"
-                        kilo_errors.append(error)
-                        print(error,flush=True)
-                        if 400<=response.status_code<500:
-                            break
-                        raise RuntimeError(error)
-                    break
-                if response is None or not response.ok:
-                    break
+                response=requests.post(kilo_url,headers=kilo_headers,
+                    json={"model":kilo_model,"messages":messages,"max_tokens":16384},timeout=(5,90))
+                if response.status_code in (400,401,403,404,422):
+                    error=f"Kilo {kilo_model} HTTP {response.status_code}: {response.text[:900]}"
+                    kilo_errors.append(error); print(error,flush=True); break
+                if response.status_code in (408,425,429,500,502,503,504):
+                    raise RuntimeError(f"Kilo HTTP {response.status_code}: {response.text[:900]}")
+                response.raise_for_status()
                 choices=response.json().get("choices") or []
                 message=choices[0].get("message",{}) if choices else {}
                 content=message.get("content","")
-                if isinstance(content,list):
-                    content="".join(part.get("text","") for part in content if isinstance(part,dict))
+                if isinstance(content,list): content="".join(part.get("text","") for part in content if isinstance(part,dict))
                 result=parse_json(content)
-                print(f"Free planner backup active: Kilo {kilo_model} (anonymous access)",flush=True)
+                print(f"Kilo planner active: {kilo_model}",flush=True)
                 return result
             except Exception as exc:
-                kilo_errors.append(f"{kilo_model} try {attempt}: {type(exc).__name__}: {exc}")
-                if attempt<1:
-                    delay=attempt*7
-                    print(f"Kilo model {kilo_model} attempt {attempt}/1 failed: {exc}. Retrying in {delay}s.",flush=True)
-                    time.sleep(delay)
-
-
-
+                kilo_errors.append(f"{kilo_model} try {attempt}/2: {type(exc).__name__}: {exc}")
+                print(f"Kilo {kilo_model} attempt {attempt}/2 failed: {exc}",flush=True)
+                if attempt<2: time.sleep(3)
+    if not kilo_candidates: kilo_errors.append("No Kilo free models found in live catalogue.")
     if OPENROUTER_KEY:
         try:
             response=requests.post(
