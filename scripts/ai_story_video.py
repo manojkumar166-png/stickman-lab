@@ -15,21 +15,30 @@ GROQ_MODEL=os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip()
 KILO_MODEL=os.getenv("KILO_MODEL","kilo-auto/free").strip()
 KILO_FALLBACK_MODELS=[x.strip() for x in os.getenv("KILO_FALLBACK_MODELS","nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free,nvidia/nemotron-3-ultra-550b-a55b:free").split(",") if x.strip()]
 OVH_MODEL=os.getenv("OVH_MODEL","gpt-oss-20b").strip()
-# Keep planner calls on Gemini API models listed as free-tier eligible.
-# Paid or unknown model IDs supplied through Actions variables are ignored.
+# Stable Gemini Developer API models, ordered with Flash-Lite first.
+# Unknown/paid IDs are ignored so repository variables cannot silently select
+# a model outside this known free-tier-compatible allowlist.
 FREE_GEMINI_MODELS=(
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
 )
-_requested_model=os.getenv("GEMINI_MODEL","gemini-3.8-flash").strip()
-MODEL=_requested_model if _requested_model in FREE_GEMINI_MODELS else "gemini-3.8-flash"
-_requested_fallbacks=os.getenv("GEMINI_FALLBACK_MODELS",",".join(FREE_GEMINI_MODELS[1:]))
+_requested_model=os.getenv("GEMINI_MODEL","gemini-3.5-flash-lite").strip()
+MODEL=_requested_model if _requested_model in FREE_GEMINI_MODELS else FREE_GEMINI_MODELS[0]
+_requested_fallbacks=os.getenv(
+    "GEMINI_FALLBACK_MODELS",
+    ",".join(model for model in FREE_GEMINI_MODELS if model != MODEL),
+)
 FALLBACK=[
     model for model in (x.strip() for x in _requested_fallbacks.split(","))
     if model in FREE_GEMINI_MODELS and model != MODEL
 ]
+# Always append every remaining allowlisted model so a partial Actions variable
+# cannot accidentally disable the built-in failover chain.
+FALLBACK=list(dict.fromkeys(FALLBACK + [
+    model for model in FREE_GEMINI_MODELS if model != MODEL and model not in FALLBACK
+]))
 TIMEOUT=(20,180)
 _OVH_LAST_CALL=0.0
 
@@ -168,8 +177,10 @@ Every field must be non-empty. Preserve continuity, avoid repeating prior scenes
 def gemini(prompt):
     errors=[]
     if KEY:
-        for model in [MODEL]:
+        # Try the configured primary, then every allowed fallback in order.
+        for model in [MODEL, *FALLBACK]:
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            model_failed=False
             for attempt in range(1,4):
                 try:
                     r=requests.post(
@@ -180,9 +191,10 @@ def gemini(prompt):
                         timeout=(3,18),
                     )
                     if r.status_code in (400,403,404):
-                        error=f"Gemini {model} permanent HTTP {r.status_code}: {r.text[:900]}"
+                        error=f"Gemini {model} unavailable/rejected (HTTP {r.status_code}): {r.text[:900]}"
                         errors.append(error)
                         print(error,flush=True)
+                        model_failed=True
                         break
                     if r.status_code in (408,429,500,502,503,504):
                         raise RuntimeError(f"Gemini {model} HTTP {r.status_code}: {r.text[:900]}")
@@ -196,8 +208,12 @@ def gemini(prompt):
                     errors.append(f"{model} try {attempt}/3: {type(exc).__name__}: {exc}")
                     if attempt<3:
                         delay=min(30,2**(attempt+1))
-                        print(f"Gemini {model} transient failure; retrying in {delay}s ({attempt}/3).",flush=True)
+                        print(f"Gemini {model} transient/response failure; retrying in {delay}s ({attempt}/3).",flush=True)
                         time.sleep(delay)
+                    else:
+                        model_failed=True
+            if model_failed:
+                print(f"Moving to next Gemini model after {model} failed.",flush=True)
     else:
         errors.append("GEMINI_API_KEY is not configured; skipped Gemini.")
         print("Gemini skipped: GEMINI_API_KEY is not configured.",flush=True)
