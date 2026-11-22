@@ -5,7 +5,8 @@
     "The Borrowed Umbrella",
     "The Rooftop Message Bottle",
     "The Last Coin",
-    "The Train Ticket Home"
+    "The Train Ticket Home",
+    "The Forgotten Birthday"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -13,7 +14,8 @@
     "He lends his umbrella to a stranger and later gets it back with a note.",
     "A bottle on his rooftop contains a wish written ten years earlier.",
     "He gives his last coin to a stranger, who leaves him a mysterious map.",
-    "An unused train ticket leads him to a person waiting for an apology."
+    "An unused train ticket leads him to a person waiting for an apology.",
+    "He plans a birthday surprise for a neighbour who thinks everyone forgot."
   ],
   "films": [
     {
@@ -39,6 +41,10 @@
     {
       "date": "2026-11-21",
       "title": "The Train Ticket Home"
+    },
+    {
+      "date": "2026-11-22",
+      "title": "The Forgotten Birthday"
     }
   ]
 }
