@@ -50,7 +50,8 @@
     "Why do we get dizzy when we spin?",
     "Why do hot pavement surfaces look wet?",
     "Why do raindrops fall as teardrops instead of spheres?",
-    "How do amber fossils preserve tiny insects in 3D?"
+    "How do amber fossils preserve tiny insects in 3D?",
+    "Why does popcorn pop?"
   ],
   "topic_details": [
     {
@@ -292,6 +293,11 @@
       "title": "How do amber fossils preserve tiny insects in 3D?",
       "angle": "We explore how sticky tree resin transforms into clear amber over millions of years, perfectly locking away microscopic details of ancient organisms like insects and feathers in three dimensions.",
       "pillar": "Dinosaurs, fossils and ancient Earth"
+    },
+    {
+      "title": "Why does popcorn pop?",
+      "angle": "An exploration of how trapped water turns superheated steam inside a hard starch kernel, creating the sudden pressure release that flips the seed inside out.",
+      "pillar": "Food and everyday chemistry"
     }
   ]
 }
