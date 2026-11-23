@@ -416,82 +416,9 @@ def _read_history(path):
     return []
 
 
-def _local_story_fallback(niche, desired_scene_count, history=None):
-    """Deterministic offline story: keep rendering possible when every API is down."""
-    banks = {
-        "science": [
-            ("Why does the Moon seem to change shape?", "moon phases"),
-            ("How do plants turn sunlight into food?", "photosynthesis"),
-            ("Why does lightning happen before thunder?", "storms"),
-            ("How do vaccines help the immune system?", "immune memory"),
-        ],
-        "technology": [
-            ("How does the internet move information around the world?", "internet routing"),
-            ("How do computers learn patterns from examples?", "machine learning"),
-            ("How does a battery store and release energy?", "battery chemistry"),
-        ],
-        "history": [
-            ("How did ancient trade routes connect distant societies?", "trade routes"),
-            ("How did the printing press change the spread of ideas?", "printing press"),
-        ],
-        "psychology": [
-            ("Why does the brain remember some moments better than others?", "memory"),
-            ("How do habits become automatic?", "habit formation"),
-        ],
-        "finance": [
-            ("How does compound growth make money change over time?", "compound growth"),
-            ("Why do prices rise when demand outpaces supply?", "supply and demand"),
-        ],
-        "self-improvement": [
-            ("How can small daily actions build lasting skills?", "deliberate practice"),
-            ("Why does breaking a big goal into steps help?", "goal setting"),
-        ],
-        "general education": [
-            ("How do simple systems create surprising results?", "complex systems"),
-        ],
-    }
-    options = banks.get(str(niche).lower(), banks["general education"])
-    history = history or []
-    fresh_options = [item for item in options if not _is_repeat(item[0], history)]
-    if fresh_options:
-        topic, concept = random.choice(fresh_options)
-    else:
-        topic, concept = random.choice(options)
-        topic = f"How can we understand {concept} through a fresh everyday example?"
-    beats = [
-        ("Start with a question", f"Everyday experience gives us clues about {concept}, but the full explanation is more interesting than it first appears. Let us build the idea one clear step at a time.", "A curious stick figure studies a simple everyday example", "home", "think"),
-        ("Notice the key parts", f"First identify the main parts involved in {concept}. Each part has a role, and understanding those roles makes the larger process easier to follow.", "A character points to three simple illustrated components", "lab", "point"),
-        ("Follow the first change", f"When the process begins, one small change affects the next part. This chain of events is the central idea behind understanding {concept}.", "Connected objects respond one after another", "lab", "observe"),
-        ("Look for a pattern", f"Repeated observations help reveal a pattern. Instead of memorizing isolated facts, look at what stays consistent and what changes as conditions become different.", "A character compares several clear visual examples", "city", "explain"),
-        ("Test the explanation", f"A useful explanation should make sense in a new example too. Change one condition, keep the others steady, and observe how the result responds.", "A simple experiment with one changing variable", "lab", "observe"),
-        ("Avoid a common mix-up", f"It is easy to confuse two events that happen together with one event causing the other. Careful comparisons help separate coincidence from a real explanation.", "Two parallel timelines are compared by a character", "lab", "think"),
-        ("Connect the bigger picture", f"Now connect the individual parts. Their interactions explain why {concept} can produce an outcome that no single part could create alone.", "Small pieces combine into one larger system", "space", "explain"),
-        ("See it in daily life", f"This idea appears in ordinary life more often than expected. Recognizing it helps turn an abstract explanation into something practical and memorable.", "A stick figure spots the concept in daily surroundings", "home", "surprised"),
-        ("Remember the limits", f"Real situations can include extra factors, so this simple model is a starting point rather than the whole story. New evidence can refine an explanation.", "A simple model gains additional surrounding details", "lab", "observe"),
-        ("Take away the main idea", f"The central lesson is to follow the parts, watch how they interact, and test explanations against evidence. That habit makes complicated subjects easier to understand.", "The character celebrates as the complete visual system comes together", "sky", "celebrate"),
-    ]
-    scenes = []
-    for index in range(desired_scene_count):
-        title, narration, visual, background, action = beats[index % len(beats)]
-        scenes.append({
-            "title": f"{title} ({index + 1})",
-            "narration": narration,
-            "visual": visual + "; clean colorful educational cartoon, no written words",
-            "background": background,
-            "action": action,
-        })
-    print("WARNING: All remote LLM providers failed; using deterministic offline explainer fallback.", flush=True)
-    return {
-        "topic": topic,
-        "description": f"A simple step-by-step visual introduction to {concept}.",
-        "scenes": scenes,
-        "generation_mode": "offline_fallback",
-    }
-
-
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    print("Story order: Gemini -> OVH -> Kilo -> OpenRouter -> Groq; each provider retries temporary busy responses, then offline fallback is enabled.", flush=True)
+    print("Story order: Gemini -> OVH -> Kilo -> OpenRouter -> Groq; each provider retries temporary busy responses. No offline story fallback is used.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -598,9 +525,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 print(f"{provider}/{provider_model} unavailable: {type(exc).__name__}: {str(exc)[:450]}", flush=True)
 
         if data is None:
-            story = _local_story_fallback(niche, desired_scene_count, history)
-            used_model = "offline:template"
-            break
+            continue
 
         try:
             raw = _response_text(data)
@@ -638,13 +563,11 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         break
 
     if story is None:
-        print(
-            "Remote providers did not produce a valid, complete, non-repeated story after "
-            "five attempts; switching to the offline story generator.",
-            flush=True,
+        raise RuntimeError(
+            "Remote providers did not produce a valid, complete, non-repeated story "
+            "after five generation attempts and all configured model failovers. "
+            "No offline/template story was generated."
         )
-        story = _local_story_fallback(niche, desired_scene_count, history)
-        used_model = "offline:template"
 
     print(f"Story generated with {used_model}: {story['topic']}")
     scenes = story.get("scenes", [])
