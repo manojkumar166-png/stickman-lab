@@ -86,6 +86,8 @@ jobs:
           python -m pip install --retries 5 --timeout 60 --upgrade pip
           python -m pip install --retries 5 --timeout 60 -r requirements.txt
           python -m pip install --retries 5 --timeout 60 whisperx faster-whisper
+      - name: Install Playwright Chromium for anonymous story fallback
+        run: python -m playwright install --with-deps chromium
       - name: Generate AI Video
         env:
           AI_VIDEO_RENDERER: ffmpeg
