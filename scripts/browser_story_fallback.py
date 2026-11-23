@@ -180,7 +180,6 @@ def _try_site(browser, site, prompt, timeout_seconds):
     context = browser.new_context(
         locale="en-US",
         viewport={"width": 1440, "height": 1000},
-        service_workers="block",
     )
     page = context.new_page()
     page.set_default_timeout(12000)
