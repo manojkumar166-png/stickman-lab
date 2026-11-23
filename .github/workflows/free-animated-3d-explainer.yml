@@ -227,7 +227,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
-          python -m pip install requests Pillow edge-tts gTTS
+          python -m pip install requests Pillow edge-tts gTTS playwright
+          python -m playwright install --with-deps chromium
 
       - name: Generate story, voiceover and original background sound
         if: inputs.stage == 'render'
@@ -295,7 +296,7 @@ jobs:
           config["scene_count"] = max(5, minutes * 5)
           config["topic_history_file"] = "free_animated_3d_topic_history.json"
 
-          # Tries Gemini three times, then OVH, Kilo and OpenRouter; local fallback remains.
+          # Tries configured API models first, then anonymous public AI chat websites if all APIs fail.
           story = generate_story(root, config)
           scenes = story.get("scenes", [])
           if not isinstance(scenes, list) or not scenes:
