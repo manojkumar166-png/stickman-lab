@@ -5,6 +5,7 @@ from pathlib import Path
 import edge_tts, requests
 from gtts import gTTS
 from PIL import Image
+from browser_story_fallback import generate_story_anonymously
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"ai-story-video-output"
@@ -517,12 +518,24 @@ def gemini(prompt):
     else:
         print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
 
-    raise RuntimeError(
-        "All planner providers failed. Gemini: "+" | ".join(errors)
+    # Last resort: use public AI chat pages in a fresh anonymous browser.
+    # The helper skips any site that asks for sign-in, CAPTCHA, or verification.
+    api_failure = (
+        "All API planner providers failed. Gemini: "+" | ".join(errors)
         +" | Groq: "+(" | ".join(groq_errors) if groq_errors else "not configured")
         +" | Kilo: "+" | ".join(kilo_errors)
         +" | OVHcloud: "+" | ".join(ovh_errors)
     )
+    try:
+        browser_response = generate_story_anonymously(prompt)
+        result = parse_json(browser_response)
+        print("Story planner active: anonymous browser website fallback.", flush=True)
+        return result
+    except Exception as exc:
+        raise RuntimeError(
+            api_failure + " | Anonymous browser fallback: "
+            + type(exc).__name__ + ": " + str(exc)
+        ) from exc
 
 def plan_story(topic,count):
     topics_file=ROOT/"topics.txt"
