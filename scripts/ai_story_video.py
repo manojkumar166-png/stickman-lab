@@ -165,12 +165,32 @@ def refresh_model_catalogs():
             entries=response.json().get("data",[])
             available={item.get("id") for item in entries if isinstance(item,dict)
                        and item.get("active",True) is not False and isinstance(item.get("id"),str)}
-            GROQ_CANDIDATES=[GROQ_MODEL] if GROQ_MODEL in available else []
-            print(f"Groq catalogue: {len(available)} active model IDs; configured choice={'available' if GROQ_MODEL in available else 'not listed'}.",flush=True)
+            GROQ_CANDIDATES=sorted(available)
+            if GROQ_MODEL in GROQ_CANDIDATES:
+                GROQ_CANDIDATES.remove(GROQ_MODEL)
+                GROQ_CANDIDATES.insert(0,GROQ_MODEL)
+            print(f"Groq catalogue: {len(GROQ_CANDIDATES)} active model IDs discovered.",flush=True)
         except Exception as exc:
             print(f"Groq catalogue refresh failed; retaining configured choice: {exc}",flush=True)
     else:
         print("Groq catalogue skipped: GROQ_API_KEY missing.",flush=True)
+
+    # Persist the latest catalogue for every story generator in this repository.
+    # Only write after a successful refresh cycle; each provider retains its
+    # configured safe candidates when its catalogue endpoint is unavailable.
+    registry_path=ROOT/"story-model-registry.json"
+    registry={"updated_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
+              "providers":{
+                  "Gemini":GEMINI_CANDIDATES,
+                  "OVH":OVH_CANDIDATES,
+                  "Kilo":KILO_CANDIDATES,
+                  "OpenRouter":OPENROUTER_CANDIDATES,
+                  "Groq":GROQ_CANDIDATES,
+              }}
+    temporary=registry_path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(registry,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    temporary.replace(registry_path)
+    print(f"Shared model registry updated: {registry_path.name}",flush=True)
     print("::endgroup::",flush=True)
 
 def parse_json(raw):
