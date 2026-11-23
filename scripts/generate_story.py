@@ -33,7 +33,7 @@ PROVIDER_CONFIG = {
 }
 
 
-def _call_openai_compatible(provider, model, prompt, attempts=1):
+def _call_openai_compatible(provider, model, prompt, attempts=3):
     """Call a configured OpenAI-compatible provider with bounded retries."""
     if provider not in PROVIDER_CONFIG:
         raise ValueError(f"Unsupported backup provider: {provider}")
@@ -67,7 +67,7 @@ def _call_openai_compatible(provider, model, prompt, attempts=1):
         try:
             response = None
             for variant_index, body in enumerate(request_bodies):
-                response = requests.post(url, headers=headers, json=body, timeout=(3, 18))
+                response = requests.post(url, headers=headers, json=body, timeout=(5, 45))
                 if response.status_code == 400 and variant_index == 0:
                     # Some free-tier models reject optional sampling parameters.
                     continue
@@ -97,7 +97,15 @@ def _call_openai_compatible(provider, model, prompt, attempts=1):
             last_error = exc
             print(f"{provider} attempt {attempt}/{attempts} failed: {type(exc).__name__}: {exc}", flush=True)
             if attempt < attempts:
-                time.sleep(2 ** attempt)
+                retry_after = None
+                if response is not None:
+                    try:
+                        retry_after = float(response.headers.get("Retry-After", ""))
+                    except (TypeError, ValueError):
+                        retry_after = None
+                delay = min(90, max(retry_after or 0, 4 * (2 ** (attempt - 1))))
+                print(f"{provider}/{model} busy or temporarily unavailable; retrying in {delay:.0f}s.", flush=True)
+                time.sleep(delay)
     raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
 
 
@@ -122,9 +130,15 @@ def _call_gemini(api_key, model, prompt):
     last_error = None
     for attempt in range(1, 4):
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=(3, 18))
+            response = requests.post(url, headers=headers, json=body, timeout=(5, 45))
             if response.status_code in (408, 425, 429, 500, 502, 503, 504):
-                raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:500]}")
+                retry_after = None
+                try:
+                    retry_after = float(response.headers.get("Retry-After", ""))
+                except (TypeError, ValueError):
+                    pass
+                delay = min(90, max(retry_after or 0, 4 * (2 ** (attempt - 1))))
+                raise RuntimeError(f"Gemini HTTP {response.status_code}; retry after {delay:.0f}s: {response.text[:500]}")
             if not response.ok:
                 raise PermanentProviderError(f"Gemini HTTP {response.status_code}: {response.text[:500]}")
             payload = response.json()
@@ -139,7 +153,10 @@ def _call_gemini(api_key, model, prompt):
             last_error = exc
             print(f"Gemini attempt {attempt}/3 failed: {type(exc).__name__}: {exc}", flush=True)
             if attempt < 3:
-                time.sleep(attempt)
+                match = re.search(r"retry after ([0-9.]+)s", str(exc), re.I)
+                delay = min(90, float(match.group(1))) if match else min(90, 4 * (2 ** (attempt - 1)))
+                print(f"Gemini/{model} temporarily busy; waiting {delay:.0f}s before retry.", flush=True)
+                time.sleep(delay)
     raise RuntimeError(f"Gemini failed after 3 attempts: {last_error}") from last_error
 
 
@@ -512,7 +529,7 @@ def generate_story(root: Path, config: dict) -> dict:
     if user_prompt:
         print("A manual workflow prompt will guide the generated story.", flush=True)
 
-    for generation_attempt in range(2):
+    for generation_attempt in range(5):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
         print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
         user_prompt_section = (
