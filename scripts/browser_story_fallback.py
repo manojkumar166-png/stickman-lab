@@ -126,8 +126,8 @@ def _visible_input(page, selectors):
     return None
 
 
-def _submit_prompt(page, textbox):
-    textbox.fill(page._story_prompt)
+def _submit_prompt(page, textbox, prompt):
+    textbox.fill(prompt)
     try:
         textbox.press("Enter", timeout=5000)
         return
@@ -184,7 +184,6 @@ def _try_site(browser, site, prompt, timeout_seconds):
     )
     page = context.new_page()
     page.set_default_timeout(12000)
-    page._story_prompt = prompt
     try:
         print(f"Anonymous browser fallback: opening {site['name']} ({site['url']}).", flush=True)
         page.goto(site["url"], wait_until="domcontentloaded", timeout=45000)
@@ -198,7 +197,7 @@ def _try_site(browser, site, prompt, timeout_seconds):
         if textbox is None:
             raise RuntimeError("no usable public chat input was found")
 
-        _submit_prompt(page, textbox)
+        _submit_prompt(page, textbox, prompt)
         print(f"{site['name']}: prompt submitted; waiting for a complete response.", flush=True)
 
         deadline = time.monotonic() + timeout_seconds
