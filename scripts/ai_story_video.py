@@ -45,6 +45,18 @@ FALLBACK=list(dict.fromkeys(FALLBACK + [
 TIMEOUT=(20,180)
 _OVH_LAST_CALL=0.0
 
+def _retry_wait(response, attempt):
+    """Honor provider Retry-After and use bounded exponential backoff."""
+    retry_after=None
+    if response is not None:
+        try:
+            retry_after=float(response.headers.get("Retry-After",""))
+        except (TypeError,ValueError):
+            retry_after=None
+    delay=min(90,max(retry_after or 0,4*(2**(attempt-1))))
+    print(f"Provider is busy or rate-limited; waiting {delay:.0f}s before retry.",flush=True)
+    time.sleep(delay)
+
 # Model catalogues are refreshed on every generator run. Catalogue discovery is
 # free/read-only; the real story request doubles as the live availability test,
 # avoiding extra billable "ping" generations.
@@ -360,9 +372,7 @@ def gemini(prompt):
                 except Exception as exc:
                     errors.append(f"{model} try {attempt}/3: {type(exc).__name__}: {exc}")
                     if attempt<3:
-                        delay=min(30,2**(attempt+1))
-                        print(f"Gemini {model} transient/response failure; retrying in {delay}s ({attempt}/3).",flush=True)
-                        time.sleep(delay)
+                        _retry_wait(locals().get("r"),attempt)
                     else:
                         model_failed=True
             if model_failed:
@@ -382,29 +392,34 @@ def gemini(prompt):
     else:
         print("OVH_AI_ENDPOINTS_API_KEY is not configured; trying anonymous OVH access.",flush=True)
     for ovh_model in ovh_models:
-        try:
-            if _OVH_LAST_CALL:
-                wait=max(0,31-(time.monotonic()-_OVH_LAST_CALL))
-                if wait: time.sleep(wait)
-            _OVH_LAST_CALL=time.monotonic()
-            response=requests.post(ovh_url,headers=ovh_headers,
-                json={"model":ovh_model,"messages":[
-                    {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
-                    {"role":"user","content":prompt}], "temperature":0.8,"max_tokens":16384},timeout=(5,90))
-            if response.status_code in (400,401,403,404,422,408,425,429,500,502,503,504):
-                error=f"OVHcloud {ovh_model} HTTP {response.status_code}: {response.text[:900]}"
-                ovh_errors.append(error); print(error,flush=True); continue
-            response.raise_for_status()
-            choices=response.json().get("choices") or []
-            message=choices[0].get("message",{}) if choices else {}
-            content=message.get("content","")
-            if isinstance(content,list): content="".join(part.get("text","") for part in content if isinstance(part,dict))
-            result=parse_json(content)
-            print(f"OVHcloud planner active: {ovh_model}",flush=True)
-            return result
-        except Exception as exc:
-            ovh_errors.append(f"{ovh_model}: {type(exc).__name__}: {exc}")
-            print(f"OVHcloud model {ovh_model} failed: {type(exc).__name__}: {exc}",flush=True)
+        for attempt in range(1,4):
+            response=None
+            try:
+                if _OVH_LAST_CALL:
+                    wait=max(0,31-(time.monotonic()-_OVH_LAST_CALL))
+                    if wait: time.sleep(wait)
+                _OVH_LAST_CALL=time.monotonic()
+                response=requests.post(ovh_url,headers=ovh_headers,
+                    json={"model":ovh_model,"messages":[
+                        {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
+                        {"role":"user","content":prompt}], "temperature":0.8,"max_tokens":16384},timeout=(5,90))
+                if response.status_code in (400,401,403,404,422):
+                    error=f"OVHcloud {ovh_model} HTTP {response.status_code}: {response.text[:900]}"
+                    ovh_errors.append(error); print(error,flush=True); break
+                if response.status_code in (408,425,429,500,502,503,504):
+                    raise RuntimeError(f"OVHcloud HTTP {response.status_code}: {response.text[:900]}")
+                response.raise_for_status()
+                choices=response.json().get("choices") or []
+                message=choices[0].get("message",{}) if choices else {}
+                content=message.get("content","")
+                if isinstance(content,list): content="".join(part.get("text","") for part in content if isinstance(part,dict))
+                result=parse_json(content)
+                print(f"OVHcloud planner active: {ovh_model}",flush=True)
+                return result
+            except Exception as exc:
+                ovh_errors.append(f"{ovh_model} try {attempt}/3: {type(exc).__name__}: {exc}")
+                print(f"OVHcloud {ovh_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
+                if attempt<3: _retry_wait(response,attempt)
     # Kilo Gateway: discover the live catalogue and try catalogue-confirmed free models.
     kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
     kilo_errors=[]
@@ -415,8 +430,8 @@ def gemini(prompt):
         {"role":"system","content":"Return only one valid JSON object matching the requested schema. No Markdown fences or commentary."},
         {"role":"user","content":prompt},
     ]
-    for kilo_model in kilo_candidates[:8]:
-        for attempt in range(1,3):
+    for kilo_model in kilo_candidates:
+        for attempt in range(1,4):
             try:
                 response=requests.post(kilo_url,headers=kilo_headers,
                     json={"model":kilo_model,"messages":messages,"max_tokens":16384},timeout=(5,90))
@@ -436,12 +451,14 @@ def gemini(prompt):
             except Exception as exc:
                 kilo_errors.append(f"{kilo_model} try {attempt}/2: {type(exc).__name__}: {exc}")
                 print(f"Kilo {kilo_model} attempt {attempt}/2 failed: {exc}",flush=True)
-                if attempt<2: time.sleep(3)
+                if attempt<3: _retry_wait(locals().get("response"),attempt)
     if not kilo_candidates: kilo_errors.append("No Kilo free models found in live catalogue.")
     if OPENROUTER_KEY:
         for or_model in OPENROUTER_CANDIDATES:
-            try:
-                response=requests.post(
+            for attempt in range(1,4):
+                response=None
+                try:
+                    response=requests.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={"Authorization":f"Bearer {OPENROUTER_KEY}","Content-Type":"application/json",
                              "HTTP-Referer":"https://github.com/manojkumar166-png/stickman-lab",
@@ -456,10 +473,11 @@ def gemini(prompt):
                 choices=response.json().get("choices") or []
                 content=choices[0].get("message",{}).get("content","") if choices else ""
                 result=parse_json(content)
-                print(f"OpenRouter free planner fallback active: {or_model}.",flush=True)
-                return result
-            except Exception as exc:
-                print(f"OpenRouter model {or_model} failed: {type(exc).__name__}: {exc}",flush=True)
+                    print(f"OpenRouter free planner fallback active: {or_model}.",flush=True)
+                    return result
+                except Exception as exc:
+                    print(f"OpenRouter {or_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
+                    if attempt<3: _retry_wait(response,attempt)
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.",flush=True)
 
@@ -468,8 +486,10 @@ def gemini(prompt):
     if GROQ_KEY:
         groq_url="https://api.groq.com/openai/v1/chat/completions"
         for groq_model in GROQ_CANDIDATES:
-            try:
-                response=requests.post(groq_url,
+            for attempt in range(1,4):
+                response=None
+                try:
+                    response=requests.post(groq_url,
                     headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
                     json={"model":groq_model,"messages":[
                         {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
@@ -485,8 +505,9 @@ def gemini(prompt):
                 print(f"Open-weight planner backup active: Groq {groq_model}",flush=True)
                 return result
             except Exception as exc:
-                groq_errors.append(f"{groq_model}: {type(exc).__name__}: {exc}")
-                print(f"Groq model {groq_model} failed: {type(exc).__name__}: {exc}",flush=True)
+                    groq_errors.append(f"{groq_model} try {attempt}/3: {type(exc).__name__}: {exc}")
+                    print(f"Groq {groq_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
+                    if attempt<3: _retry_wait(response,attempt)
     else:
         print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
 
