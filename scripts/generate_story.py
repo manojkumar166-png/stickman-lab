@@ -176,14 +176,97 @@ def _call_story_model(api_key, model, prompt):
 
 
 def _prompt_provider_models(api_key, config):
-    """Use the shared daily catalogue, preserving safe defaults as fallback."""
+    """Discover current text models, then append cached and built-in safe fallbacks."""
     defaults = {
         "Gemini": [str(config.get("gemini_model") or "gemini-3.8-flash")],
         "OVH": ["gpt-oss-20b"],
         "Kilo": ["kilo-auto/free"],
         "OpenRouter": ["openrouter/free"],
-        "Groq": [],
+        "Groq": [os.environ.get("GROQ_MODEL", "").strip()],
     }
+    discovered = {name: [] for name in defaults}
+
+    def read_catalogue(url, headers=None, params=None):
+        try:
+            response = requests.get(url, headers=headers or {}, params=params or {}, timeout=(5, 15))
+            response.raise_for_status()
+            payload = response.json()
+            entries = payload if isinstance(payload, list) else payload.get("data", payload.get("models", []))
+            return entries if isinstance(entries, list) else []
+        except Exception as exc:
+            print(f"Live model catalogue unavailable at {url}: {type(exc).__name__}: {exc}", flush=True)
+            return []
+
+    if api_key:
+        entries = read_catalogue(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            params={"key": api_key, "pageSize": 1000},
+        )
+        for item in entries:
+            if not isinstance(item, dict) or "generateContent" not in (item.get("supportedGenerationMethods") or []):
+                continue
+            name = str(item.get("name", "")).removeprefix("models/")
+            low = name.lower()
+            if "flash" in low and not any(x in low for x in ("tts", "image", "embedding", "live", "transcribe")):
+                discovered["Gemini"].append(name)
+        discovered["Gemini"].sort(key=lambda name: (0 if "lite" in name.lower() else 1, "preview" in name.lower(), name))
+
+    entries = read_catalogue("https://ai-gateway.kilo.ai/api/v1/models")
+    for item in entries:
+        if isinstance(item, dict) and isinstance(item.get("id"), str):
+            model_id = item["id"]
+            pricing = item.get("pricing") or {}
+            try:
+                free = (float(pricing.get("prompt", pricing.get("input", 1)) or 0) == 0
+                        and float(pricing.get("completion", pricing.get("output", 1)) or 0) == 0)
+            except (TypeError, ValueError):
+                free = False
+            if free or model_id == "kilo-auto/free" or model_id.endswith(":free"):
+                if not any(x in model_id.lower() for x in ("embed", "rerank", "tts", "image", "transcribe")):
+                    discovered["Kilo"].append(model_id)
+
+    entries = read_catalogue("https://catalog.endpoints.ai.ovh.net/rest/v1/models_v2")
+    for item in entries:
+        if not isinstance(item, dict) or item.get("available") is not True:
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str):
+            continue
+        metadata = item.get("metadata") or {}
+        capabilities = (metadata.get("model_specs") or {}).get("capabilities") or {}
+        output = capabilities.get("output_modality") or []
+        if isinstance(output, str):
+            output = [output]
+        if not output or any("text" in str(value).lower() for value in output):
+            discovered["OVH"].append(model_id)
+
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if openrouter_key:
+        entries = read_catalogue(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {openrouter_key}"},
+            params={"output_modalities": "text"},
+        )
+        for item in entries:
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                model_id = item["id"]
+                if model_id.endswith(":free"):
+                    discovered["OpenRouter"].append(model_id)
+
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if groq_key:
+        entries = read_catalogue(
+            "https://api.groq.com/openai/v1/models",
+            headers={"Authorization": f"Bearer {groq_key}"},
+        )
+        for item in entries:
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                model_id = item["id"]
+                if item.get("active", True) is not False and not any(
+                    token in model_id.lower() for token in ("whisper", "speech", "guard", "embedding", "playai")
+                ):
+                    discovered["Groq"].append(model_id)
+
     registry_path = Path(__file__).resolve().parents[1] / "story-model-registry.json"
     try:
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -191,22 +274,22 @@ def _prompt_provider_models(api_key, config):
         if isinstance(providers, dict):
             for provider, candidates in providers.items():
                 if provider in defaults and isinstance(candidates, list):
-                    valid = [item.strip() for item in candidates
-                             if isinstance(item, str) and item.strip()]
-                    if valid:
-                        defaults[provider] = list(dict.fromkeys(valid + defaults[provider]))
+                    defaults[provider] = [item.strip() for item in candidates
+                                          if isinstance(item, str) and item.strip()] + defaults[provider]
     except (OSError, ValueError, TypeError):
-        print("Shared model registry unavailable; using built-in provider defaults.", flush=True)
+        print("Shared model registry unavailable; using live catalogues and built-in defaults.", flush=True)
 
     models = []
-    if api_key:
-        models.extend(("Gemini", model) for model in defaults["Gemini"])
-    for provider in ("OVH", "Kilo"):
-        models.extend((provider, model) for model in defaults[provider])
-    if os.environ.get("OPENROUTER_API_KEY", "").strip():
-        models.extend(("OpenRouter", model) for model in defaults["OpenRouter"])
-    if os.environ.get("GROQ_API_KEY", "").strip():
-        models.extend(("Groq", model) for model in defaults["Groq"])
+    for provider in ("Gemini", "OVH", "Kilo", "OpenRouter", "Groq"):
+        candidates = list(dict.fromkeys(discovered[provider] + defaults[provider]))
+        if provider == "Gemini" and not api_key:
+            continue
+        if provider == "OpenRouter" and not openrouter_key:
+            continue
+        if provider == "Groq" and not groq_key:
+            continue
+        models.extend((provider, model) for model in candidates if model)
+        print(f"{provider} model candidates: {len(candidates)} (live + fallback).", flush=True)
     return list(dict.fromkeys(models))
 
 
