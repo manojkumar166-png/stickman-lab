@@ -463,7 +463,7 @@ def generate_story(root: Path, config: dict) -> dict:
 
     for generation_attempt in range(3):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
-        print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
+        print(f"Content niche ({generation_attempt + 1}/3): {category}", flush=True)
         user_prompt_section = (
             "USER'S RUN-SPECIFIC PROMPT — treat this as the controlling topic and creative brief. "
             "Preserve its intent; expand it into the complete explainer.\n"
