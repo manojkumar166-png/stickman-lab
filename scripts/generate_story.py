@@ -491,7 +491,7 @@ def _local_story_fallback(niche, desired_scene_count, history=None):
 
 def generate_story(root: Path, config: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    print("Story order: Gemini (3 attempts) -> OVH -> Kilo -> OpenRouter; offline fallback enabled.", flush=True)
+    print("Story order: Gemini -> OVH -> Kilo -> OpenRouter -> Groq; each provider retries temporary busy responses, then offline fallback is enabled.", flush=True)
 
     topics_path = root / "topics.txt"
     if not topics_path.is_file():
@@ -580,7 +580,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
 """
 
         data = None
-        # Gemini gets three short attempts; each backup gets one bounded request.
+        # Each provider gets bounded retries before the next discovered model is tried.
         provider_models = _prompt_provider_models(api_key, config)
         for provider, provider_model in provider_models:
             if data is not None:
