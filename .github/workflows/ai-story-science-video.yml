@@ -74,7 +74,8 @@ jobs:
             sleep $((attempt * 10))
           done
           python -m pip install --retries 5 --timeout 60 --upgrade pip
-          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper
+          python -m pip install --retries 5 --timeout 60 requests Pillow edge-tts gTTS faster-whisper playwright
+          python -m playwright install --with-deps chromium
       - name: Plan, generate scene images, narrate and render
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
