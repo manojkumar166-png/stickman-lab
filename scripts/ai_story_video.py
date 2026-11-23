@@ -347,7 +347,7 @@ def gemini(prompt):
         for model in GEMINI_CANDIDATES:
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             model_failed=False
-            for attempt in range(1,2):
+            for attempt in range(1,4):
                 r=None
                 try:
                     r=requests.post(
@@ -372,7 +372,7 @@ def gemini(prompt):
                     print(f"Gemini planner active: {model}",flush=True)
                     return result
                 except Exception as exc:
-                    errors.append(f"{model} try {attempt}/1: {type(exc).__name__}: {exc}")
+                    errors.append(f"{model} try {attempt}/3: {type(exc).__name__}: {exc}")
                     if attempt<3:
                         _retry_wait(locals().get("r"),attempt)
                     else:
