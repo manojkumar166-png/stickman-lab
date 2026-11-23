@@ -188,7 +188,7 @@ def refresh_model_catalogs():
                   "Groq":GROQ_CANDIDATES,
               }}
     temporary=registry_path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(registry,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    temporary.write_text(json.dumps(registry,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     temporary.replace(registry_path)
     print(f"Shared model registry updated: {registry_path.name}",flush=True)
     print("::endgroup::",flush=True)
