@@ -1,7 +1,7 @@
 {
-  "title": "The Forgotten Birthday",
-  "premise": "He plans a birthday surprise for a neighbour who thinks everyone forgot.",
-  "date": "2026-11-22",
+  "title": "The Lighthouse Text",
+  "premise": "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
+  "date": "2026-11-23",
   "style": "2D cinematic",
   "length": "30 seconds",
   "total_seconds": 30,
@@ -95,10 +95,10 @@
   ],
   "youtube": {
     "titles": [
-      "The Forgotten Birthday | A Stickman Short Film",
-      "He Found The Forgotten Birthday... And Everything Changed",
+      "The Lighthouse Text | A Stickman Short Film",
+      "He Found The Lighthouse Text... And Everything Changed",
       "This 30-Second Stickman Film Will Make You Smile"
     ],
-    "thumbnail_text": "THE FORGOTTEN BIRT"
+    "thumbnail_text": "THE LIGHTHOUSE TEX"
   }
 }

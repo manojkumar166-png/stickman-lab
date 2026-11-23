@@ -1,0 +1,104 @@
+{
+  "title": "The Lighthouse Text",
+  "premise": "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
+  "date": "2026-11-23",
+  "style": "2D cinematic",
+  "length": "30 seconds",
+  "total_seconds": 30,
+  "voiceover": false,
+  "background_music": false,
+  "sound_effects": true,
+  "hero": "Friendly 2D stickman; cream round face, warm brown eyes with highlights, gentle smile, coral hoodie with darker red hood, dark trousers; never scary.",
+  "end_card": "One small kindness can change everything.",
+  "scenes": [
+    {
+      "n": 1,
+      "title": "Alone",
+      "start": 0,
+      "end": 3,
+      "camera": "Wide, slow push-in",
+      "sound": "Quiet room ambience",
+      "action": "The friendly hero is alone, looking at an everyday object."
+    },
+    {
+      "n": 2,
+      "title": "Something strange",
+      "start": 3,
+      "end": 5,
+      "camera": "Medium shot",
+      "sound": "Soft magical rumble",
+      "action": "A mysterious event connected to the premise appears."
+    },
+    {
+      "n": 3,
+      "title": "Curiosity",
+      "start": 5,
+      "end": 8,
+      "camera": "Side tracking",
+      "sound": "Gentle footsteps",
+      "action": "The hero approaches carefully and reaches out."
+    },
+    {
+      "n": 4,
+      "title": "Discovery",
+      "start": 8,
+      "end": 11,
+      "camera": "Close-up",
+      "sound": "Click and soft chime",
+      "action": "The hero interacts with the object and discovers its secret."
+    },
+    {
+      "n": 5,
+      "title": "The glimpse",
+      "start": 11,
+      "end": 14,
+      "camera": "Over-the-shoulder",
+      "sound": "Airy transition",
+      "action": "A revealing image or memory appears."
+    },
+    {
+      "n": 6,
+      "title": "The truth",
+      "start": 14,
+      "end": 18,
+      "camera": "Slow push-in",
+      "sound": "Soft heartbeat",
+      "action": "The emotional meaning of the discovery becomes clear."
+    },
+    {
+      "n": 7,
+      "title": "The choice",
+      "start": 18,
+      "end": 22,
+      "camera": "Close-up reaction",
+      "sound": "Gentle musical sting",
+      "action": "The hero decides to do something kind."
+    },
+    {
+      "n": 8,
+      "title": "A small action",
+      "start": 22,
+      "end": 27,
+      "camera": "Medium shot",
+      "sound": "Message sent tone",
+      "action": "The hero acts: helps someone, returns something, or reaches out."
+    },
+    {
+      "n": 9,
+      "title": "A different tomorrow",
+      "start": 27,
+      "end": 30,
+      "camera": "Slow pull-back",
+      "sound": "Warm chime",
+      "action": "A hopeful final moment shows the small change mattered."
+    }
+  ],
+  "youtube": {
+    "titles": [
+      "The Lighthouse Text | A Stickman Short Film",
+      "He Found The Lighthouse Text... And Everything Changed",
+      "This 30-Second Stickman Film Will Make You Smile"
+    ],
+    "thumbnail_text": "THE LIGHTHOUSE TEX"
+  }
+}

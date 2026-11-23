@@ -6,7 +6,8 @@
     "The Rooftop Message Bottle",
     "The Last Coin",
     "The Train Ticket Home",
-    "The Forgotten Birthday"
+    "The Forgotten Birthday",
+    "The Lighthouse Text"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -15,7 +16,8 @@
     "A bottle on his rooftop contains a wish written ten years earlier.",
     "He gives his last coin to a stranger, who leaves him a mysterious map.",
     "An unused train ticket leads him to a person waiting for an apology.",
-    "He plans a birthday surprise for a neighbour who thinks everyone forgot."
+    "He plans a birthday surprise for a neighbour who thinks everyone forgot.",
+    "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship."
   ],
   "films": [
     {
@@ -45,6 +47,10 @@
     {
       "date": "2026-11-22",
       "title": "The Forgotten Birthday"
+    },
+    {
+      "date": "2026-11-23",
+      "title": "The Lighthouse Text"
     }
   ]
 }
