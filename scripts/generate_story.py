@@ -114,8 +114,8 @@ def _call_openai_compatible(provider, model, prompt, attempts=3):
     raise RuntimeError(f"{provider} failed after {attempts} attempts: {last_error}") from last_error
 
 
-def _call_gemini(api_key, model, prompt):
-    """Try Gemini up to three times with short per-request timeouts."""
+def _call_gemini(api_key, model, prompt, attempts=3):
+    """Call Gemini with a configurable, bounded retry count."""
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -133,7 +133,7 @@ def _call_gemini(api_key, model, prompt):
         },
     }
     last_error = None
-    for attempt in range(1, 4):
+    for attempt in range(1, attempts + 1):
         try:
             response = requests.post(url, headers=headers, json=body, timeout=(5, 45))
             if response.status_code in (408, 425, 429, 500, 502, 503, 504):
@@ -156,13 +156,13 @@ def _call_gemini(api_key, model, prompt):
             raise
         except Exception as exc:
             last_error = exc
-            print(f"Gemini attempt {attempt}/3 failed: {type(exc).__name__}: {exc}", flush=True)
-            if attempt < 3:
+            print(f"Gemini attempt {attempt}/{attempts} failed: {type(exc).__name__}: {exc}", flush=True)
+            if attempt < attempts:
                 match = re.search(r"retry after ([0-9.]+)s", str(exc), re.I)
                 delay = min(90, float(match.group(1))) if match else min(90, 4 * (2 ** (attempt - 1)))
                 print(f"Gemini/{model} temporarily busy; waiting {delay:.0f}s before retry.", flush=True)
                 time.sleep(delay)
-    raise RuntimeError(f"Gemini failed after 3 attempts: {last_error}") from last_error
+    raise RuntimeError(f"Gemini failed after {attempts} attempts: {last_error}") from last_error
 
 
 def _call_story_model(api_key, model, prompt):
@@ -342,7 +342,7 @@ Description: {story.get("description", "")}
 The story currently has {len(scenes)} complete scenes and needs exactly {missing} additional scenes in this batch.
 The final existing scenes are:
 {json.dumps(scenes[-5:], ensure_ascii=False)}
-Return ONLY valid JSON in this shape: {{"scenes":[{{"title":"short heading","narration":"28-32 spoken words","visual":"drawable cartoon scene without text","background":"sky, lab, space, ocean, forest, city, home, cave, desert, or mountain","action":"explain, walk, point, run, think, surprised, celebrate, observe"}}]}}
+Return ONLY valid JSON in this shape: {{"scenes":[{{"title":"short heading","narration":"23-27 spoken words","visual":"drawable cartoon scene without text","background":"sky, lab, space, ocean, forest, city, home, cave, desert, or mountain","action":"explain, walk, point, run, think, surprised, celebrate, observe"}}]}}
 Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep the narration factually careful and make the final scene of the whole story a memorable conclusion.
 """
         batch_added = False
@@ -374,7 +374,7 @@ Return exactly {missing} new scenes. Do not repeat earlier explanations. Keep th
                 break
             except Exception as exc:
                 print(
-                    f"Scene repair batch {batch_number}, attempt {attempt}/3 failed: {exc}",
+                    f"Scene repair batch {batch_number}, attempt {attempt}/1 failed: {exc}",
                     flush=True,
                 )
 
@@ -461,7 +461,7 @@ def generate_story(root: Path, config: dict) -> dict:
     if user_prompt:
         print("A manual workflow prompt will guide the generated story.", flush=True)
 
-    for generation_attempt in range(5):
+    for generation_attempt in range(3):
         category = random.choice(TOPIC_CATEGORIES) if niche.lower() == "science" else niche
         print(f"Content niche ({generation_attempt + 1}/5): {category}", flush=True)
         user_prompt_section = (
@@ -501,14 +501,14 @@ Return ONLY valid JSON with this schema:
  "scenes": [
    {{
     "title": "short scene heading",
-    "narration": "natural voiceover, about 28-32 words",
+    "narration": "natural voiceover, about 23-27 words",
     "visual": "a concrete, drawable scene description, no written text in image",
     "background": "one of: sky, lab, space, ocean, forest, city, home, cave, desert, mountain",
     "action": "one of: explain, walk, point, run, think, surprised, celebrate, observe"
    }}
  ]
 }}
-CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the scenes array — not {desired_scene_count - 1}, not {desired_scene_count + 1}. Count the objects before returning JSON. The final array must contain {desired_scene_count} complete objects. Do not stop early to save tokens; keep each narration within the requested 28-32 words. Create exactly {desired_scene_count} scenes. The total narration should match approximately {target_minutes} minutes at 140-160 words per minute. Begin with a surprising hook, build curiosity, explain the subject accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph and should be 28-32 words, not shorter. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
+CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the scenes array — not {desired_scene_count - 1}, not {desired_scene_count + 1}. Count the objects before returning JSON. The final array must contain {desired_scene_count} complete objects. Do not stop early to save tokens; keep each narration within the requested 23-27 words. Create exactly {desired_scene_count} scenes. The total narration should match approximately {target_minutes} minutes at 140-160 words per minute. Begin with a surprising hook, build curiosity, explain the subject accurately in plain language, and end with a memorable takeaway. Avoid fabricated statistics, unsupported claims, medical advice, and repetitive filler. Use age-friendly language. Each narration must be a complete spoken paragraph of 23-27 words. Make visual descriptions easy to illustrate with simple cartoon shapes. Do not put text or labels inside scene images. JSON only, no Markdown fences.
 """
 
         data = None
@@ -521,9 +521,9 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 continue
             try:
                 if provider == "Gemini":
-                    data = _call_gemini(api_key, provider_model, prompt)
+                    data = _call_gemini(api_key, provider_model, prompt, attempts=1)
                 else:
-                    data = _call_openai_compatible(provider, provider_model, prompt)
+                    data = _call_openai_compatible(provider, provider_model, prompt, attempts=1)
                 used_model = provider + ":" + provider_model
                 break
             except Exception as exc:
