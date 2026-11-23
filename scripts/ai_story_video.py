@@ -297,7 +297,7 @@ Return JSON only in this shape:
 Every field must be non-empty. Preserve continuity, avoid repeating prior scenes and move the story forward. Finish the story with a memorable conclusion in the final batch.
 """
         added=False
-        for attempt in range(1,4):
+        for attempt in range(1,2):
             try:
                 result=gemini(prompt)
                 new_scenes=result.get("scenes",[])
@@ -328,7 +328,7 @@ Every field must be non-empty. Preserve continuity, avoid repeating prior scenes
                 break
             except Exception as exc:
                 print(
-                    f"Scene repair batch {batch}, attempt {attempt}/3 failed: "
+                    f"Scene repair batch {batch}, attempt {attempt}/1 failed: "
                     f"{type(exc).__name__}: {exc}",
                     flush=True,
                 )
@@ -347,7 +347,7 @@ def gemini(prompt):
         for model in GEMINI_CANDIDATES:
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             model_failed=False
-            for attempt in range(1,4):
+            for attempt in range(1,2):
                 r=None
                 try:
                     r=requests.post(
@@ -372,7 +372,7 @@ def gemini(prompt):
                     print(f"Gemini planner active: {model}",flush=True)
                     return result
                 except Exception as exc:
-                    errors.append(f"{model} try {attempt}/3: {type(exc).__name__}: {exc}")
+                    errors.append(f"{model} try {attempt}/1: {type(exc).__name__}: {exc}")
                     if attempt<3:
                         _retry_wait(locals().get("r"),attempt)
                     else:
@@ -394,7 +394,7 @@ def gemini(prompt):
     else:
         print("OVH_AI_ENDPOINTS_API_KEY is not configured; trying anonymous OVH access.",flush=True)
     for ovh_model in ovh_models:
-        for attempt in range(1,4):
+        for attempt in range(1,2):
             response=None
             try:
                 if _OVH_LAST_CALL:
@@ -419,9 +419,9 @@ def gemini(prompt):
                 print(f"OVHcloud planner active: {ovh_model}",flush=True)
                 return result
             except Exception as exc:
-                ovh_errors.append(f"{ovh_model} try {attempt}/3: {type(exc).__name__}: {exc}")
-                print(f"OVHcloud {ovh_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
-                if attempt<3: _retry_wait(response,attempt)
+                ovh_errors.append(f"{ovh_model} try {attempt}/1: {type(exc).__name__}: {exc}")
+                print(f"OVHcloud {ovh_model} attempt {attempt}/1 failed: {type(exc).__name__}: {exc}",flush=True)
+                if attempt<1: _retry_wait(response,attempt)
     # Kilo Gateway: discover the live catalogue and try catalogue-confirmed free models.
     kilo_url="https://ai-gateway.kilo.ai/api/v1/chat/completions"
     kilo_errors=[]
@@ -433,7 +433,7 @@ def gemini(prompt):
         {"role":"user","content":prompt},
     ]
     for kilo_model in kilo_candidates:
-        for attempt in range(1,4):
+        for attempt in range(1,2):
             response=None
             try:
                 response=requests.post(kilo_url,headers=kilo_headers,
@@ -452,13 +452,13 @@ def gemini(prompt):
                 print(f"Kilo planner active: {kilo_model}",flush=True)
                 return result
             except Exception as exc:
-                kilo_errors.append(f"{kilo_model} try {attempt}/3: {type(exc).__name__}: {exc}")
-                print(f"Kilo {kilo_model} attempt {attempt}/3 failed: {exc}",flush=True)
-                if attempt<3: _retry_wait(locals().get("response"),attempt)
+                kilo_errors.append(f"{kilo_model} try {attempt}/1: {type(exc).__name__}: {exc}")
+                print(f"Kilo {kilo_model} attempt {attempt}/1 failed: {exc}",flush=True)
+                if attempt<1: _retry_wait(locals().get("response"),attempt)
     if not kilo_candidates: kilo_errors.append("No Kilo free models found in live catalogue.")
     if OPENROUTER_KEY:
         for or_model in OPENROUTER_CANDIDATES:
-            for attempt in range(1,4):
+            for attempt in range(1,2):
                 response=None
                 try:
                     response=requests.post(
@@ -481,8 +481,8 @@ def gemini(prompt):
                     print(f"OpenRouter free planner fallback active: {or_model}.",flush=True)
                     return result
                 except Exception as exc:
-                    print(f"OpenRouter {or_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
-                    if attempt<3: _retry_wait(response,attempt)
+                    print(f"OpenRouter {or_model} attempt {attempt}/1 failed: {type(exc).__name__}: {exc}",flush=True)
+                    if attempt<1: _retry_wait(response,attempt)
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.",flush=True)
 
@@ -491,7 +491,7 @@ def gemini(prompt):
     if GROQ_KEY:
         groq_url="https://api.groq.com/openai/v1/chat/completions"
         for groq_model in GROQ_CANDIDATES:
-            for attempt in range(1,4):
+            for attempt in range(1,2):
                 response=None
                 try:
                     response=requests.post(groq_url,
@@ -512,9 +512,9 @@ def gemini(prompt):
                     print(f"Open-weight planner backup active: Groq {groq_model}",flush=True)
                     return result
                 except Exception as exc:
-                    groq_errors.append(f"{groq_model} try {attempt}/3: {type(exc).__name__}: {exc}")
-                    print(f"Groq {groq_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
-                    if attempt<3: _retry_wait(response,attempt)
+                    groq_errors.append(f"{groq_model} try {attempt}/1: {type(exc).__name__}: {exc}")
+                    print(f"Groq {groq_model} attempt {attempt}/1 failed: {type(exc).__name__}: {exc}",flush=True)
+                    if attempt<1: _retry_wait(response,attempt)
     else:
         print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
 
