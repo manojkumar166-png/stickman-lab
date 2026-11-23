@@ -347,13 +347,14 @@ def gemini(prompt):
             url=f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             model_failed=False
             for attempt in range(1,4):
+                r=None
                 try:
                     r=requests.post(
                         url,
                         params={"key":KEY},
                         json={"contents":[{"parts":[{"text":prompt}]}],
                               "generationConfig":{"responseMimeType":"application/json","temperature":0.8}},
-                        timeout=(3,18),
+                        timeout=(5,60),
                     )
                     if r.status_code in (400,403,404):
                         error=f"Gemini {model} unavailable/rejected (HTTP {r.status_code}): {r.text[:900]}"
@@ -432,6 +433,7 @@ def gemini(prompt):
     ]
     for kilo_model in kilo_candidates:
         for attempt in range(1,4):
+            response=None
             try:
                 response=requests.post(kilo_url,headers=kilo_headers,
                     json={"model":kilo_model,"messages":messages,"max_tokens":16384},timeout=(5,90))
