@@ -297,7 +297,8 @@ Return JSON only in this shape:
 Every field must be non-empty. Preserve continuity, avoid repeating prior scenes and move the story forward. Finish the story with a memorable conclusion in the final batch.
 """
         added=False
-        for attempt in range(1,2):
+        # Retry incomplete or truncated scene batches before giving up.
+        for attempt in range(1,4):
             try:
                 result=gemini(prompt)
                 new_scenes=result.get("scenes",[])
@@ -328,7 +329,7 @@ Every field must be non-empty. Preserve continuity, avoid repeating prior scenes
                 break
             except Exception as exc:
                 print(
-                    f"Scene repair batch {batch}, attempt {attempt}/1 failed: "
+                    f"Scene repair batch {batch}, attempt {attempt}/3 failed: "
                     f"{type(exc).__name__}: {exc}",
                     flush=True,
                 )
