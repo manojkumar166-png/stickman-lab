@@ -153,15 +153,35 @@ def _call_story_model(api_key, model, prompt):
 
 
 def _prompt_provider_models(api_key, config):
-    """Gemini first, followed by short, bounded backup-provider requests."""
+    """Use the shared daily catalogue, preserving safe defaults as fallback."""
+    defaults = {
+        "Gemini": [str(config.get("gemini_model") or "gemini-3.8-flash")],
+        "OVH": ["gpt-oss-20b"],
+        "Kilo": ["kilo-auto/free"],
+        "OpenRouter": ["openrouter/free"],
+    }
+    registry_path = Path(__file__).resolve().parents[1] / "story-model-registry.json"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        providers = registry.get("providers", {})
+        if isinstance(providers, dict):
+            for provider, candidates in providers.items():
+                if provider in defaults and isinstance(candidates, list):
+                    valid = [item.strip() for item in candidates
+                             if isinstance(item, str) and item.strip()]
+                    if valid:
+                        defaults[provider] = list(dict.fromkeys(valid + defaults[provider]))
+    except (OSError, ValueError, TypeError):
+        print("Shared model registry unavailable; using built-in provider defaults.", flush=True)
+
     models = []
     if api_key:
-        models.append(("Gemini", str(config.get("gemini_model") or "gemini-3.8-flash")))
-    models.append(("OVH", "gpt-oss-20b"))
-    models.append(("Kilo", "kilo-auto/free"))
+        models.extend(("Gemini", model) for model in defaults["Gemini"])
+    for provider in ("OVH", "Kilo"):
+        models.extend((provider, model) for model in defaults[provider])
     if os.environ.get("OPENROUTER_API_KEY", "").strip():
-        models.append(("OpenRouter", "openrouter/free"))
-    return models
+        models.extend(("OpenRouter", model) for model in defaults["OpenRouter"])
+    return list(dict.fromkeys(models))
 
 
 def _rewrite_user_prompt(original_prompt, api_key, config):
