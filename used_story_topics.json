@@ -168,5 +168,10 @@
     "title": "The Quantum Clock: Why Atomic Oscillations Define Reality",
     "topic": "The precise mechanism of using hyperfine transitions in Cesium-133 atoms to define the second based on constant electromagnetic oscillation frequencies.",
     "description": "We explore the microscopic heart of timekeeping, where we venture inside an atomic clock to observe how atoms are cooled and measured. This documentary reveals how the invariant natural frequency of electron transitions serves as the universal anchor for our perception of duration."
+  },
+  {
+    "title": "The Glass Bridge: Why Some Materials Self-Heal",
+    "topic": "The mechanism of vascular-based autonomic self-healing polymers using micro-encapsulated healing agents released via fracture propagation.",
+    "description": "This documentary explores how synthetic polymers are engineered to mimic biological healing. We examine the microscopic rupture of embedded capsules that release resin to repair structural cracks."
   }
 ]
