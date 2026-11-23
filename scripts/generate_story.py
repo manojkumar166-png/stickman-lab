@@ -3,7 +3,11 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 import requests
-from browser_story_fallback import generate_story_anonymously
+
+try:
+    from .browser_story_fallback import generate_story_anonymously
+except ImportError:
+    from browser_story_fallback import generate_story_anonymously
 
 
 class PermanentProviderError(RuntimeError):
