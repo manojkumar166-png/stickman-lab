@@ -524,33 +524,6 @@ def gemini(prompt):
         +" | OVHcloud: "+" | ".join(ovh_errors)
     )
 
-def _offline_story(topic,count):
-    """Produce a complete, safe story package when every remote model is busy."""
-    subject=str(topic or "").strip() or "How small changes can create surprising effects"
-    beats=[
-        ("A surprising question",f"What makes {subject.lower()} worth exploring? Begin with a simple observation and follow the clues carefully.","A curious character notices an unusual everyday event."),
-        ("Look closer","The first impression rarely explains the whole picture. Slow down, identify the parts, and notice what changes from one moment to the next.","A character examines the main parts of a simple scene."),
-        ("Find the connection","Each part can influence another. Trace the sequence step by step instead of guessing what caused the result.","A clear chain of connected objects responds in sequence."),
-        ("Try a comparison","Compare two similar situations while changing just one detail. This makes the important difference easier to see.","Two side-by-side experiments show one changed condition."),
-        ("Build an explanation","Use the observations to form a simple explanation. Keep it grounded in what can actually be seen and checked.","A character connects visual clues into a simple model."),
-        ("Check another example","A useful idea should help explain a second example too. Look for the same pattern without assuming every situation is identical.","The character tests the idea in a new setting."),
-        ("Notice the limits","Real situations can include extra details. A simple model is a helpful starting point, not a reason to ignore new evidence.","The model gains extra details as the scene widens."),
-        ("Bring it together","The parts now fit into a clearer picture. The most useful insight comes from understanding how they work together.","The separate pieces form one complete visual system."),
-        ("Remember the lesson","Keep the question, the evidence, and the explanation connected. That habit makes unfamiliar subjects easier to understand.","The character reviews the visual clues."),
-        ("A memorable ending","Curiosity does not end with one answer. Every careful explanation gives us a better question to explore next.","The character looks toward a new discovery and celebrates.")
-    ]
-    scenes=[]
-    for index in range(count):
-        heading,narration,visual=beats[index%len(beats)]
-        scenes.append({"scene_number":index+1,"heading":heading,
-            "narration":narration,"visual_description":visual,
-            "image_prompt":f"Polished cinematic 3D CGI educational scene: {visual} Friendly original character, clear composition, detailed materials, soft cinematic lighting, depth, widescreen 16:9, no text, no logo, no watermark."})
-    return {"mode":"science","title":subject[:100],"topic":subject,
-        "description":f"A clear, step-by-step exploration of {subject}.",
-        "visual_style":"Polished cinematic 3D CGI with consistent lighting, materials and depth.",
-        "continuity_bible":"Use the same friendly original character and coherent visual language in every scene.",
-        "scenes":scenes,"generation_mode":"offline_fallback"}
-
 def plan_story(topic,count):
     topics_file=ROOT/"topics.txt"
     if not topics_file.is_file():
@@ -1144,12 +1117,9 @@ def main():
             suffix+=1
         package.mkdir(parents=True)
         print("::group::STEP 1/5 - Story planning with automatic provider failover",flush=True)
-        try:
-            data=plan_story(a.topic,a.scenes)
-        except Exception as exc:
-            print(f"All remote story planners are unavailable or busy: {type(exc).__name__}: {exc}",file=sys.stderr,flush=True)
-            print("Creating a complete offline story so this run can continue.",flush=True)
-            data=_offline_story(a.topic,a.scenes)
+        # Never substitute a local/template story when remote providers fail.
+        # Let plan_story raise after exhausting retries and discovered providers.
+        data=plan_story(a.topic,a.scenes)
         data.update({"scene_count":a.scenes,"voice":a.voice,"completed":False})
         print("Story format: "+data["mode"]+" | source: "+data.get("generation_mode","remote_model"),flush=True)
     else:
