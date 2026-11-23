@@ -38,7 +38,7 @@ PROVIDER_CONFIG = {
 }
 
 
-def _call_openai_compatible(provider, model, prompt, attempts=3):
+def _call_openai_compatible(provider, model, prompt, attempts=1):
     """Call a configured OpenAI-compatible provider with bounded retries."""
     if provider not in PROVIDER_CONFIG:
         raise ValueError(f"Unsupported backup provider: {provider}")
@@ -150,7 +150,7 @@ def _call_gemini(api_key, model, prompt, attempts=3):
             candidates = payload.get("candidates") or []
             if not candidates:
                 raise RuntimeError(f"Gemini returned no candidates: {str(payload)[:500]}")
-            print(f"Story planner active: Gemini/{model} (attempt {attempt}/3)", flush=True)
+            print(f"Story planner active: Gemini/{model} (attempt {attempt}/{attempts})", flush=True)
             return {"candidates": candidates}
         except PermanentProviderError:
             raise
@@ -172,7 +172,7 @@ def _call_story_model(api_key, model, prompt):
     provider, provider_model = model.split(":", 1)
     if provider == "Gemini":
         return _call_gemini(api_key, provider_model, prompt)
-    return _call_openai_compatible(provider, provider_model, prompt)
+    return _call_openai_compatible(provider, provider_model, prompt, attempts=1)
 
 
 def _prompt_provider_models(api_key, config):
@@ -316,7 +316,7 @@ USER PROMPT:
             if provider == "Gemini":
                 data = _call_gemini(api_key, model, rewrite_request)
             else:
-                data = _call_openai_compatible(provider, model, rewrite_request, attempts=2)
+                data = _call_openai_compatible(provider, model, rewrite_request, attempts=1)
             parsed = _decode_json_object(_response_text(data))
             rewritten = parsed.get("rewritten_prompt")
             if not isinstance(rewritten, str):
