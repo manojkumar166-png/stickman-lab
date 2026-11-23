@@ -527,8 +527,7 @@ def gemini(prompt):
         +" | OVHcloud: "+" | ".join(ovh_errors)
     )
     try:
-        browser_response = generate_story_anonymously(prompt)
-        result = parse_json(browser_response)
+        result = generate_story_anonymously(prompt, validator=parse_json)
         print("Story planner active: anonymous browser website fallback.", flush=True)
         return result
     except Exception as exc:
