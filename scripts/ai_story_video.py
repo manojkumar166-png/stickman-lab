@@ -459,20 +459,22 @@ def gemini(prompt):
                 response=None
                 try:
                     response=requests.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={"Authorization":f"Bearer {OPENROUTER_KEY}","Content-Type":"application/json",
-                             "HTTP-Referer":"https://github.com/manojkumar166-png/stickman-lab",
-                             "X-Title":"AI Story Science Video"},
-                    json={"model":or_model,"messages":[
-                        {"role":"system","content":"Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
-                        {"role":"user","content":prompt}],"max_tokens":16000},
-                    timeout=(3,30))
-                if response.status_code in (408,425,429,500,502,503,504):
-                    raise RuntimeError(f"OpenRouter {or_model} HTTP {response.status_code}: {response.text[:800]}")
-                response.raise_for_status()
-                choices=response.json().get("choices") or []
-                content=choices[0].get("message",{}).get("content","") if choices else ""
-                result=parse_json(content)
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={"Authorization":f"Bearer {OPENROUTER_KEY}","Content-Type":"application/json",
+                                 "HTTP-Referer":"https://github.com/manojkumar166-png/stickman-lab",
+                                 "X-Title":"AI Story Science Video"},
+                        json={"model":or_model,"messages":[
+                            {"role":"system","content":"Return one complete valid JSON object matching the requested schema. No Markdown or commentary."},
+                            {"role":"user","content":prompt}],"max_tokens":16000},
+                        timeout=(5,60))
+                    if response.status_code in (400,401,403,404,422):
+                        raise PermanentProviderError(f"OpenRouter {or_model} HTTP {response.status_code}: {response.text[:800]}")
+                    if response.status_code in (408,425,429,500,502,503,504):
+                        raise RuntimeError(f"OpenRouter {or_model} HTTP {response.status_code}: {response.text[:800]}")
+                    response.raise_for_status()
+                    choices=response.json().get("choices") or []
+                    content=choices[0].get("message",{}).get("content","") if choices else ""
+                    result=parse_json(content)
                     print(f"OpenRouter free planner fallback active: {or_model}.",flush=True)
                     return result
                 except Exception as exc:
@@ -481,7 +483,7 @@ def gemini(prompt):
     else:
         print("OpenRouter skipped: OPENROUTER_API_KEY is not configured.",flush=True)
 
-    # Groq follows OVH as the next configured backup; Kilo follows Groq.
+    # Groq provides another independently hosted model fallback.
     groq_errors=[]
     if GROQ_KEY:
         groq_url="https://api.groq.com/openai/v1/chat/completions"
@@ -490,27 +492,28 @@ def gemini(prompt):
                 response=None
                 try:
                     response=requests.post(groq_url,
-                    headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
-                    json={"model":groq_model,"messages":[
-                        {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
-                        {"role":"user","content":prompt}],
-                        "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
-                    timeout=(3,30))
-                if response.status_code in (408,429,500,502,503,504):
-                    raise RuntimeError(f"Groq {groq_model} HTTP {response.status_code}: {response.text[:500]}")
-                response.raise_for_status()
-                choices=response.json().get("choices") or []
-                content=choices[0].get("message",{}).get("content","") if choices else ""
-                result=parse_json(content)
-                print(f"Open-weight planner backup active: Groq {groq_model}",flush=True)
-                return result
-            except Exception as exc:
+                        headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"},
+                        json={"model":groq_model,"messages":[
+                            {"role":"system","content":"Return only a valid JSON object matching the user's requested schema. Follow all instructions precisely."},
+                            {"role":"user","content":prompt}],
+                            "response_format":{"type":"json_object"},"temperature":0.8,"max_completion_tokens":32768},
+                        timeout=(5,60))
+                    if response.status_code in (400,401,403,404,422):
+                        raise PermanentProviderError(f"Groq {groq_model} HTTP {response.status_code}: {response.text[:500]}")
+                    if response.status_code in (408,425,429,500,502,503,504):
+                        raise RuntimeError(f"Groq {groq_model} HTTP {response.status_code}: {response.text[:500]}")
+                    response.raise_for_status()
+                    choices=response.json().get("choices") or []
+                    content=choices[0].get("message",{}).get("content","") if choices else ""
+                    result=parse_json(content)
+                    print(f"Open-weight planner backup active: Groq {groq_model}",flush=True)
+                    return result
+                except Exception as exc:
                     groq_errors.append(f"{groq_model} try {attempt}/3: {type(exc).__name__}: {exc}")
                     print(f"Groq {groq_model} attempt {attempt}/3 failed: {type(exc).__name__}: {exc}",flush=True)
                     if attempt<3: _retry_wait(response,attempt)
     else:
         print("Groq skipped: GROQ_API_KEY is not configured.",flush=True)
-
 
     raise RuntimeError(
         "All planner providers failed. Gemini: "+" | ".join(errors)
