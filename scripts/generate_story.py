@@ -29,6 +29,7 @@ PROVIDER_CONFIG = {
     "OVH": ("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "", "gpt-oss-20b"),
     "Kilo": ("https://api.kilo.ai/api/gateway", "KILO_API_KEY", "kilo-auto/free"),
     "OpenRouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openrouter/free"),
+    "Groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", ""),
 }
 
 
@@ -159,6 +160,7 @@ def _prompt_provider_models(api_key, config):
         "OVH": ["gpt-oss-20b"],
         "Kilo": ["kilo-auto/free"],
         "OpenRouter": ["openrouter/free"],
+        "Groq": [],
     }
     registry_path = Path(__file__).resolve().parents[1] / "story-model-registry.json"
     try:
@@ -181,6 +183,8 @@ def _prompt_provider_models(api_key, config):
         models.extend((provider, model) for model in defaults[provider])
     if os.environ.get("OPENROUTER_API_KEY", "").strip():
         models.extend(("OpenRouter", model) for model in defaults["OpenRouter"])
+    if os.environ.get("GROQ_API_KEY", "").strip():
+        models.extend(("Groq", model) for model in defaults["Groq"])
     return list(dict.fromkeys(models))
 
 
