@@ -164,7 +164,9 @@ def refresh_model_catalogs():
             response.raise_for_status()
             entries=response.json().get("data",[])
             available={item.get("id") for item in entries if isinstance(item,dict)
-                       and item.get("active",True) is not False and isinstance(item.get("id"),str)}
+                       and item.get("active",True) is not False and isinstance(item.get("id"),str)
+                       and not any(token in item.get("id","").lower()
+                                   for token in ("whisper","speech","guard","embedding","playai"))}
             GROQ_CANDIDATES=sorted(available)
             if GROQ_MODEL in GROQ_CANDIDATES:
                 GROQ_CANDIDATES.remove(GROQ_MODEL)
