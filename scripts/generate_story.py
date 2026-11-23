@@ -521,7 +521,7 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
                 continue
             try:
                 if provider == "Gemini":
-                    data = _call_gemini(api_key, provider_model, prompt, attempts=1)
+                    data = _call_gemini(api_key, provider_model, prompt, attempts=3)
                 else:
                     data = _call_openai_compatible(provider, provider_model, prompt, attempts=1)
                 used_model = provider + ":" + provider_model
