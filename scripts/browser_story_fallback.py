@@ -226,8 +226,8 @@ def _try_site(browser, site, prompt, timeout_seconds):
         context.close()
 
 
-def generate_story_anonymously(prompt, timeout_seconds=150):
-    """Try public AI chat pages in order and return the first substantial response."""
+def generate_story_anonymously(prompt, timeout_seconds=150, validator=None):
+    """Try public AI chat pages in order; optionally validate before accepting output."""
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:
@@ -248,11 +248,20 @@ def generate_story_anonymously(prompt, timeout_seconds=150):
                 try:
                     response = _try_site(browser, site, prompt, timeout_seconds)
                     if response:
+                        accepted = response
+                        if validator is not None:
+                            try:
+                                accepted = validator(response)
+                            except Exception as exc:
+                                raise ValueError(
+                                    f"response from {site['name']} failed story validation: "
+                                    f"{type(exc).__name__}: {str(exc)[:220]}"
+                                ) from exc
                         print(
                             f"Anonymous browser fallback succeeded with {site['name']}.",
                             flush=True,
                         )
-                        return response
+                        return accepted
                 except Exception as exc:
                     reason = f"{site['name']}: {type(exc).__name__}: {str(exc)[:250]}"
                     failures.append(reason)
