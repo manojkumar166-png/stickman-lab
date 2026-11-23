@@ -3,6 +3,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 import requests
+from browser_story_fallback import generate_story_anonymously
 
 
 class PermanentProviderError(RuntimeError):
@@ -563,11 +564,33 @@ CRITICAL SCENE COUNT: Output exactly {desired_scene_count} scene objects in the 
         break
 
     if story is None:
-        raise RuntimeError(
-            "Remote providers did not produce a valid, complete, non-repeated story "
-            "after five generation attempts and all configured model failovers. "
-            "No offline/template story was generated."
+        print(
+            "All API providers and five story attempts failed; trying anonymous public AI chat websites.",
+            flush=True,
         )
+
+        def validate_browser_story(raw):
+            candidate = _parse_story_json(raw)
+            browser_scenes = candidate.get("scenes")
+            if not isinstance(browser_scenes, list) or len(browser_scenes) != desired_scene_count:
+                raise ValueError(
+                    f"expected exactly {desired_scene_count} scenes; "
+                    f"received {len(browser_scenes) if isinstance(browser_scenes, list) else 'invalid'}"
+                )
+            browser_topic = str(candidate.get("topic", "")).strip()
+            if not browser_topic or _is_repeat(browser_topic, history):
+                raise ValueError("story topic is empty or repeats the used-topic history")
+            return candidate
+
+        try:
+            story = generate_story_anonymously(prompt, validator=validate_browser_story)
+            used_model = "anonymous browser website"
+        except Exception as exc:
+            raise RuntimeError(
+                "Remote providers did not produce a valid story, and anonymous browser fallback "
+                "also failed. No offline/template story was generated. "
+                + type(exc).__name__ + ": " + str(exc)
+            ) from exc
 
     print(f"Story generated with {used_model}: {story['topic']}")
     scenes = story.get("scenes", [])
