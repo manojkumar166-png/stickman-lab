@@ -7,7 +7,8 @@
     "The Last Coin",
     "The Train Ticket Home",
     "The Forgotten Birthday",
-    "The Lighthouse Text"
+    "The Lighthouse Text",
+    "The Streetlight That Winks"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -17,7 +18,8 @@
     "He gives his last coin to a stranger, who leaves him a mysterious map.",
     "An unused train ticket leads him to a person waiting for an apology.",
     "He plans a birthday surprise for a neighbour who thinks everyone forgot.",
-    "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship."
+    "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
+    "One streetlight flickers whenever someone nearby needs help."
   ],
   "films": [
     {
@@ -51,6 +53,10 @@
     {
       "date": "2026-11-23",
       "title": "The Lighthouse Text"
+    },
+    {
+      "date": "2026-11-24",
+      "title": "The Streetlight That Winks"
     }
   ]
 }
