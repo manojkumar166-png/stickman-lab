@@ -8,7 +8,8 @@
     "The Train Ticket Home",
     "The Forgotten Birthday",
     "The Lighthouse Text",
-    "The Streetlight That Winks"
+    "The Streetlight That Winks",
+    "One Second of Time Stop"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -19,7 +20,8 @@
     "An unused train ticket leads him to a person waiting for an apology.",
     "He plans a birthday surprise for a neighbour who thinks everyone forgot.",
     "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
-    "One streetlight flickers whenever someone nearby needs help."
+    "One streetlight flickers whenever someone nearby needs help.",
+    "He can freeze time for one second each day and uses it to catch a falling cup for a stranger."
   ],
   "films": [
     {
@@ -57,6 +59,10 @@
     {
       "date": "2026-11-24",
       "title": "The Streetlight That Winks"
+    },
+    {
+      "date": "2026-11-25",
+      "title": "One Second of Time Stop"
     }
   ]
 }
