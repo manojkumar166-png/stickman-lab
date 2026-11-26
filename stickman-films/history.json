@@ -9,7 +9,8 @@
     "The Forgotten Birthday",
     "The Lighthouse Text",
     "The Streetlight That Winks",
-    "One Second of Time Stop"
+    "One Second of Time Stop",
+    "The Lost Glove"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -21,7 +22,8 @@
     "He plans a birthday surprise for a neighbour who thinks everyone forgot.",
     "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
     "One streetlight flickers whenever someone nearby needs help.",
-    "He can freeze time for one second each day and uses it to catch a falling cup for a stranger."
+    "He can freeze time for one second each day and uses it to catch a falling cup for a stranger.",
+    "He finds the same glove on a bench every winter and finally waits to return it."
   ],
   "films": [
     {
@@ -63,6 +65,10 @@
     {
       "date": "2026-11-25",
       "title": "One Second of Time Stop"
+    },
+    {
+      "date": "2026-11-26",
+      "title": "The Lost Glove"
     }
   ]
 }
