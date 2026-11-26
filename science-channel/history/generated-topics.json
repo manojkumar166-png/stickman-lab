@@ -53,7 +53,8 @@
     "How do amber fossils preserve tiny insects in 3D?",
     "Why does popcorn pop?",
     "Why do our stomachs rumble when we are hungry?",
-    "How do fiber optic cables bend light around corners?"
+    "How do fiber optic cables bend light around corners?",
+    "Why do gas giant planets have stripes?"
   ],
   "topic_details": [
     {
@@ -310,6 +311,11 @@
       "title": "How do fiber optic cables bend light around corners?",
       "angle": "Exploring the physics of total internal reflection and how microscopic glass strands carry high-speed data across oceans.",
       "pillar": "Technology and engineering"
+    },
+    {
+      "title": "Why do gas giant planets have stripes?",
+      "angle": "Explores how the colorful bands and swirling storms on planets like Jupiter and Saturn are formed by deep internal heat and opposing jet streams.",
+      "pillar": "Space and astronomy"
     }
   ]
 }
