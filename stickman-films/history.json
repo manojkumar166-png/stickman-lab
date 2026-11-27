@@ -10,7 +10,8 @@
     "The Lighthouse Text",
     "The Streetlight That Winks",
     "One Second of Time Stop",
-    "The Lost Glove"
+    "The Lost Glove",
+    "The Clock That Runs Backwards at Night"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -23,7 +24,8 @@
     "A lonely lighthouse keeper receives a message from a wrong number that becomes a friendship.",
     "One streetlight flickers whenever someone nearby needs help.",
     "He can freeze time for one second each day and uses it to catch a falling cup for a stranger.",
-    "He finds the same glove on a bench every winter and finally waits to return it."
+    "He finds the same glove on a bench every winter and finally waits to return it.",
+    "At 3 a.m. his clock runs backwards and reveals a moment he missed."
   ],
   "films": [
     {
@@ -69,6 +71,10 @@
     {
       "date": "2026-11-26",
       "title": "The Lost Glove"
+    },
+    {
+      "date": "2026-11-27",
+      "title": "The Clock That Runs Backwards at Night"
     }
   ]
 }
