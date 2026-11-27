@@ -54,7 +54,8 @@
     "Why does popcorn pop?",
     "Why do our stomachs rumble when we are hungry?",
     "How do fiber optic cables bend light around corners?",
-    "Why do gas giant planets have stripes?"
+    "Why do gas giant planets have stripes?",
+    "Why do we feel phantom vibrations in our phones?"
   ],
   "topic_details": [
     {
@@ -316,6 +317,11 @@
       "title": "Why do gas giant planets have stripes?",
       "angle": "Explores how the colorful bands and swirling storms on planets like Jupiter and Saturn are formed by deep internal heat and opposing jet streams.",
       "pillar": "Space and astronomy"
+    },
+    {
+      "title": "Why do we feel phantom vibrations in our phones?",
+      "angle": "We explore the neurological glitch where our brains misinterpret everyday friction and muscle twitches as incoming text messages.",
+      "pillar": "Human body and mind"
     }
   ]
 }
