@@ -55,7 +55,8 @@
     "Why do our stomachs rumble when we are hungry?",
     "How do fiber optic cables bend light around corners?",
     "Why do gas giant planets have stripes?",
-    "Why do we feel phantom vibrations in our phones?"
+    "Why do we feel phantom vibrations in our phones?",
+    "How do noise-canceling headphones silence sound?"
   ],
   "topic_details": [
     {
@@ -322,6 +323,11 @@
       "title": "Why do we feel phantom vibrations in our phones?",
       "angle": "We explore the neurological glitch where our brains misinterpret everyday friction and muscle twitches as incoming text messages.",
       "pillar": "Human body and mind"
+    },
+    {
+      "title": "How do noise-canceling headphones silence sound?",
+      "angle": "An explanation of how destructive interference uses sound waves to actively erase unwanted ambient noise in real time.",
+      "pillar": "Technology and engineering"
     }
   ]
 }
