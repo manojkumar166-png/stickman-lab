@@ -11,7 +11,8 @@
     "The Streetlight That Winks",
     "One Second of Time Stop",
     "The Lost Glove",
-    "The Clock That Runs Backwards at Night"
+    "The Clock That Runs Backwards at Night",
+    "The Plant That Listens"
   ],
   "used_premises": [
     "A door shows him one moment from tomorrow",
@@ -25,7 +26,8 @@
     "One streetlight flickers whenever someone nearby needs help.",
     "He can freeze time for one second each day and uses it to catch a falling cup for a stranger.",
     "He finds the same glove on a bench every winter and finally waits to return it.",
-    "At 3 a.m. his clock runs backwards and reveals a moment he missed."
+    "At 3 a.m. his clock runs backwards and reveals a moment he missed.",
+    "His plant leans toward his voice, so he starts telling it the truth."
   ],
   "films": [
     {
@@ -75,6 +77,10 @@
     {
       "date": "2026-11-27",
       "title": "The Clock That Runs Backwards at Night"
+    },
+    {
+      "date": "2026-11-28",
+      "title": "The Plant That Listens"
     }
   ]
 }
